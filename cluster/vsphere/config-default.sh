@@ -45,7 +45,7 @@ ELASTICSEARCH_LOGGING_REPLICAS=1
 #   none     - No cluster monitoring setup 
 #   influxdb - Heapster, InfluxDB, and Grafana 
 #   google   - Heapster, Google Cloud Monitoring, and Google Cloud Logging
-ENABLE_CLUSTER_MONITORING="${KUBE_ENABLE_CLUSTER_MONITORING:-influxdb}"
+ENABLE_CLUSTER_MONITORING="${KUBE_ENABLE_CLUSTER_MONITORING:-none}"
 
 # Optional: Install cluster DNS.
 ENABLE_CLUSTER_DNS="${KUBE_ENABLE_CLUSTER_DNS:-true}"
