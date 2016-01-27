@@ -230,9 +230,14 @@ func (cm *containerManagerImpl) setupNode() error {
 				Name: "/",
 			},
 		}
+		kubeletContainer := &fs.Manager{
+			Cgroups: &configs.Cgroup{
+				Name: cm.KubeletContainerName,
+			},
+		}
 		manager := createManager(cm.SystemContainerName)
 
-		err := ensureSystemContainer(rootContainer, manager)
+		err := ensureSystemContainer(rootContainer, kubeletContainer, manager)
 		if err != nil {
 			return err
 		}
@@ -362,7 +367,7 @@ func getContainer(pid int) (string, error) {
 // the base cgroup path based on process 1. Please see:
 // https://github.com/kubernetes/kubernetes/issues/12789#issuecomment-132384126
 // for detail explanation.
-func ensureSystemContainer(rootContainer *fs.Manager, manager *fs.Manager) error {
+func ensureSystemContainer(rootContainer *fs.Manager, kubeletContainer *fs.Manager, manager *fs.Manager) error {
 	// Move non-kernel PIDs to the system container.
 	attemptsRemaining := 10
 	var errs []error
@@ -377,6 +382,14 @@ func ensureSystemContainer(rootContainer *fs.Manager, manager *fs.Manager) error
 			continue
 		}
 
+		// Get PIDs in kubelet group so we can remove them from the list of
+		// PIDs to move.
+		kubeletPids, err := kubeletContainer.GetPids()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to list PIDs for kubelet: %v", err))
+			continue
+		}
+
 		// Get PIDs already in target group so we can remove them from the list of
 		// PIDs to move.
 		systemCgroupPIDs, err := manager.GetPids()
@@ -385,32 +398,38 @@ func ensureSystemContainer(rootContainer *fs.Manager, manager *fs.Manager) error
 			continue
 		}
 
-		systemCgroupPIDMap := make(map[int]struct{}, len(systemCgroupPIDs))
+		// Don't move these PIDs
+		protectedPIDMap := make(map[int]struct{}, len(kubeletPids)+len(systemCgroupPIDs)+1)
+		protectedPIDMap[1] = struct{}{}
+
+		for _, pid := range kubeletPids {
+			protectedPIDMap[pid] = struct{}{}
+		}
 		for _, pid := range systemCgroupPIDs {
-			systemCgroupPIDMap[pid] = struct{}{}
+			protectedPIDMap[pid] = struct{}{}
 		}
 
-		// Remove kernel pids and process 1
+		// Remove kernel pids and other protected PIDs (pid 1, PIDs already in system & kubelet containers)
 		pids := make([]int, 0, len(allPids))
 		for _, pid := range allPids {
 			if isKernelPid(pid) {
 				continue
 			}
 
-			if _, ok := systemCgroupPIDMap[pid]; ok {
+			if _, ok := protectedPIDMap[pid]; ok {
 				continue
 			}
 
 			pids = append(pids, pid)
 		}
-		glog.Infof("Found %d PIDs in root, %d of them are kernel related", len(allPids), len(allPids)-len(pids))
+		glog.Infof("Found %d PIDs in root, %d of them are not to be moved", len(allPids), len(allPids)-len(pids))
 
-		// Check if we moved all the non-kernel PIDs.
+		// Check if we have moved all the non-kernel PIDs.
 		if len(pids) == 0 {
 			break
 		}
 
-		glog.Infof("Moving non-kernel threads: %v", pids)
+		glog.Infof("Moving non-protected processes: %v", pids)
 		for _, pid := range pids {
 			err := manager.Apply(pid)
 			if err != nil {
