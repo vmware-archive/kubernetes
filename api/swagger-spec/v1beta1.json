@@ -3029,6 +3029,10 @@
       "$ref": "v1.FlockerVolumeSource",
       "description": "Flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running"
      },
+     "vmdk": {
+      "$ref": "v1.VMDKVolumeSource",
+      "description": "VMDKVolume represents a VMDK Volume attached to a kubelet's host machine and is then exposed to the pod requesting the volume."
+     },
      "downwardAPI": {
       "$ref": "v1.DownwardAPIVolumeSource",
       "description": "DownwardAPI represents downward API about the pod that should populate this volume"
@@ -3363,6 +3367,24 @@
      "datasetName": {
       "type": "string",
       "description": "Required: the volume name. This is going to be store on metadata -\u003e name on the payload for Flocker"
+     }
+    }
+   },
+   "v1.VMDKVolumeSource": {
+    "id": "v1.VMDKVolumeSource",
+    "description": "VMDKVolume represents a VMDK Volume attached to a kubelet's host machine and is then exposed to the pod requesting the volume.",
+    "required": [
+     "datastore",
+     "vmdkVolumeID"
+    ],
+    "properties": {
+     "datastore": {
+      "type": "string",
+      "description": "DataStore hosting the VMDK Volume"
+     },
+     "vmdkVolumeID": {
+      "type": "string",
+      "description": "The unique ID for a volume within a datastore."
      }
     }
    },

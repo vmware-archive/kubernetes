@@ -1798,6 +1798,14 @@ func autoconvert_api_PersistentVolumeSource_To_v1_PersistentVolumeSource(in *api
 	} else {
 		out.Flocker = nil
 	}
+	if in.VMDKVolume != nil {
+		out.VMDKVolume = new(VMDKVolumeSource)
+		if err := convert_api_VMDKVolumeSource_To_v1_VMDKVolumeSource(in.VMDKVolume, out.VMDKVolume, s); err != nil {
+			return err
+		}
+	} else {
+		out.VMDKVolume = nil
+	}
 	return nil
 }
 
@@ -2864,6 +2872,19 @@ func convert_api_TCPSocketAction_To_v1_TCPSocketAction(in *api.TCPSocketAction, 
 	return autoconvert_api_TCPSocketAction_To_v1_TCPSocketAction(in, out, s)
 }
 
+func autoconvert_api_VMDKVolumeSource_To_v1_VMDKVolumeSource(in *api.VMDKVolumeSource, out *VMDKVolumeSource, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*api.VMDKVolumeSource))(in)
+	}
+	out.DataStore = in.DataStore
+	out.VMDKVolume = in.VMDKVolume
+	return nil
+}
+
+func convert_api_VMDKVolumeSource_To_v1_VMDKVolumeSource(in *api.VMDKVolumeSource, out *VMDKVolumeSource, s conversion.Scope) error {
+	return autoconvert_api_VMDKVolumeSource_To_v1_VMDKVolumeSource(in, out, s)
+}
+
 func autoconvert_api_Volume_To_v1_Volume(in *api.Volume, out *Volume, s conversion.Scope) error {
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*api.Volume))(in)
@@ -3008,6 +3029,14 @@ func autoconvert_api_VolumeSource_To_v1_VolumeSource(in *api.VolumeSource, out *
 		}
 	} else {
 		out.Flocker = nil
+	}
+	if in.VMDKVolume != nil {
+		out.VMDKVolume = new(VMDKVolumeSource)
+		if err := convert_api_VMDKVolumeSource_To_v1_VMDKVolumeSource(in.VMDKVolume, out.VMDKVolume, s); err != nil {
+			return err
+		}
+	} else {
+		out.VMDKVolume = nil
 	}
 	if in.DownwardAPI != nil {
 		out.DownwardAPI = new(DownwardAPIVolumeSource)
@@ -4804,6 +4833,14 @@ func autoconvert_v1_PersistentVolumeSource_To_api_PersistentVolumeSource(in *Per
 	} else {
 		out.Flocker = nil
 	}
+	if in.VMDKVolume != nil {
+		out.VMDKVolume = new(api.VMDKVolumeSource)
+		if err := convert_v1_VMDKVolumeSource_To_api_VMDKVolumeSource(in.VMDKVolume, out.VMDKVolume, s); err != nil {
+			return err
+		}
+	} else {
+		out.VMDKVolume = nil
+	}
 	return nil
 }
 
@@ -5870,6 +5907,19 @@ func convert_v1_TCPSocketAction_To_api_TCPSocketAction(in *TCPSocketAction, out 
 	return autoconvert_v1_TCPSocketAction_To_api_TCPSocketAction(in, out, s)
 }
 
+func autoconvert_v1_VMDKVolumeSource_To_api_VMDKVolumeSource(in *VMDKVolumeSource, out *api.VMDKVolumeSource, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*VMDKVolumeSource))(in)
+	}
+	out.DataStore = in.DataStore
+	out.VMDKVolume = in.VMDKVolume
+	return nil
+}
+
+func convert_v1_VMDKVolumeSource_To_api_VMDKVolumeSource(in *VMDKVolumeSource, out *api.VMDKVolumeSource, s conversion.Scope) error {
+	return autoconvert_v1_VMDKVolumeSource_To_api_VMDKVolumeSource(in, out, s)
+}
+
 func autoconvert_v1_Volume_To_api_Volume(in *Volume, out *api.Volume, s conversion.Scope) error {
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*Volume))(in)
@@ -6015,6 +6065,14 @@ func autoconvert_v1_VolumeSource_To_api_VolumeSource(in *VolumeSource, out *api.
 	} else {
 		out.Flocker = nil
 	}
+	if in.VMDKVolume != nil {
+		out.VMDKVolume = new(api.VMDKVolumeSource)
+		if err := convert_v1_VMDKVolumeSource_To_api_VMDKVolumeSource(in.VMDKVolume, out.VMDKVolume, s); err != nil {
+			return err
+		}
+	} else {
+		out.VMDKVolume = nil
+	}
 	if in.DownwardAPI != nil {
 		out.DownwardAPI = new(api.DownwardAPIVolumeSource)
 		if err := convert_v1_DownwardAPIVolumeSource_To_api_DownwardAPIVolumeSource(in.DownwardAPI, out.DownwardAPI, s); err != nil {
@@ -6155,6 +6213,7 @@ func init() {
 		autoconvert_api_ServiceStatus_To_v1_ServiceStatus,
 		autoconvert_api_Service_To_v1_Service,
 		autoconvert_api_TCPSocketAction_To_v1_TCPSocketAction,
+		autoconvert_api_VMDKVolumeSource_To_v1_VMDKVolumeSource,
 		autoconvert_api_VolumeMount_To_v1_VolumeMount,
 		autoconvert_api_VolumeSource_To_v1_VolumeSource,
 		autoconvert_api_Volume_To_v1_Volume,
@@ -6273,6 +6332,7 @@ func init() {
 		autoconvert_v1_ServiceStatus_To_api_ServiceStatus,
 		autoconvert_v1_Service_To_api_Service,
 		autoconvert_v1_TCPSocketAction_To_api_TCPSocketAction,
+		autoconvert_v1_VMDKVolumeSource_To_api_VMDKVolumeSource,
 		autoconvert_v1_VolumeMount_To_api_VolumeMount,
 		autoconvert_v1_VolumeSource_To_api_VolumeSource,
 		autoconvert_v1_Volume_To_api_Volume,

@@ -858,6 +858,7 @@ var map_PersistentVolumeSource = map[string]string{
 	"cephfs":               "CephFS represents a Ceph FS mount on the host that shares a pod's lifetime",
 	"fc":                   "FC represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.",
 	"flocker":              "Flocker represents a Flocker volume attached to a kubelet's host machine and exposed to the pod for its usage. This depends on the Flocker control service being running",
+	"vmdk":                 "VMDKVolume represents a VMDK Volume attached to a kubelet's host machine and is then exposed to the pod requesting the volume.",
 }
 
 func (PersistentVolumeSource) SwaggerDoc() map[string]string {
@@ -1334,6 +1335,16 @@ func (TCPSocketAction) SwaggerDoc() map[string]string {
 	return map_TCPSocketAction
 }
 
+var map_VMDKVolumeSource = map[string]string{
+	"":             "VMDKVolume represents a VMDK Volume attached to a kubelet's host machine and is then exposed to the pod requesting the volume.",
+	"datastore":    "DataStore hosting the VMDK Volume",
+	"vmdkVolumeID": "The unique ID for a volume within a datastore.",
+}
+
+func (VMDKVolumeSource) SwaggerDoc() map[string]string {
+	return map_VMDKVolumeSource
+}
+
 var map_Volume = map[string]string{
 	"":     "Volume represents a named volume in a pod that may be accessed by any container in the pod.",
 	"name": "Volume's name. Must be a DNS_LABEL and unique within the pod. More info: http://releases.k8s.io/release-1.1/docs/user-guide/identifiers.md#names",
@@ -1370,6 +1381,7 @@ var map_VolumeSource = map[string]string{
 	"cinder":      "Cinder represents a cinder volume attached and mounted on kubelets host machine More info: http://releases.k8s.io/release-1.1/examples/mysql-cinder-pd/README.md",
 	"cephfs":      "CephFS represents a Ceph FS mount on the host that shares a pod's lifetime",
 	"flocker":     "Flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running",
+	"vmdk":        "VMDKVolume represents a VMDK Volume attached to a kubelet's host machine and is then exposed to the pod requesting the volume.",
 	"downwardAPI": "DownwardAPI represents downward API about the pod that should populate this volume",
 	"fc":          "FC represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.",
 }

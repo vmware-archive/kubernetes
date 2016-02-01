@@ -12250,6 +12250,10 @@
       "$ref": "v1.FlockerVolumeSource",
       "description": "Flocker represents a Flocker volume attached to a kubelet's host machine and exposed to the pod for its usage. This depends on the Flocker control service being running"
      },
+     "vmdk": {
+      "$ref": "v1.VMDKVolumeSource",
+      "description": "VMDKVolume represents a VMDK Volume attached to a kubelet's host machine and is then exposed to the pod requesting the volume."
+     },
      "accessModes": {
       "type": "array",
       "items": {
@@ -12567,6 +12571,24 @@
      }
     }
    },
+   "v1.VMDKVolumeSource": {
+    "id": "v1.VMDKVolumeSource",
+    "description": "VMDKVolume represents a VMDK Volume attached to a kubelet's host machine and is then exposed to the pod requesting the volume.",
+    "required": [
+     "datastore",
+     "vmdkVolumeID"
+    ],
+    "properties": {
+     "datastore": {
+      "type": "string",
+      "description": "DataStore hosting the VMDK Volume"
+     },
+     "vmdkVolumeID": {
+      "type": "string",
+      "description": "The unique ID for a volume within a datastore."
+     }
+    }
+   },
    "v1.PersistentVolumeStatus": {
     "id": "v1.PersistentVolumeStatus",
     "description": "PersistentVolumeStatus is the current status of a persistent volume.",
@@ -12781,6 +12803,10 @@
      "flocker": {
       "$ref": "v1.FlockerVolumeSource",
       "description": "Flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running"
+     },
+     "vmdk": {
+      "$ref": "v1.VMDKVolumeSource",
+      "description": "VMDKVolume represents a VMDK Volume attached to a kubelet's host machine and is then exposed to the pod requesting the volume."
      },
      "downwardAPI": {
       "$ref": "v1.DownwardAPIVolumeSource",

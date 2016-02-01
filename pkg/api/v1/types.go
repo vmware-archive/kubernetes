@@ -253,6 +253,10 @@ type VolumeSource struct {
 	// Flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running
 	Flocker *FlockerVolumeSource `json:"flocker,omitempty"`
 
+	// VMDKVolume represents a VMDK Volume attached to a kubelet's host
+        // machine and is then exposed to the pod requesting the volume.
+	VMDKVolume *VMDKVolumeSource `json:"vmdk,omitempty"`
+
 	// DownwardAPI represents downward API about the pod that should populate this volume
 	DownwardAPI *DownwardAPIVolumeSource `json:"downwardAPI,omitempty"`
 	// FC represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.
@@ -311,6 +315,10 @@ type PersistentVolumeSource struct {
 	FC *FCVolumeSource `json:"fc,omitempty"`
 	// Flocker represents a Flocker volume attached to a kubelet's host machine and exposed to the pod for its usage. This depends on the Flocker control service being running
 	Flocker *FlockerVolumeSource `json:"flocker,omitempty"`
+	
+        // VMDKVolume represents a VMDK Volume attached to a kubelet's host
+        // machine and is then exposed to the pod requesting the volume.
+	VMDKVolume *VMDKVolumeSource `json:"vmdk,omitempty"`
 }
 
 // PersistentVolume (PV) is a storage resource provisioned by an administrator.
@@ -598,6 +606,18 @@ type CephFSVolumeSource struct {
 type FlockerVolumeSource struct {
 	// Required: the volume name. This is going to be store on metadata -> name on the payload for Flocker
 	DatasetName string `json:"datasetName"`
+}
+
+// VMDKVolume represents a VMDK Volume attached to a kubelet's host
+// machine and is then exposed to the pod requesting the volume.
+type VMDKVolumeSource struct {
+        // DataStore hosting the VMDK Volume
+        DataStore string `json:"datastore"`
+        // The unique ID for a volume within a datastore.
+        VMDKVolume string `json:"vmdkVolumeID"`
+        // TODO: Should we add support for partitions?
+        // TODO: What form of SPBM support should be added?
+        // TODO: Add support for readonly disk.
 }
 
 const (

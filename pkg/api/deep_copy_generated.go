@@ -1309,6 +1309,14 @@ func deepCopy_api_PersistentVolumeSource(in PersistentVolumeSource, out *Persist
 	} else {
 		out.Flocker = nil
 	}
+	if in.VMDKVolume != nil {
+		out.VMDKVolume = new(VMDKVolumeSource)
+		if err := deepCopy_api_VMDKVolumeSource(*in.VMDKVolume, out.VMDKVolume, c); err != nil {
+			return err
+		}
+	} else {
+		out.VMDKVolume = nil
+	}
 	return nil
 }
 
@@ -2105,6 +2113,12 @@ func deepCopy_api_TCPSocketAction(in TCPSocketAction, out *TCPSocketAction, c *c
 	return nil
 }
 
+func deepCopy_api_VMDKVolumeSource(in VMDKVolumeSource, out *VMDKVolumeSource, c *conversion.Cloner) error {
+	out.DataStore = in.DataStore
+	out.VMDKVolume = in.VMDKVolume
+	return nil
+}
+
 func deepCopy_api_Volume(in Volume, out *Volume, c *conversion.Cloner) error {
 	out.Name = in.Name
 	if err := deepCopy_api_VolumeSource(in.VolumeSource, &out.VolumeSource, c); err != nil {
@@ -2232,6 +2246,14 @@ func deepCopy_api_VolumeSource(in VolumeSource, out *VolumeSource, c *conversion
 		}
 	} else {
 		out.Flocker = nil
+	}
+	if in.VMDKVolume != nil {
+		out.VMDKVolume = new(VMDKVolumeSource)
+		if err := deepCopy_api_VMDKVolumeSource(*in.VMDKVolume, out.VMDKVolume, c); err != nil {
+			return err
+		}
+	} else {
+		out.VMDKVolume = nil
 	}
 	if in.DownwardAPI != nil {
 		out.DownwardAPI = new(DownwardAPIVolumeSource)
@@ -2413,6 +2435,7 @@ func init() {
 		deepCopy_api_ServiceSpec,
 		deepCopy_api_ServiceStatus,
 		deepCopy_api_TCPSocketAction,
+		deepCopy_api_VMDKVolumeSource,
 		deepCopy_api_Volume,
 		deepCopy_api_VolumeMount,
 		deepCopy_api_VolumeSource,

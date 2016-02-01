@@ -31,6 +31,7 @@ Familiarity with [pods](pods.md) is suggested.
     - [nfs](#nfs)
     - [iscsi](#iscsi)
     - [flocker](#flocker)
+    - [vmdk](#vmdk)
     - [glusterfs](#glusterfs)
     - [rbd](#rbd)
     - [gitRepo](#gitrepo)
@@ -88,6 +89,7 @@ Kubernetes supports several types of Volumes:
    * `nfs`
    * `iscsi`
    * `flocker`
+   * `vmdk`
    * `glusterfs`
    * `rbd`
    * `gitRepo`
@@ -296,6 +298,23 @@ can be "handed off" between pods as required.
 __Important: You must have your own Flocker installation running before you can use it__
 
 See the [Flocker example](../../examples/flocker/) for more details.
+
+### vmdk
+
+VMDK is the file format to provide virtual hard drives to be used within
+virtual machines deployed on hypervisors such as vSphere. The VMDK plugin allows
+Pods to consume storage under vSphere management.
+
+To use the plugin follow the install steps for installing kubernetes on top of
+vSphere.
+
+The volumes created by this plugin are single writer, single reader. The volume
+can be attached to any node in the kubernetes cluster provided all vSphere
+machines have access to the underlying datastore used to create the volume.
+
+see the [VMDK exmaple](../../examples/flocker/) for usage details
+see the [vSphere installation](../getting-started-guides/vsphere.md) for
+installation details
 
 ### glusterfs
 
