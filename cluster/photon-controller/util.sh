@@ -321,11 +321,11 @@ function pc-delete-vm {
     fi
 }
 
-# 
+#
 # Looks for the image named PHOTON_IMAGE
 # Set PHOTON_IMAGE_ID to be the id of that image.
 # We currently assume there is exactly one image with name
-# 
+#
 function find-image-id {
     local rc=0
     PHOTON_IMAGE_ID=$($PHOTON image list | head -1 | grep "\t${PHOTON_IMAGE}\t" | awk '{print $1}')
@@ -480,7 +480,7 @@ function install-kubernetes-on-master {
 
 function install-kubernetes-on-nodes {
     gen-node-salt
-    
+
     # Run in parallel to bring up the cluster faster
     # TODO: Batch this so that we run up to N in parallel, so
     # we don't overload this machine
@@ -560,11 +560,20 @@ function wait-minion-apis {
 #
 function setup-pod-routes {
     local node
+
     KUBE_NODE_BRIDGE_NETWORK=()
     for (( node=0; node<${#NODE_NAMES[@]}; node++)); do
+
+        # This happens in two steps (wait for an address, wait for a non 172.x.x.x address)
+        # because it's both simpler and more clear what's happening.
         try-until-success-ssh ${KUBE_NODE_IP_ADDRESSES[$node]} \
-            "Waiting for cbr0 bridge on ${NODE_NAMES[$node]}"  \
-            'sudo ifconfig cbr0 | grep -oP "inet addr:\K\S+"'
+            "Waiting for cbr0 bridge on ${NODE_NAMES[$node]} to have an address"  \
+            'sudo ifconfig cbr0  | grep -oP "inet addr:\K\S+"'
+
+        try-until-success-ssh ${KUBE_NODE_IP_ADDRESSES[$node]} \
+            "Waiting for cbr0 bridge on ${NODE_NAMES[$node]} to have correct address"  \
+            'sudo ifconfig cbr0  | grep -oP "inet addr:\K\S+" | grep -v  "^172."'
+
         run-ssh-cmd ${KUBE_NODE_IP_ADDRESSES[$node]} 'sudo ip route show | grep -E "dev cbr0" | cut -d " " -f1'
         KUBE_NODE_BRIDGE_NETWORK+=($_OUTPUT)
         kube::log::status "cbr0 on ${NODE_NAMES[$node]} is ${_OUTPUT}"
@@ -884,7 +893,6 @@ function try-until-success {
     done
 
 }
-
 
 #
 # Sets up a trap handler
