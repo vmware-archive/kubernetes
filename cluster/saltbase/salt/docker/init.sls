@@ -69,6 +69,7 @@ docker:
         environment_file: {{ environment_file }}
     - require:
       - file: /opt/kubernetes/helpers/docker-prestart
+      - pkg: docker-engine
 
 # The docker service.running block below doesn't work reliably
 # Instead we run our script which e.g. does a systemd daemon-reload
@@ -144,6 +145,7 @@ docker-engine:
      - version: 1.9.*
      - require:
        - file: /etc/apt/sources.list.d/docker.list
+
 docker:
    service.running:
      - enable: True
