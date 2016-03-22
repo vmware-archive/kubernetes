@@ -422,7 +422,7 @@ function gen-node-salt {
             echo "salt ${NODE_NAMES[$i]} state.highstate -t 30 --no-color > /tmp/${NODE_NAMES[$i]}-salt.out"
             echo "grep -E \"Failed:[[:space:]]+0\" /tmp/${NODE_NAMES[$i]}-salt.out"
             echo 'success=$?'
-            echo "cat /tmp/master.out >> /tmp/${NODE_NAMES[$i]}-salt.log"
+            echo "cat /tmp/${NODE_NAMES[$i]}-salt.out >> /tmp/${NODE_NAMES[$i]}-salt.log"
             echo 'exit $success'
         ) > "${KUBE_TEMP}/${NODE_NAMES[$i]}-salt.sh"
     done
