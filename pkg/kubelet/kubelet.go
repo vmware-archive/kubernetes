@@ -461,6 +461,11 @@ func NewMainKubelet(
 		containerRefManager,
 		recorder)
 
+	glog.V(1).Infof("SUFIANDAR: Number of Plugins: %d", len(volumePlugins))
+	for _, p := range volumePlugins {
+		glog.V(1).Infof("SUFIANDAR: PluginName: %s", p.Name())
+	}
+
 	if err := klet.volumePluginMgr.InitPlugins(volumePlugins, &volumeHost{klet}); err != nil {
 		return nil, err
 	}

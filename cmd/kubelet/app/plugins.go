@@ -47,6 +47,7 @@ import (
 	"k8s.io/kubernetes/pkg/volume/persistent_claim"
 	"k8s.io/kubernetes/pkg/volume/rbd"
 	"k8s.io/kubernetes/pkg/volume/secret"
+	"k8s.io/kubernetes/pkg/volume/photoncontroller_pd"
 	// Cloud providers
 	_ "k8s.io/kubernetes/pkg/cloudprovider/providers"
 )
@@ -82,6 +83,7 @@ func ProbeVolumePlugins(pluginDir string) []volume.VolumePlugin {
 	allPlugins = append(allPlugins, flexvolume.ProbeVolumePlugins(pluginDir)...)
 	allPlugins = append(allPlugins, azure_file.ProbeVolumePlugins()...)
 	allPlugins = append(allPlugins, configmap.ProbeVolumePlugins()...)
+	allPlugins = append(allPlugins, photoncontroller_pd.ProbeVolumePlugins()...)
 	return allPlugins
 }
 

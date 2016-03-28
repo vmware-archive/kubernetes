@@ -592,6 +592,14 @@ func deepCopy_v1_PersistentVolumeClaimVolumeSource(in v1.PersistentVolumeClaimVo
 	return nil
 }
 
+func deepCopy_v1_PhotonControllerPersistentDiskSource(in v1.PhotonControllerPersistentDiskSource, out *v1.PhotonControllerPersistentDiskSource, c *conversion.Cloner) error {
+	out.DiskID = in.DiskID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
 func deepCopy_v1_PodSecurityContext(in v1.PodSecurityContext, out *v1.PodSecurityContext, c *conversion.Cloner) error {
 	if in.SELinuxOptions != nil {
 		out.SELinuxOptions = new(v1.SELinuxOptions)
@@ -1015,6 +1023,14 @@ func deepCopy_v1_VolumeSource(in v1.VolumeSource, out *v1.VolumeSource, c *conve
 		}
 	} else {
 		out.ConfigMap = nil
+	}
+	if in.PhotonControllerDisk != nil {
+		out.PhotonControllerDisk = new(v1.PhotonControllerPersistentDiskSource)
+		if err := deepCopy_v1_PhotonControllerPersistentDiskSource(*in.PhotonControllerDisk, out.PhotonControllerDisk, c); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
 	}
 	return nil
 }
@@ -1981,6 +1997,7 @@ func init() {
 		deepCopy_v1_ObjectFieldSelector,
 		deepCopy_v1_ObjectMeta,
 		deepCopy_v1_PersistentVolumeClaimVolumeSource,
+		deepCopy_v1_PhotonControllerPersistentDiskSource,
 		deepCopy_v1_PodSecurityContext,
 		deepCopy_v1_PodSpec,
 		deepCopy_v1_PodTemplateSpec,
