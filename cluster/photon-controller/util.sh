@@ -39,6 +39,8 @@ PHOTON="photon -n"
 #
 function detect-master {
     local silent=${1:-""}
+    local tenant_args="--tenant ${PHOTON_TENANT} --project ${PHOTON_PROJECT}"
+
     KUBE_MASTER=${MASTER_NAME}
     KUBE_MASTER_ID=${KUBE_MASTER_ID:-""}
     KUBE_MASTER_IP=${KUBE_MASTER_IP:-""}
@@ -46,7 +48,7 @@ function detect-master {
     # We don't want silent failure: we check for failure
     set +o pipefail
     if [ -z ${KUBE_MASTER_ID} ]; then
-        KUBE_MASTER_ID=$($PHOTON vm list | grep "\tkubernetes-master\t" | awk '{print $1}')
+        KUBE_MASTER_ID=$($PHOTON vm list ${tenant_args} | grep "\tkubernetes-master\t" | awk '{print $1}')
     fi
     if [ -z ${KUBE_MASTER_ID} ]; then
         kube::log::error "Could not find Kubernetes master node ID. Make sure you've launched a cluster with kube-up.sh"
@@ -81,6 +83,7 @@ function detect-master {
 function detect-nodes {
     local silent=${1:-""}
     local failure=0
+    local tenant_args="--tenant ${PHOTON_TENANT} --project ${PHOTON_PROJECT}"
 
     KUBE_NODE_IP_ADDRESSES=()
     KUBE_NODE_IDS=()
@@ -88,7 +91,7 @@ function detect-nodes {
     set +o pipefail
     for (( i=0; i<${#NODE_NAMES[@]}; i++)); do
 
-        local node_id=$($PHOTON vm list | grep "\t${NODE_NAMES[$i]}\t" | awk '{print $1}')
+        local node_id=$($PHOTON vm list ${tenant_args} | grep "\t${NODE_NAMES[$i]}\t" | awk '{print $1}')
         if [ -z ${node_id} ]; then
             kube::log::error "Could not find ${NODE_NAMES[$i]}"
             failure=1
@@ -232,9 +235,9 @@ function pc-create-vm {
     local i=0
 
     # Create the VM
-    tenant_args="--tenant ${PHOTON_TENANT} --project ${PHOTON_PROJECT}"
-    vm_args="--name ${vm_name} --image ${PHOTON_IMAGE_ID} --flavor ${vm_flavor}"
-    disk_args="disk-1 ${PHOTON_DISK_FLAVOR} boot=true"
+    local tenant_args="--tenant ${PHOTON_TENANT} --project ${PHOTON_PROJECT}"
+    local vm_args="--name ${vm_name} --image ${PHOTON_IMAGE_ID} --flavor ${vm_flavor}"
+    local disk_args="disk-1 ${PHOTON_DISK_FLAVOR} boot=true"
 
     rc=0
     _VM_ID=$($PHOTON vm create ${tenant_args} ${vm_args} --disks "${disk_args}" 2>&1) || rc=$?
@@ -323,12 +326,12 @@ function pc-delete-vm {
 
 #
 # Looks for the image named PHOTON_IMAGE
-# Set PHOTON_IMAGE_ID to be the id of that image.
+# Sets PHOTON_IMAGE_ID to be the id of that image.
 # We currently assume there is exactly one image with name
 #
 function find-image-id {
     local rc=0
-    PHOTON_IMAGE_ID=$($PHOTON image list | head -1 | grep "\t${PHOTON_IMAGE}\t" | awk '{print $1}')
+    PHOTON_IMAGE_ID=$($PHOTON image list | head -1 | grep "\t${PHOTON_IMAGE}\t" | grep READY | awk '{print $1}')
     if [ $rc -ne 0 ]; then
         kube::log::error "Cannot find image \"${PHOTON_IMAGE}\""
         fail=1
@@ -360,6 +363,7 @@ function gen-master-start {
         echo "readonly ENABLE_NODE_LOGGING='${ENABLE_NODE_LOGGING:-false}'"
         echo "readonly LOGGING_DESTINATION='${LOGGING_DESTINATION:-}'"
         echo "readonly ENABLE_CLUSTER_DNS='${ENABLE_CLUSTER_DNS:-false}'"
+        echo "readonly ENABLE_CLUSTER_UI='${ENABLE_CLUSTER_UI:-false}'"
         echo "readonly DNS_SERVER_IP='${DNS_SERVER_IP:-}'"
         echo "readonly DNS_DOMAIN='${DNS_DOMAIN:-}'"
         echo "readonly KUBE_USER='${KUBE_USER:-}'"
@@ -395,7 +399,7 @@ function gen-node-start {
 #
 # Create a script that will run on the Kubernetes master and will run salt
 # to configure the master. We make it a script instead of just running a
-# single ssh command so that we can get loging.
+# single ssh command so that we can get logging.
 #
 function gen-master-salt {
      (
@@ -558,6 +562,9 @@ function wait-minion-apis {
 # defined in config-default.sh. This finds the IP address (assigned
 # by Kubernetes) to minion and configures routes so they can communicate
 #
+# Also configure the master to be able to talk to the nodes. This is
+# useful so that you can get to the UI from the master.
+#
 function setup-pod-routes {
     local node
 
@@ -583,6 +590,7 @@ function setup-pod-routes {
     local j
     for (( i=0; i<${#NODE_NAMES[@]}; i++)); do
         kube::log::status "Configuring pod routes on ${NODE_NAMES[$i]}..."
+        run-ssh-cmd ${KUBE_MASTER_IP} "sudo route add -net ${KUBE_NODE_BRIDGE_NETWORK[$i]} gw ${KUBE_NODE_IP_ADDRESSES[$i]}"
         for (( j=0; j<${#NODE_NAMES[@]}; j++)); do
             if [[ $i != $j ]]; then
                 run-ssh-cmd ${KUBE_NODE_IP_ADDRESSES[$i]} "sudo route add -net ${KUBE_NODE_BRIDGE_NETWORK[$j]} gw ${KUBE_NODE_IP_ADDRESSES[$j]}"
@@ -781,31 +789,87 @@ function verify-ssh-prereqs {
 function verify-photon-config {
     kube::log::status "Validating Photon configuration..."
 
-    fail=0
-    rc=0
+    # We don't want silent failure: we check for failure
+    set +o pipefail
+
+    verify-photon-flavors
+    verify-photon-image
+    verify-photon-tenant
+
+    # Reset default set in common.sh
+    set -o pipefail
+}
+
+#
+# Verify that the VM and disk flavors have been created
+#
+function verify-photon-flavors {
+    local rc=0
+
     $PHOTON flavor list | awk -Ft '{print $2}' | grep "^${PHOTON_MASTER_FLAVOR}$" > /dev/null 2>&1 || rc=$?
     if [ $rc -ne 0 ]; then
-        kube::log::error "Cannot find flavor named ${PHOTON_MASTER_FLAVOR}"
-        fail=1
+        kube::log::error "ERROR: Cannot find VM flavor named ${PHOTON_MASTER_FLAVOR}"
+        exit 1
     fi
 
     if [ "${PHOTON_MASTER_FLAVOR}" != "${PHOTON_NODE_FLAVOR}" ]; then
         rc=0
         $PHOTON flavor list | awk -Ft '{print $2}' | grep "^${PHOTON_NODE_FLAVOR}$" > /dev/null 2>&1 || rc=$?
         if [ $rc -ne 0 ]; then
-            kube::log::error "Cannot find flavor named ${PHOTON_NODE_FLAVOR}"
-            fail=1
+            kube::log::error "ERROR: Cannot find VM flavor named ${PHOTON_NODE_FLAVOR}"
+            exit 1
         fi
     fi
+
+    $PHOTON flavor list | awk -Ft '{print $2}' | grep "^${PHOTON_DISK_FLAVOR}$" > /dev/null 2>&1 || rc=$?
+    if [ $rc -ne 0 ]; then
+        kube::log::error "ERROR: Cannot find disk flavor named ${PHOTON_DISK_FLAVOR}"
+        exit 1
+    fi
+}
+
+#
+# Verify that we have the image we need, and it's not in error state or
+# multiple copies
+#
+function verify-photon-image {
+    local rc
 
     rc=0
     $PHOTON image list | grep "\t${PHOTON_IMAGE}\t"  > /dev/null 2>&1 || rc=$?
     if [ $rc -ne 0 ]; then
-        kube::log::error "Cannot find image \"${PHOTON_IMAGE}\""
-        fail=1
+        kube::log::error "ERROR: Cannot find image \"${PHOTON_IMAGE}\""
+        exit 1
     fi
 
-    if [ $fail -eq 1 ]; then
+    rc=0
+    $PHOTON image list | grep "\t${PHOTON_IMAGE}\t" | grep ERROR > /dev/null 2>&1 || rc=$?
+    if [ $rc -eq 0 ]; then
+        echo "Warning: You have at least one ${PHOTON_IMAGE} image in the ERROR state. You may want to investigate."
+        echo "Images in the ERROR state will be ignored."
+    fi
+
+    rc=0
+    num_images=$($PHOTON image list | grep "\t${PHOTON_IMAGE}\t" | grep READY | wc -l)
+    if [ "$num_images" -gt 1 ]; then
+        echo "ERROR: You have more than one READY ${PHOTON_IMAGE} image. Ensure there is only one"
+        exit 1
+    fi
+}
+
+function verify-photon-tenant {
+    local rc
+
+    rc=0
+    $PHOTON tenant list | grep "\t${PHOTON_TENANT}$" > /dev/null 2>&1 || rc=$?
+    if [ $rc -ne 0 ]; then
+        echo "ERROR: Cannot find tenant \"${PHOTON_TENANT}\""
+        exit 1
+    fi
+
+    $PHOTON project list --tenant ${PHOTON_TENANT} | grep "\t${PHOTON_PROJECT}\t" > /dev/null 2>&1  || rc=$?
+    if [ $rc -ne 0 ]; then
+        echo "ERROR: Cannot find project \"${PHOTON_PROJECT}\""
         exit 1
     fi
 }

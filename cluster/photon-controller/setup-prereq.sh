@@ -87,29 +87,52 @@ function set-target {
 
 function create-tenant {
     local rc=0
+    local output
 
     $PHOTON tenant list | grep "\t${PHOTON_TENANT}$" > /dev/null 2>&1 || rc=$?
     if [ $rc -eq 0 ]; then
         echo "Tenant ${PHOTON_TENANT} already made, skipping"
     else
         echo "Making tenant ${PHOTON_TENANT}"
-        $PHOTON tenant create ${PHOTON_TENANT} > /dev/null 2>&1
+        rc=0
+        output=$($PHOTON tenant create ${PHOTON_TENANT} 2>&1) || rc=$?
+        if [ $rc -ne 0 ]; then
+            echo "ERROR: Could not create tenant \"${PHOTON_TENANT}\", exiting"
+            echo "Output from tenant creation:"
+            echo ${output}
+            exit 1
+        fi
     fi
     $PHOTON tenant set ${PHOTON_TENANT} > /dev/null 2>&1
 }
 
 function create-project {
     local rc=0
+    local output
 
     $PHOTON project list | grep "\t${PHOTON_PROJECT}\t" > /dev/null 2>&1  || rc=$?
     if [ $rc -eq 0 ]; then
         echo "Project ${PHOTON_PROJECT} already made, skipping"
     else
         echo "Making project ${PHOTON_PROJECT}"
-        $PHOTON resource-ticket create --tenant ${PHOTON_TENANT} --name ${PHOTON_TENANT}-resources \
-            --limits "${SETUP_TICKET_SPEC}" > /dev/null 2>&1
-        $PHOTON project create --tenant ${PHOTON_TENANT} --resource-ticket ${PHOTON_TENANT}-resources \
-            --name ${PHOTON_PROJECT} --limits "${SETUP_PROJECT_SPEC}" > /dev/null 2>&1
+        rc=0
+        output=$($PHOTON resource-ticket create --tenant ${PHOTON_TENANT} --name ${PHOTON_TENANT}-resources --limits "${SETUP_TICKET_SPEC}" 2>&1) || rc=$?
+        if [ $rc -ne 0 ]; then
+            echo "ERROR: Could not create resource ticket, exiting"
+            echo "Output from resource ticket creation:"
+            echo ${output}
+            exit 1
+        fi
+
+        rc=0
+        output=$($PHOTON project create --tenant ${PHOTON_TENANT} --resource-ticket ${PHOTON_TENANT}-resources --name ${PHOTON_PROJECT} --limits "${SETUP_PROJECT_SPEC}" 2>&1) || rc=$?
+        if [ $rc -ne 0 ]; then
+            echo "ERROR: Could not create project \"${PHOTON_PROJECT}\", exiting"
+            echo "Output from project creation:"
+            echo ${output}
+            exit 1
+        fi
+
     fi
     $PHOTON project set ${PHOTON_PROJECT}
 }
@@ -118,40 +141,95 @@ function create-vm-flavor {
     local flavor_name=$1
     local flavor_spec=$2
     local rc=0
+    local output
 
     $PHOTON flavor list | grep "\t${flavor_name}\t" > /dev/null 2>&1 || rc=$?
     if [ $rc -eq 0 ]; then
+        check-flavor-ready ${flavor_name}
         echo "Flavor ${flavor_name} already made, skipping"
     else
         echo "Making VM flavor ${flavor_name}"
-        $PHOTON -n flavor create --name "${flavor_name}" --kind "vm" --cost "${flavor_spec}" > /dev/null 2>&1
+        rc=0
+        output=$($PHOTON -n flavor create --name "${flavor_name}" --kind "vm" --cost "${flavor_spec}" 2>&1) || rc=$?
+        if [ $rc -ne 0 ]; then
+            echo "ERROR: Could not create vm flavor \"${flavor_name}\", exiting"
+            echo "Output from flavor creation:"
+            echo ${output}
+            exit 1
+        fi
     fi
 }
 
 function create-disk-flavor {
     local rc=0
+    local output
 
     $PHOTON flavor list | grep "\t${PHOTON_DISK_FLAVOR}\t" > /dev/null 2>&1  || rc=$?
     if [ $rc -eq 0 ]; then
+        check-flavor-ready ${PHOTON_DISK_FLAVOR}
         echo "Flavor ${PHOTON_DISK_FLAVOR} already made, skipping"
     else
         echo "Making disk flavor ${PHOTON_DISK_FLAVOR}"
-        $PHOTON -n flavor create --name ${PHOTON_DISK_FLAVOR} --kind "ephemeral-disk" --cost "${SETUP_DISK_FLAVOR_SPEC}" > /dev/null 2>&1
+        rc=0
+        output=$($PHOTON -n flavor create --name ${PHOTON_DISK_FLAVOR} --kind "ephemeral-disk" --cost "${SETUP_DISK_FLAVOR_SPEC}" 2>&1) || rc=$?
+        if [ $rc -ne 0 ]; then
+            echo "ERROR: Could not create disk flavor \"${PHOTON_DISK_FLAVOR}\", exiting"
+            echo "Output from flavor creation:"
+            echo ${output}
+            exit 1
+        fi
+    fi
+}
+
+function check-flavor-ready {
+    local flavor_name=$1
+    local rc=0
+
+    local flavor_id
+    flavor_id=$($PHOTON flavor list | grep "\t${flavor_name}\t" | awk '{print $1}') || rc=$?
+    $PHOTON flavor show ${flavor_id} | grep "\tREADY\$" > /dev/null 2>&1  || rc=$?
+    if [ $rc -ne 0 ]; then
+        echo "ERROR: Flavor \"${flavor_name}\" already exists but is not READY. Please delete or fix it."
+        exit 1
     fi
 }
 
 function create-image {
     local rc=0
     local image_id=""
+    local num_images
+    local output
 
-    $PHOTON image list | grep "\tkube-image\t" > /dev/null 2>&1 || rc=$?
+    $PHOTON image list | grep "\t${PHOTON_IMAGE}\t" | grep ERROR > /dev/null 2>&1 || rc=$?
+    if [ $rc -eq 0 ]; then
+        echo "Warning: You have at least one ${PHOTON_IMAGE} image in the ERROR state. You may want to investigate."
+        echo "Images in the ERROR state will be ignored."
+    fi
+
+    rc=0
+    num_images=$($PHOTON image list | grep "\t${PHOTON_IMAGE}\t" | grep READY | wc -l)
+    if [ "$num_images" -gt 1 ]; then
+        echo "Warning: You have more than one good ${PHOTON_IMAGE} image. You may want to remove duplicates."
+    fi
+
+    $PHOTON image list | grep "\t${PHOTON_IMAGE}\t" | grep READY > /dev/null 2>&1 || rc=$?
     if [ $rc -eq 0 ]; then
         echo "Image ${PHOTON_VMDK} already uploaded, skipping"
     else
         echo "Uploading image ${PHOTON_VMDK}"
-        $PHOTON image create $PHOTON_VMDK -n ${PHOTON_IMAGE} -i EAGER > /dev/null 2>&1
+        rc=0
+        output=$($PHOTON image create $PHOTON_VMDK -n ${PHOTON_IMAGE} -i EAGER 2>&1) || rc=$?
+        if [ $rc -ne 0 ]; then
+            echo "ERROR: Could not upload image, exiting"
+            echo "Output from image create:"
+            echo ${output}
+            exit 1
+        fi
     fi
 }
+
+# We don't want silent pipeline failure: we check for failure
+set +o pipefail
 
 parse-cmd-line $@
 main

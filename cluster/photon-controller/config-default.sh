@@ -74,7 +74,8 @@ DNS_DOMAIN="cluster.local"
 DNS_REPLICAS=1
 
 # Optional: Install Kubernetes UI
-ENABLE_CLUSTER_UI="${KUBE_ENABLE_CLUSTER_UI:-true}"
+# This is currently disabled because it's not fully working
+ENABLE_CLUSTER_UI=false
 
 # Optional: if set to true, kube-up will configure the cluster to run e2e tests.
 E2E_STORAGE_TEST_ENVIRONMENT=${KUBE_E2E_STORAGE_TEST_ENVIRONMENT:-false}
