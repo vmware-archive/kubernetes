@@ -129,7 +129,8 @@ function verify-prereqs {
     verify-cmd-in-path ssh
     verify-cmd-in-path scp
     verify-cmd-in-path ssh-add
-    verify-cmd-in-path sshpass
+    verify-cmd-in-path openssl
+    verify-cmd-in-path mkisofs
 }
 
 #
@@ -143,6 +144,8 @@ function kube-up {
     find-release-tars
     find-image-id
 
+    load-or-gen-kube-basicauth
+    gen-cloud-init-iso
     gen-master-start
     create-master-vm
     install-salt-on-master
@@ -222,8 +225,12 @@ function test-teardown {
 # Takes two parameters:
 #   - The name of the VM (Assumed to be unique)
 #   - The name of the flavor to create the VM (Assumed to be unique)
+#
 # It assumes that the variables in config-common.sh (PHOTON_TENANT, etc)
 # are set correctly.
+#
+# It also assumes the cloud-init ISO has been generated
+#
 # When it completes, it sets two environment variables for use by the
 # caller: _VM_ID (the ID of the created VM) and _VM_IP (the IP address
 # of the created VM)
@@ -249,6 +256,12 @@ function pc-create-vm {
     kube::log::status "Created VM ${vm_name}: ${_VM_ID}"
 
     # Start the VM
+    # Note that the VM has cloud-init in it, and we attach an ISO that
+    # contains a user-data.txt file for cloud-init. When the VM starts,
+    # cloud-init will temporarily mount the ISO and configure the VM
+    # Our user-data will configure the 'kube' user and set up the ssh
+    # authorized keys to allow us to ssh to the VM and do further work.
+    run-cmd "$PHOTON vm attach-iso -p ${KUBE_TEMP}/cloud-init.iso ${_VM_ID}"
     run-cmd "$PHOTON vm start ${_VM_ID}"
     kube::log::status "Started VM ${vm_name}, waiting for network address..."
 
@@ -281,19 +294,6 @@ function pc-create-vm {
     # Find the IP address of the VM
     _VM_IP=$(PHOTON -n vm networks ${_VM_ID} | head -1 | awk -Ft '{print $3}')
     kube::log::status "VM ${vm_name} has IP: ${_VM_IP}"
-
-    # Find this user's ssh public keys, if any.
-    # We can't use run-cmd, because it uses $(), which removes newlines from output
-    rc=0
-    auth_key_file="${KUBE_TEMP}/${vm_name}-authorized_keys"
-    ssh-add -L > ${auth_key_file}
-
-    # And copy them to the VM
-    run-ssh-cmd -p ${_VM_IP} "mkdir /home/kube/.ssh"
-    run-ssh-cmd -p ${_VM_IP} "chmod 700 /home/kube/.ssh"
-    copy-file-to-vm -p ${_VM_IP} ${auth_key_file} "/home/kube/.ssh/authorized_keys"
-    run-ssh-cmd -p ${_VM_IP} "chmod 600 /home/kube/.ssh/authorized_keys"
-    rm -f ${auth_key_file}
 }
 
 #
@@ -339,11 +339,56 @@ function find-image-id {
 }
 
 #
+# Generate an ISO with a single file called user-data.txt
+# This ISO will be used to configure cloud-init (which is already
+# on the VM). We will tell cloud-init to create the kube user/group
+# and give ourselves the ability to ssh to the VM with ssh. We also
+# allow people to ssh with the same password that was randomly
+# generated for access to Kubernetes as a backup method.
+#
+# Assumes environment variables:
+#   - VM_USER
+#   - KUBE_PASSWORD (randomly generated password)
+#
+function gen-cloud-init-iso {
+    local password_hash
+    password_hash=$(openssl passwd -1 ${KUBE_PASSWORD})
+
+    local ssh_key
+    ssh_key=$(ssh-add -L | head -1)
+
+    # Make the user-data file that will be used by cloud-init
+    (
+        echo "#cloud-config"
+        echo ""
+        echo "groups:"
+        echo "  - ${VM_USER}"
+        echo ""
+        echo "users:"
+        echo "  - name: ${VM_USER}"
+        echo "    gecos: Kubernetes"
+        echo "    primary-group: ${VM_USER}"
+        echo "    lock-passwd: false"
+        echo "    passwd: ${password_hash}"
+        echo "    ssh-authorized-keys: "
+        echo "      - ${ssh_key}"
+        echo "    sudo: ALL=(ALL) NOPASSWD:ALL"
+        echo "    shell: /bin/bash"
+        echo ""
+        echo "hostname:"
+        echo "  - hostname: kube"
+    ) > ${KUBE_TEMP}/user-data.txt
+
+    # Make the ISO that will contain the user-data
+    # The -rock option means that we'll generate real filenames (long and with case)
+    run-cmd "mkisofs -rock -o ${KUBE_TEMP}/cloud-init.iso ${KUBE_TEMP}/user-data.txt"
+}
+
+#
 # Generate a script used to install salt on the master
 # It is placed into $KUBE_TEMP/master-start.sh
 #
 function gen-master-start {
-    load-or-gen-kube-basicauth
     python "${KUBE_ROOT}/third_party/htpasswd/htpasswd.py" \
         -b -c "${KUBE_TEMP}/htpasswd" "$KUBE_USER" "$KUBE_PASSWORD"
     local htpasswd
@@ -476,7 +521,7 @@ function install-kubernetes-on-master {
         "Waiting for salt-master to start on ${KUBE_MASTER}" \
         "pgrep salt-master"
     gen-master-salt
-    copy-file-to-vm -p ${_VM_IP} ${KUBE_TEMP}/salt-master.sh "/tmp/master-salt.sh"
+    copy-file-to-vm ${_VM_IP} ${KUBE_TEMP}/salt-master.sh "/tmp/master-salt.sh"
     try-until-success-ssh ${KUBE_MASTER_IP} \
         "Installing Kubernetes on ${KUBE_MASTER} via salt" \
         "sudo /bin/bash /tmp/master-salt.sh"
@@ -491,7 +536,7 @@ function install-kubernetes-on-nodes {
     local node
     for (( node=0; node<${#NODE_NAMES[@]}; node++)); do
     (
-        copy-file-to-vm -p ${_VM_IP} ${KUBE_TEMP}/${NODE_NAMES[$node]}-salt.sh "/tmp/${NODE_NAMES[$node]}-salt.sh"
+        copy-file-to-vm ${_VM_IP} ${KUBE_TEMP}/${NODE_NAMES[$node]}-salt.sh "/tmp/${NODE_NAMES[$node]}-salt.sh"
         try-until-success-ssh ${KUBE_NODE_IP_ADDRESSES[$node]} \
             "Waiting for salt-master to start on ${NODE_NAMES[$node]}" \
             "pgrep salt-minion"
@@ -649,25 +694,16 @@ function run-script-remotely {
 
 #
 # Runs an command on a VM using ssh
-# If -p is the first parameter, it uses sshpass to login. This is only done
-# during bootstrapping.
 # Parameters:
-#   - (optional) -p to use sshpass
 #   - (optional) -i to ignore failure
 #   - IP address of the VM
 #   - Command to run
 # Assumes environment variables:
 #   - VM_USER
-#   - VM_PASSWORD
 #   - SSH_OPTS
 #
 function run-ssh-cmd {
-    local use_sshpass=0
     local ignore_failure=""
-    if [ "$1" = "-p" ]; then
-        use_sshpass=1
-        shift
-    fi
     if [ "$1" = "-i" ]; then
         ignore_failure="-i"
         shift
@@ -676,42 +712,25 @@ function run-ssh-cmd {
     local vm_ip=$1
     shift
 
-    if [ $use_sshpass -eq 1 ]; then
-        run-cmd ${ignore_failure} "sshpass -p $VM_PASSWORD ssh $SSH_OPTS $VM_USER@${vm_ip} $@"
-    else
-        run-cmd ${ignore_failure} "ssh $SSH_OPTS $VM_USER@${vm_ip} $@"
-    fi
+    run-cmd ${ignore_failure} "ssh $SSH_OPTS $VM_USER@${vm_ip} $@"
 }
 
 #
 # Uses scp to copy file to VM
-# If -p is the first parameter, uses sshpass to login. This is only done
-# during bootstrapping.
 # Parameters:
-#   - (optional) -p to use sshpass
 #   - IP address of the VM
 #   - Path to local file
 #   - Path to remote file
 # Assumes environment variables:
 #   - VM_USER
-#   - VM_PASSWORD
 #   - SSH_OPTS
 #
 function copy-file-to-vm {
-    use_sshpass=0
-    if [ "$1" = "-p" ]; then
-        use_sshpass=1
-        shift
-    fi
     local vm_ip=$1
     local local_file=$2
     local remote_file=$3
 
-    if [ $use_sshpass -eq 1 ]; then
-        run-cmd "sshpass -p $VM_PASSWORD scp $SSH_OPTS $local_file $VM_USER@${vm_ip}:$remote_file"
-    else
-        run-cmd "scp $SSH_OPTS $local_file $VM_USER@${vm_ip}:$remote_file"
-    fi
+    run-cmd "scp $SSH_OPTS $local_file $VM_USER@${vm_ip}:$remote_file"
 }
 
 function copy-file-from-vm {
