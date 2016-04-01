@@ -55,7 +55,7 @@ base:
     - kube-controller-manager
     - kube-scheduler
     - supervisor
-{% if grains['cloud'] is defined and not grains.cloud in [ 'aws', 'gce', 'vagrant', 'vsphere'] %}
+{% if grains['cloud'] is defined and not grains.cloud in [ 'aws', 'gce', 'vagrant', 'vsphere', 'photon-controller'] %}
     - nginx
 {% endif %}
     - cadvisor
@@ -73,7 +73,7 @@ base:
     - logrotate
 {% endif %}
     - kube-addons
-{% if grains['cloud'] is defined and grains['cloud'] in [ 'vagrant', 'gce', 'aws', 'vsphere' ] %}
+{% if grains['cloud'] is defined and grains['cloud'] in [ 'vagrant', 'gce', 'aws', 'vsphere', 'photon-controller' ] %}
     - docker
     - kubelet
 {% endif %}
