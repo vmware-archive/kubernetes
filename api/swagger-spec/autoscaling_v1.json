@@ -626,7 +626,7 @@
       "type": "v1.HorizontalPodAutoscalerList",
       "method": "GET",
       "summary": "list or watch objects of kind HorizontalPodAutoscaler",
-      "nickname": "listHorizontalPodAutoscaler",
+      "nickname": "listNamespacedHorizontalPodAutoscaler",
       "parameters": [
        {
         "type": "string",
@@ -702,7 +702,7 @@
       "type": "json.WatchEvent",
       "method": "GET",
       "summary": "watch individual changes to a list of HorizontalPodAutoscaler",
-      "nickname": "watchHorizontalPodAutoscalerList",
+      "nickname": "watchNamespacedHorizontalPodAutoscalerList",
       "parameters": [
        {
         "type": "string",
@@ -834,7 +834,7 @@
     "description": "API at /apis/autoscaling/v1",
     "operations": [
      {
-      "type": "void",
+      "type": "unversioned.APIResourceList",
       "method": "GET",
       "summary": "get available resources",
       "nickname": "getAPIResources",
@@ -1169,9 +1169,6 @@
    "v1.DeleteOptions": {
     "id": "v1.DeleteOptions",
     "description": "DeleteOptions may be provided when deleting an API object",
-    "required": [
-     "gracePeriodSeconds"
-    ],
     "properties": {
      "kind": {
       "type": "string",
@@ -1185,6 +1182,76 @@
       "type": "integer",
       "format": "int64",
       "description": "The duration in seconds before the object should be deleted. Value must be non-negative integer. The value zero indicates delete immediately. If this value is nil, the default grace period for the specified type will be used. Defaults to a per object value if not specified. zero means delete immediately."
+     },
+     "preconditions": {
+      "$ref": "v1.Preconditions",
+      "description": "Must be fulfilled before a deletion is carried out. If not possible, a 409 Conflict status will be returned."
+     }
+    }
+   },
+   "v1.Preconditions": {
+    "id": "v1.Preconditions",
+    "description": "Preconditions must be fulfilled before an operation (update, delete, etc.) is carried out.",
+    "properties": {
+     "uid": {
+      "$ref": "types.UID",
+      "description": "Specifies the target UID."
+     }
+    }
+   },
+   "types.UID": {
+    "id": "types.UID",
+    "properties": {}
+   },
+   "unversioned.APIResourceList": {
+    "id": "unversioned.APIResourceList",
+    "description": "APIResourceList is a list of APIResource, it is used to expose the name of the resources supported in a specific group and version, and if the resource is namespaced.",
+    "required": [
+     "groupVersion",
+     "resources"
+    ],
+    "properties": {
+     "kind": {
+      "type": "string",
+      "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#types-kinds"
+     },
+     "apiVersion": {
+      "type": "string",
+      "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#resources"
+     },
+     "groupVersion": {
+      "type": "string",
+      "description": "groupVersion is the group and version this APIResourceList is for."
+     },
+     "resources": {
+      "type": "array",
+      "items": {
+       "$ref": "unversioned.APIResource"
+      },
+      "description": "resources contains the name of the resources and if they are namespaced."
+     }
+    }
+   },
+   "unversioned.APIResource": {
+    "id": "unversioned.APIResource",
+    "description": "APIResource specifies the name of a resource and whether it is namespaced.",
+    "required": [
+     "name",
+     "namespaced",
+     "kind"
+    ],
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "name is the name of the resource."
+     },
+     "namespaced": {
+      "type": "boolean",
+      "description": "namespaced indicates if a resource is namespaced or not."
+     },
+     "kind": {
+      "type": "string",
+      "description": "kind is the kind for the resource (e.g. 'Foo' is the kind for a resource 'foo')"
      }
     }
    }

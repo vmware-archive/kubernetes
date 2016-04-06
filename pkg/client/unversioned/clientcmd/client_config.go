@@ -28,7 +28,6 @@ import (
 	"github.com/imdario/mergo"
 
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/client/restclient"
 	clientauth "k8s.io/kubernetes/pkg/client/unversioned/auth"
 	clientcmdapi "k8s.io/kubernetes/pkg/client/unversioned/clientcmd/api"
@@ -99,13 +98,6 @@ func (config *DirectClientConfig) ClientConfig() (*restclient.Config, error) {
 		u.RawQuery = ""
 		u.Fragment = ""
 		clientConfig.Host = u.String()
-	}
-	if len(configClusterInfo.APIVersion) != 0 {
-		gv, err := unversioned.ParseGroupVersion(configClusterInfo.APIVersion)
-		if err != nil {
-			return nil, err
-		}
-		clientConfig.GroupVersion = &gv
 	}
 
 	// only try to read the auth information if we are secure
@@ -313,6 +305,14 @@ func (config *DirectClientConfig) getCluster() clientcmdapi.Cluster {
 		mergo.Merge(&mergedClusterInfo, configClusterInfo)
 	}
 	mergo.Merge(&mergedClusterInfo, config.overrides.ClusterInfo)
+	// An override of --insecure-skip-tls-verify=true and no accompanying CA/CA data should clear already-set CA/CA data
+	// otherwise, a kubeconfig containing a CA reference would return an error that "CA and insecure-skip-tls-verify couldn't both be set"
+	caLen := len(config.overrides.ClusterInfo.CertificateAuthority)
+	caDataLen := len(config.overrides.ClusterInfo.CertificateAuthorityData)
+	if config.overrides.ClusterInfo.InsecureSkipTLSVerify && caLen == 0 && caDataLen == 0 {
+		mergedClusterInfo.CertificateAuthority = ""
+		mergedClusterInfo.CertificateAuthorityData = nil
+	}
 
 	return mergedClusterInfo
 }

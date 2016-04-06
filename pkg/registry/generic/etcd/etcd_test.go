@@ -99,6 +99,7 @@ func NewTestGenericEtcdRegistry(t *testing.T) (*etcdtesting.EtcdTestServer, *Etc
 		QualifiedResource: api.Resource("pods"),
 		CreateStrategy:    strategy,
 		UpdateStrategy:    strategy,
+		DeleteStrategy:    strategy,
 		KeyRootFunc: func(ctx api.Context) string {
 			return podPrefix
 		},
@@ -323,7 +324,7 @@ func TestEtcdUpdate(t *testing.T) {
 	// Test3 outofDate
 	_, _, err = registry.Update(testContext, podAWithResourceVersion)
 	if !errors.IsConflict(err) {
-		t.Errorf("Unexpected error: %v", err)
+		t.Errorf("Unexpected error updating podAWithResourceVersion: %v", err)
 	}
 
 	// Test4 normal update and verify
@@ -598,7 +599,7 @@ func TestEtcdDeleteCollectionNotFound(t *testing.T) {
 
 		// Kick off multiple delete collection calls to test notfound behavior
 		wg := &sync.WaitGroup{}
-		for j := 0; j < 5; j++ {
+		for j := 0; j < 2; j++ {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()

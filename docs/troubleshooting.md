@@ -21,7 +21,7 @@ refer to the docs that go with that version.
 <!-- TAG RELEASE_LINK, added by the munger automatically -->
 <strong>
 The latest release of this document can be found
-[here](http://releases.k8s.io/release-1.1/docs/troubleshooting.md).
+[here](http://releases.k8s.io/release-1.2/docs/troubleshooting.md).
 
 Documentation for other releases can be found at
 [releases.k8s.io](http://releases.k8s.io).
@@ -38,7 +38,7 @@ Sometimes things go wrong.  This guide is aimed at making them right.  It has tw
    * [Troubleshooting your application](user-guide/application-troubleshooting.md) - Useful for users who are deploying code into Kubernetes and wondering why it is not working.
    * [Troubleshooting your cluster](admin/cluster-troubleshooting.md) - Useful for cluster administrators and people whose Kubernetes cluster is unhappy.
 
-You should also check the [known issues](user-guide/known-issues.md) for the release you're using.
+You should also check the [known issues for the release](../CHANGELOG.md) you're using.
 
 # Getting help
 

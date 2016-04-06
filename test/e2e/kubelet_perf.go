@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/kubernetes/pkg/api"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/util/sets"
@@ -47,7 +46,7 @@ type resourceTest struct {
 
 func logPodsOnNodes(c *client.Client, nodeNames []string) {
 	for _, n := range nodeNames {
-		podList, err := GetKubeletPods(c, n)
+		podList, err := GetKubeletRunningPods(c, n)
 		if err != nil {
 			Logf("Unable to retrieve kubelet pods for node %v", n)
 			continue
@@ -180,15 +179,13 @@ func verifyCPULimits(expected containersCPUSummary, actual nodesCPUSummary) {
 }
 
 // Slow by design (1 hour)
-var _ = Describe("Kubelet [Serial] [Slow]", func() {
+var _ = KubeDescribe("Kubelet [Serial] [Slow]", func() {
 	var nodeNames sets.String
 	framework := NewDefaultFramework("kubelet-perf")
 	var rm *resourceMonitor
 
 	BeforeEach(func() {
-		// It should be OK to list unschedulable Nodes here.
-		nodes, err := framework.Client.Nodes().List(api.ListOptions{})
-		expectNoError(err)
+		nodes := ListSchedulableNodesOrDie(framework.Client)
 		nodeNames = sets.NewString()
 		for _, node := range nodes.Items {
 			nodeNames.Insert(node.Name)
@@ -200,7 +197,7 @@ var _ = Describe("Kubelet [Serial] [Slow]", func() {
 	AfterEach(func() {
 		rm.Stop()
 	})
-	Describe("regular resource usage tracking", func() {
+	KubeDescribe("regular resource usage tracking", func() {
 		// We assume that the scheduler will make reasonable scheduling choices
 		// and assign ~N pods on the node.
 		// Although we want to track N pods per node, there are N + add-on pods
@@ -251,7 +248,7 @@ var _ = Describe("Kubelet [Serial] [Slow]", func() {
 			})
 		}
 	})
-	Describe("experimental resource usage tracking [Feature:ExperimentalResourceUsageTracking]", func() {
+	KubeDescribe("experimental resource usage tracking [Feature:ExperimentalResourceUsageTracking]", func() {
 		density := []int{100}
 		for i := range density {
 			podsPerNode := density[i]

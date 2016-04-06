@@ -16,11 +16,11 @@ kubectl get \- Display one or many resources
 Display one or many resources.
 
 .PP
-Possible resource types include (case insensitive): pods (po), services (svc),
-replicationcontrollers (rc), nodes (no), events (ev), componentstatuses (cs),
-limitranges (limits), persistentvolumes (pv), persistentvolumeclaims (pvc),
-resourcequotas (quota), namespaces (ns), endpoints (ep),
-horizontalpodautoscalers (hpa), serviceaccounts or secrets.
+Possible resource types include (case insensitive): pods (po), services (svc), deployments,
+replicasets (rs), replicationcontrollers (rc), nodes (no), events (ev), limitranges (limits),
+persistentvolumes (pv), persistentvolumeclaims (pvc), resourcequotas (quota), namespaces (ns),
+serviceaccounts (sa), ingresses (ing), horizontalpodautoscalers (hpa), daemonsets (ds), configmaps,
+componentstatuses (cs), endpoints (ep), and secrets.
 
 .PP
 By specifying the output as 'template' and providing a Go template as the value
@@ -41,6 +41,10 @@ of the \-\-template flag, you can filter the attributes of the fetched resource(
     Filename, directory, or URL to a file identifying the resource to get from a server.
 
 .PP
+\fB\-\-include\-extended\-apis\fP=true
+    If true, include definitions of new APIs via calls to the API server. [default true]
+
+.PP
 \fB\-L\fP, \fB\-\-label\-columns\fP=[]
     Accepts a comma separated list of labels that are going to be presented as columns. Names are case\-sensitive. You can also use multiple flag statements like \-L label1 \-L label2...
 
@@ -56,7 +60,11 @@ of the \-\-template flag, you can filter the attributes of the fetched resource(
 
 .PP
 \fB\-\-output\-version\fP=""
-    Output the formatted object with the given version (default api\-version).
+    Output the formatted object with the given group version (for ex: 'extensions/v1beta1').
+
+.PP
+\fB\-R\fP, \fB\-\-recursive\fP=false
+    If true, process directory recursively.
 
 .PP
 \fB\-l\fP, \fB\-\-selector\fP=""
@@ -95,7 +103,7 @@ of the \-\-template flag, you can filter the attributes of the fetched resource(
 
 .PP
 \fB\-\-api\-version\fP=""
-    The API version to use when talking to the server
+    DEPRECATED: The API version to use when talking to the server
 
 .PP
 \fB\-\-certificate\-authority\fP=""
@@ -203,7 +211,7 @@ kubectl get \-o json pod web\-pod\-13je7
 kubectl get \-f pod.yaml \-o json
 
 # Return only the phase value of the specified pod.
-kubectl get \-o template pod/web\-pod\-13je7 \-\-template={{.status.phase}} \-\-api\-version=v1
+kubectl get \-o template pod/web\-pod\-13je7 \-\-template={{.status.phase}}
 
 # List all replication controllers and services together in ps output format.
 kubectl get rc,services

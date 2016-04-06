@@ -21,7 +21,7 @@ refer to the docs that go with that version.
 <!-- TAG RELEASE_LINK, added by the munger automatically -->
 <strong>
 The latest release of this document can be found
-[here](http://releases.k8s.io/release-1.1/docs/design/secrets.md).
+[here](http://releases.k8s.io/release-1.2/docs/design/secrets.md).
 
 Documentation for other releases can be found at
 [releases.k8s.io](http://releases.k8s.io).
@@ -391,11 +391,11 @@ type Host interface {
 
 The secret volume plugin will be responsible for:
 
-1.  Returning a `volume.Builder` implementation from `NewBuilder` that:
+1.  Returning a `volume.Mounter` implementation from `NewMounter` that:
     1.  Retrieves the secret data for the volume from the API server
     2.  Places the secret data onto the container's filesystem
     3.  Sets the correct security attributes for the volume based on the pod's `SecurityContext`
-2.  Returning a `volume.Cleaner` implementation from `NewClear` that cleans the volume from the
+2.  Returning a `volume.Unmounter` implementation from `NewUnmounter` that cleans the volume from the
     container's filesystem
 
 ### Kubelet: Node-level secret storage

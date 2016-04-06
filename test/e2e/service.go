@@ -61,7 +61,7 @@ const loadBalancerCreateTimeout = 20 * time.Minute
 // This should match whatever the default/configured range is
 var ServiceNodePortRange = utilnet.PortRange{Base: 30000, Size: 2768}
 
-var _ = Describe("Services", func() {
+var _ = KubeDescribe("Services", func() {
 	f := NewDefaultFramework("services")
 
 	var c *client.Client
@@ -1295,7 +1295,7 @@ func startServeHostnameService(c *client.Client, ns, name string, port, replicas
 	maxContainerFailures := 0
 	config := RCConfig{
 		Client:               c,
-		Image:                "gcr.io/google_containers/serve_hostname:1.1",
+		Image:                "gcr.io/google_containers/serve_hostname:v1.4",
 		Name:                 name,
 		Namespace:            ns,
 		PollInterval:         3 * time.Second,
@@ -1442,9 +1442,9 @@ func verifyServeHostnameServiceDown(c *client.Client, host string, serviceIP str
 // This masks problems where the iptables rule has changed, but we don't see it
 // This is intended for relatively quick requests (status checks), so we set a short (5 seconds) timeout
 func httpGetNoConnectionPool(url string) (*http.Response, error) {
-	tr := &http.Transport{
+	tr := utilnet.SetTransportDefaults(&http.Transport{
 		DisableKeepAlives: true,
-	}
+	})
 	client := &http.Client{
 		Transport: tr,
 		Timeout:   5 * time.Second,

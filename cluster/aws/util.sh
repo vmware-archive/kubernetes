@@ -34,6 +34,7 @@
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/../..
 source "${KUBE_ROOT}/cluster/aws/${KUBE_CONFIG_FILE-"config-default.sh"}"
 source "${KUBE_ROOT}/cluster/common.sh"
+source "${KUBE_ROOT}/cluster/lib/util.sh"
 
 ALLOCATE_NODE_CIDRS=true
 
@@ -48,23 +49,50 @@ MASTER_DISK_ID=
 # Well known tags
 TAG_KEY_MASTER_IP="kubernetes.io/master-ip"
 
-# Defaults: ubuntu -> wily
-if [[ "${KUBE_OS_DISTRIBUTION}" == "ubuntu" ]]; then
-  KUBE_OS_DISTRIBUTION=wily
-fi
-
-# For GCE script compatibility
 OS_DISTRIBUTION=${KUBE_OS_DISTRIBUTION}
 
-case "${KUBE_OS_DISTRIBUTION}" in
-  trusty|wheezy|jessie|vivid|wily|coreos)
-    source "${KUBE_ROOT}/cluster/aws/${KUBE_OS_DISTRIBUTION}/util.sh"
+# Defaults: ubuntu -> wily
+if [[ "${OS_DISTRIBUTION}" == "ubuntu" ]]; then
+  OS_DISTRIBUTION=wily
+fi
+
+# Loads the distro-specific utils script.
+# If the distro is not recommended, prints warnings or exits.
+function load_distro_utils () {
+case "${OS_DISTRIBUTION}" in
+  jessie)
+    ;;
+  wily)
+    ;;
+  vivid)
+    echo "vivid is currently end-of-life and does not get updates." >&2
+    echo "Please consider using wily or jessie instead" >&2
+    echo "(will continue in 10 seconds)" >&2
+    sleep 10
+    ;;
+  coreos)
+    echo "coreos is no longer supported by kube-up; please use jessie instead" >&2
+    exit 2
+    ;;
+  trusty)
+    echo "trusty is no longer supported by kube-up; please use jessie or wily instead" >&2
+    exit 2
+    ;;
+  wheezy)
+    echo "wheezy is no longer supported by kube-up; please use jessie instead" >&2
+    exit 2
     ;;
   *)
-    echo "Cannot start cluster using os distro: ${KUBE_OS_DISTRIBUTION}" >&2
+    echo "Cannot start cluster using os distro: ${OS_DISTRIBUTION}" >&2
+    echo "The current recommended distro is jessie" >&2
     exit 2
     ;;
 esac
+
+source "${KUBE_ROOT}/cluster/aws/${OS_DISTRIBUTION}/util.sh"
+}
+
+load_distro_utils
 
 # This removes the final character in bash (somehow)
 AWS_REGION=${ZONE%?}
@@ -92,10 +120,17 @@ NODE_SG_NAME="kubernetes-minion-${CLUSTER_ID}"
 # Be sure to map all the ephemeral drives.  We can specify more than we actually have.
 # TODO: Actually mount the correct number (especially if we have more), though this is non-trivial, and
 #  only affects the big storage instance types, which aren't a typical use case right now.
-BLOCK_DEVICE_MAPPINGS_BASE="{\"DeviceName\": \"/dev/sdc\",\"VirtualName\":\"ephemeral0\"},{\"DeviceName\": \"/dev/sdd\",\"VirtualName\":\"ephemeral1\"},{\"DeviceName\": \"/dev/sde\",\"VirtualName\":\"ephemeral2\"},{\"DeviceName\": \"/dev/sdf\",\"VirtualName\":\"ephemeral3\"}"
+EPHEMERAL_BLOCK_DEVICE_MAPPINGS=",{\"DeviceName\": \"/dev/sdc\",\"VirtualName\":\"ephemeral0\"},{\"DeviceName\": \"/dev/sdd\",\"VirtualName\":\"ephemeral1\"},{\"DeviceName\": \"/dev/sde\",\"VirtualName\":\"ephemeral2\"},{\"DeviceName\": \"/dev/sdf\",\"VirtualName\":\"ephemeral3\"}"
+
+# Experimental: If the user sets KUBE_AWS_STORAGE to ebs, use ebs storage
+# in preference to local instance storage We do this by not mounting any
+# instance storage.  We could do this better in future (e.g. making instance
+# storage available for other purposes)
+if [[ "${KUBE_AWS_STORAGE:-}" == "ebs" ]]; then
+  EPHEMERAL_BLOCK_DEVICE_MAPPINGS=""
+fi
 
 # TODO (bburns) Parameterize this for multiple cluster per project
-
 function get_vpc_id {
   $AWS_CMD describe-vpcs \
            --filters Name=tag:Name,Values=kubernetes-vpc \
@@ -190,6 +225,16 @@ function detect-master() {
   echo "Using master: $KUBE_MASTER (external IP: $KUBE_MASTER_IP)"
 }
 
+# Reads kube-env metadata from master
+#
+# Assumed vars:
+#   KUBE_MASTER_IP
+#   AWS_SSH_KEY
+#   SSH_USER
+function get-master-env() {
+  ssh -oStrictHostKeyChecking=no -i "${AWS_SSH_KEY}" ${SSH_USER}@${KUBE_MASTER_IP} sudo cat /etc/kubernetes/kube_env.yaml
+}
+
 
 function query-running-minions () {
   local query=$1
@@ -202,7 +247,13 @@ function query-running-minions () {
            --query ${query}
 }
 
-function find-running-minions () {
+function detect-node-names () {
+  # If this is called directly, VPC_ID might not be set
+  # (this is case from cluster/log-dump.sh)
+  if [[ -z "${VPC_ID:-}" ]]; then
+    VPC_ID=$(get_vpc_id)
+  fi
+
   NODE_IDS=()
   NODE_NAMES=()
   for id in $(query-running-minions "Reservations[].Instances[].InstanceId"); do
@@ -213,8 +264,14 @@ function find-running-minions () {
   done
 }
 
+# Called to detect the project on GCE
+# Not needed on AWS
+function detect-project() {
+  :
+}
+
 function detect-nodes () {
-  find-running-minions
+  detect-node-names
 
   # This is inefficient, but we want NODE_NAMES / NODE_IDS to be ordered the same as KUBE_NODE_IP_ADDRESSES
   KUBE_NODE_IP_ADDRESSES=()
@@ -265,7 +322,7 @@ function detect-security-groups {
 # Vars set:
 #   AWS_IMAGE
 function detect-image () {
-case "${KUBE_OS_DISTRIBUTION}" in
+case "${OS_DISTRIBUTION}" in
   trusty|coreos)
     detect-trusty-image
     ;;
@@ -282,7 +339,7 @@ case "${KUBE_OS_DISTRIBUTION}" in
     detect-jessie-image
     ;;
   *)
-    echo "Please specify AWS_IMAGE directly (distro ${KUBE_OS_DISTRIBUTION} not recognized)"
+    echo "Please specify AWS_IMAGE directly (distro ${OS_DISTRIBUTION} not recognized)"
     exit 2
     ;;
 esac
@@ -367,8 +424,8 @@ function detect-root-device {
       ROOT_DEVICE_NODE=$($AWS_CMD describe-images --image-ids ${node_image} --query 'Images[].RootDeviceName')
   fi
 
-  MASTER_BLOCK_DEVICE_MAPPINGS="[{\"DeviceName\":\"${ROOT_DEVICE_MASTER}\",\"Ebs\":{\"DeleteOnTermination\":true,\"VolumeSize\":${MASTER_ROOT_DISK_SIZE},\"VolumeType\":\"${MASTER_ROOT_DISK_TYPE}\"}}, ${BLOCK_DEVICE_MAPPINGS_BASE}]"
-  NODE_BLOCK_DEVICE_MAPPINGS="[{\"DeviceName\":\"${ROOT_DEVICE_NODE}\",\"Ebs\":{\"DeleteOnTermination\":true,\"VolumeSize\":${NODE_ROOT_DISK_SIZE},\"VolumeType\":\"${NODE_ROOT_DISK_TYPE}\"}}, ${BLOCK_DEVICE_MAPPINGS_BASE}]"
+  MASTER_BLOCK_DEVICE_MAPPINGS="[{\"DeviceName\":\"${ROOT_DEVICE_MASTER}\",\"Ebs\":{\"DeleteOnTermination\":true,\"VolumeSize\":${MASTER_ROOT_DISK_SIZE},\"VolumeType\":\"${MASTER_ROOT_DISK_TYPE}\"}} ${EPHEMERAL_BLOCK_DEVICE_MAPPINGS}]"
+  NODE_BLOCK_DEVICE_MAPPINGS="[{\"DeviceName\":\"${ROOT_DEVICE_NODE}\",\"Ebs\":{\"DeleteOnTermination\":true,\"VolumeSize\":${NODE_ROOT_DISK_SIZE},\"VolumeType\":\"${NODE_ROOT_DISK_TYPE}\"}} ${EPHEMERAL_BLOCK_DEVICE_MAPPINGS}]"
 }
 
 # Computes the AWS fingerprint for a public key file ($1)
@@ -453,8 +510,14 @@ function authorize-security-group-ingress {
 function find-master-pd {
   local name=${MASTER_NAME}-pd
   if [[ -z "${MASTER_DISK_ID}" ]]; then
+    local zone_filter="Name=availability-zone,Values=${ZONE}"
+    if [[ "${KUBE_USE_EXISTING_MASTER:-}" == "true" ]]; then
+      # If we're reusing an existing master, it is likely to be in another zone
+      # If running multizone, your cluster must be uniquely named across zones
+      zone_filter=""
+    fi
     MASTER_DISK_ID=`$AWS_CMD describe-volumes \
-                             --filters Name=availability-zone,Values=${ZONE} \
+                             --filters ${zone_filter} \
                                        Name=tag:Name,Values=${name} \
                                        Name=tag:KubernetesCluster,Values=${CLUSTER_ID} \
                              --query Volumes[].VolumeId`
@@ -780,6 +843,24 @@ function release-elastic-ip {
   fi
 }
 
+# Deletes a security group
+# usage: delete_security_group <sgid>
+function delete_security_group {
+  local -r sg_id=${1}
+
+  echo "Deleting security group: ${sg_id}"
+
+  # We retry in case there's a dependent resource - typically an ELB
+  n=0
+  until [ $n -ge 20 ]; do
+    $AWS_CMD delete-security-group --group-id ${sg_id} > $LOG && return
+    n=$[$n+1]
+    sleep 3
+  done
+  echo "Unable to delete security group: ${sg_id}"
+  exit 1
+}
+
 function ssh-key-setup {
   if [[ ! -f "$AWS_SSH_KEY" ]]; then
     ssh-keygen -f "$AWS_SSH_KEY" -N ''
@@ -833,7 +914,7 @@ function subnet-setup {
 }
 
 function kube-up {
-  echo "Starting cluster using os distro: ${KUBE_OS_DISTRIBUTION}" >&2
+  echo "Starting cluster using os distro: ${OS_DISTRIBUTION}" >&2
 
   get-tokens
 
@@ -927,8 +1008,8 @@ function kube-up {
 
   # KUBE_USE_EXISTING_MASTER is used to add minions to an existing master
   if [[ "${KUBE_USE_EXISTING_MASTER:-}" == "true" ]]; then
-    # Detect existing master
     detect-master
+    parse-master-env
 
     # Start minions
     start-minions
@@ -1163,7 +1244,7 @@ function wait-minions {
     max_attempts=90
   fi
   while true; do
-    find-running-minions > $LOG
+    detect-node-names > $LOG
     if [[ ${#NODE_IDS[@]} == ${NUM_NODES} ]]; then
       echo -e " ${color_green}${#NODE_IDS[@]} minions started; ready${color_norm}"
       break
@@ -1371,8 +1452,7 @@ function kube-down {
         continue
       fi
 
-      echo "Deleting security group: ${sg_id}"
-      $AWS_CMD delete-security-group --group-id ${sg_id} > $LOG
+      delete_security_group ${sg_id}
     done
 
     subnet_ids=$($AWS_CMD describe-subnets \
@@ -1491,40 +1571,41 @@ function test-teardown {
 }
 
 
-# SSH to a node by name ($1) and run a command ($2).
-function ssh-to-node {
+# Gets the hostname (or IP) that we should SSH to for the given nodename
+# For the master, we use the nodename, for the nodes we use their instanceids
+function get_ssh_hostname {
   local node="$1"
-  local cmd="$2"
 
   if [[ "${node}" == "${MASTER_NAME}" ]]; then
     node=$(get_instanceid_from_name ${MASTER_NAME})
     if [[ -z "${node-}" ]]; then
-      echo "Could not detect Kubernetes master node.  Make sure you've launched a cluster with 'kube-up.sh'"
+      echo "Could not detect Kubernetes master node.  Make sure you've launched a cluster with 'kube-up.sh'" 1>&2
       exit 1
     fi
   fi
 
   local ip=$(get_instance_public_ip ${node})
   if [[ -z "$ip" ]]; then
-    echo "Could not detect IP for ${node}."
+    echo "Could not detect IP for ${node}." 1>&2
     exit 1
   fi
+  echo ${ip}
+}
+
+# SSH to a node by name ($1) and run a command ($2).
+function ssh-to-node {
+  local node="$1"
+  local cmd="$2"
+
+  local ip=$(get_ssh_hostname ${node})
 
   for try in $(seq 1 5); do
-    if ssh -oLogLevel=quiet -oStrictHostKeyChecking=no -i "${AWS_SSH_KEY}" ${SSH_USER}@${ip} "${cmd}"; then
+    if ssh -oLogLevel=quiet -oConnectTimeout=30 -oStrictHostKeyChecking=no -i "${AWS_SSH_KEY}" ${SSH_USER}@${ip} "echo test > /dev/null"; then
       break
     fi
+    sleep 5
   done
-}
-
-# Restart the kube-proxy on a node ($1)
-function restart-kube-proxy {
-  ssh-to-node "$1" "sudo /etc/init.d/kube-proxy restart"
-}
-
-# Restart the kube-apiserver on a node ($1)
-function restart-apiserver {
-  ssh-to-node "$1" "sudo /etc/init.d/kube-apiserver restart"
+  ssh -oLogLevel=quiet -oConnectTimeout=30 -oStrictHostKeyChecking=no -i "${AWS_SSH_KEY}" ${SSH_USER}@${ip} "${cmd}"
 }
 
 # Perform preparations required to run e2e tests

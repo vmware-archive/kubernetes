@@ -46,8 +46,9 @@ type ScaleStatus struct {
 	// actual number of observed instances of the scaled object.
 	Replicas int `json:"replicas"`
 
-	// label query over pods that should match the replicas count. More info: http://releases.k8s.io/HEAD/docs/user-guide/labels.md#label-selectors
-	Selector map[string]string `json:"selector,omitempty"`
+	// label query over pods that should match the replicas count.
+	// More info: http://releases.k8s.io/HEAD/docs/user-guide/labels.md#label-selectors
+	Selector *unversioned.LabelSelector `json:"selector,omitempty"`
 }
 
 // +genclient=true,noMethods=true
@@ -200,9 +201,6 @@ type ThirdPartyResourceList struct {
 type APIVersion struct {
 	// Name of this version (e.g. 'v1').
 	Name string `json:"name,omitempty"`
-
-	// The API group to add this object into, default 'experimental'.
-	APIGroup string `json:"apiGroup,omitempty"`
 }
 
 // An internal object, used for versioned storage in etcd.  Not exposed to the end user.
@@ -657,10 +655,11 @@ type IngressSpec struct {
 	// specify a global default.
 	Backend *IngressBackend `json:"backend,omitempty"`
 
-	// TLS is the TLS configuration. Currently the Ingress only supports a single TLS
-	// port, 443, and assumes TLS termination. If multiple members of this
-	// list specify different hosts, they will be multiplexed on the same
-	// port according to the hostname specified through the SNI TLS extension.
+	// TLS configuration. Currently the Ingress only supports a single TLS
+	// port, 443. If multiple members of this list specify different hosts, they
+	// will be multiplexed on the same port according to the hostname specified
+	// through the SNI TLS extension, if the ingress controller fulfilling the
+	// ingress supports SNI.
 	TLS []IngressTLS `json:"tls,omitempty"`
 
 	// A list of host rules used to configure the Ingress. If unspecified, or
@@ -806,13 +805,16 @@ type ReplicaSetSpec struct {
 
 	// Template is the object that describes the pod that will be created if
 	// insufficient replicas are detected.
-	Template *api.PodTemplateSpec `json:"template,omitempty"`
+	Template api.PodTemplateSpec `json:"template,omitempty"`
 }
 
 // ReplicaSetStatus represents the current status of a ReplicaSet.
 type ReplicaSetStatus struct {
 	// Replicas is the number of actual replicas.
 	Replicas int `json:"replicas"`
+
+	// The number of pods that have labels matching the labels of the pod template of the replicaset.
+	FullyLabeledReplicas int `json:"fullyLabeledReplicas,omitempty"`
 
 	// ObservedGeneration is the most recent generation observed by the controller.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`

@@ -2680,7 +2680,6 @@ func autoConvert_extensions_APIVersion_To_v1beta1_APIVersion(in *extensions.APIV
 		defaulting.(func(*extensions.APIVersion))(in)
 	}
 	out.Name = in.Name
-	out.APIGroup = in.APIGroup
 	return nil
 }
 
@@ -3599,14 +3598,8 @@ func autoConvert_extensions_ReplicaSetSpec_To_v1beta1_ReplicaSetSpec(in *extensi
 	} else {
 		out.Selector = nil
 	}
-	// unable to generate simple pointer conversion for api.PodTemplateSpec -> v1.PodTemplateSpec
-	if in.Template != nil {
-		out.Template = new(v1.PodTemplateSpec)
-		if err := Convert_api_PodTemplateSpec_To_v1_PodTemplateSpec(in.Template, out.Template, s); err != nil {
-			return err
-		}
-	} else {
-		out.Template = nil
+	if err := Convert_api_PodTemplateSpec_To_v1_PodTemplateSpec(&in.Template, &out.Template, s); err != nil {
+		return err
 	}
 	return nil
 }
@@ -3616,6 +3609,7 @@ func autoConvert_extensions_ReplicaSetStatus_To_v1beta1_ReplicaSetStatus(in *ext
 		defaulting.(func(*extensions.ReplicaSetStatus))(in)
 	}
 	out.Replicas = int32(in.Replicas)
+	out.FullyLabeledReplicas = int32(in.FullyLabeledReplicas)
 	out.ObservedGeneration = in.ObservedGeneration
 	return nil
 }
@@ -3746,19 +3740,8 @@ func autoConvert_extensions_ScaleStatus_To_v1beta1_ScaleStatus(in *extensions.Sc
 		defaulting.(func(*extensions.ScaleStatus))(in)
 	}
 	out.Replicas = int32(in.Replicas)
-	if in.Selector != nil {
-		out.Selector = make(map[string]string)
-		for key, val := range in.Selector {
-			out.Selector[key] = val
-		}
-	} else {
-		out.Selector = nil
-	}
+	// in.Selector has no peer in out
 	return nil
-}
-
-func Convert_extensions_ScaleStatus_To_v1beta1_ScaleStatus(in *extensions.ScaleStatus, out *ScaleStatus, s conversion.Scope) error {
-	return autoConvert_extensions_ScaleStatus_To_v1beta1_ScaleStatus(in, out, s)
 }
 
 func autoConvert_extensions_SubresourceReference_To_v1beta1_SubresourceReference(in *extensions.SubresourceReference, out *SubresourceReference, s conversion.Scope) error {
@@ -3883,7 +3866,6 @@ func autoConvert_v1beta1_APIVersion_To_extensions_APIVersion(in *APIVersion, out
 		defaulting.(func(*APIVersion))(in)
 	}
 	out.Name = in.Name
-	out.APIGroup = in.APIGroup
 	return nil
 }
 
@@ -4859,14 +4841,8 @@ func autoConvert_v1beta1_ReplicaSetSpec_To_extensions_ReplicaSetSpec(in *Replica
 	} else {
 		out.Selector = nil
 	}
-	// unable to generate simple pointer conversion for v1.PodTemplateSpec -> api.PodTemplateSpec
-	if in.Template != nil {
-		out.Template = new(api.PodTemplateSpec)
-		if err := Convert_v1_PodTemplateSpec_To_api_PodTemplateSpec(in.Template, out.Template, s); err != nil {
-			return err
-		}
-	} else {
-		out.Template = nil
+	if err := Convert_v1_PodTemplateSpec_To_api_PodTemplateSpec(&in.Template, &out.Template, s); err != nil {
+		return err
 	}
 	return nil
 }
@@ -4876,6 +4852,7 @@ func autoConvert_v1beta1_ReplicaSetStatus_To_extensions_ReplicaSetStatus(in *Rep
 		defaulting.(func(*ReplicaSetStatus))(in)
 	}
 	out.Replicas = int(in.Replicas)
+	out.FullyLabeledReplicas = int(in.FullyLabeledReplicas)
 	out.ObservedGeneration = in.ObservedGeneration
 	return nil
 }
@@ -5002,19 +4979,9 @@ func autoConvert_v1beta1_ScaleStatus_To_extensions_ScaleStatus(in *ScaleStatus, 
 		defaulting.(func(*ScaleStatus))(in)
 	}
 	out.Replicas = int(in.Replicas)
-	if in.Selector != nil {
-		out.Selector = make(map[string]string)
-		for key, val := range in.Selector {
-			out.Selector[key] = val
-		}
-	} else {
-		out.Selector = nil
-	}
+	// in.Selector has no peer in out
+	// in.TargetSelector has no peer in out
 	return nil
-}
-
-func Convert_v1beta1_ScaleStatus_To_extensions_ScaleStatus(in *ScaleStatus, out *extensions.ScaleStatus, s conversion.Scope) error {
-	return autoConvert_v1beta1_ScaleStatus_To_extensions_ScaleStatus(in, out, s)
 }
 
 func autoConvert_v1beta1_SubresourceReference_To_extensions_SubresourceReference(in *SubresourceReference, out *extensions.SubresourceReference, s conversion.Scope) error {

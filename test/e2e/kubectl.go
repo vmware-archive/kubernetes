@@ -45,6 +45,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/labels"
+	utilnet "k8s.io/kubernetes/pkg/util/net"
 	"k8s.io/kubernetes/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/version"
 
@@ -72,6 +73,7 @@ const (
 	nginxDefaultOutput       = "Welcome to nginx!"
 	simplePodPort            = 80
 	runJobTimeout            = 5 * time.Minute
+	busyboxImage             = "gcr.io/google_containers/busybox:1.24"
 	nginxImage               = "gcr.io/google_containers/nginx:1.7.9"
 )
 
@@ -101,9 +103,15 @@ var (
 	//
 	// TODO(ihmccreery): remove once we don't care about v1.1 anymore, (tentatively in v1.4).
 	deploymentsVersion = version.MustParse("v1.2.0-alpha.7.726")
+
+	// Pod probe parameters were introduced in #15967 (v1.2) so we dont expect tests that use
+	// these probe parameters to work on clusters before that.
+	//
+	// TODO(ihmccreery): remove once we don't care about v1.1 anymore, (tentatively in v1.4).
+	podProbeParametersVersion = version.MustParse("v1.2.0-alpha.4")
 )
 
-var _ = Describe("Kubectl client", func() {
+var _ = KubeDescribe("Kubectl client", func() {
 	defer GinkgoRecover()
 	framework := NewDefaultFramework("kubectl")
 	var c *client.Client
@@ -113,7 +121,7 @@ var _ = Describe("Kubectl client", func() {
 		ns = framework.Namespace.Name
 	})
 
-	Describe("Update Demo", func() {
+	KubeDescribe("Update Demo", func() {
 		var updateDemoRoot, nautilusPath, kittenPath string
 		BeforeEach(func() {
 			updateDemoRoot = filepath.Join(testContext.RepoRoot, "docs/user-guide/update-demo")
@@ -153,7 +161,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Guestbook application", func() {
+	KubeDescribe("Guestbook application", func() {
 		var guestbookPath string
 
 		BeforeEach(func() {
@@ -173,7 +181,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Simple pod", func() {
+	KubeDescribe("Simple pod", func() {
 		var podPath string
 
 		BeforeEach(func() {
@@ -271,7 +279,18 @@ var _ = Describe("Kubectl client", func() {
 			}
 			// start exec-proxy-tester container
 			netexecPodPath := filepath.Join(testContext.RepoRoot, "test/images/netexec/pod.yaml")
-			runKubectlOrDie("create", "-f", netexecPodPath, fmt.Sprintf("--namespace=%v", ns))
+
+			// Add "validate=false" if the server version is less than 1.2.
+			// More details: https://github.com/kubernetes/kubernetes/issues/22884.
+			validateFlag := "--validate=true"
+			gte, err := serverVersionGTE(podProbeParametersVersion, c)
+			if err != nil {
+				Failf("Failed to get server version: %v", err)
+			}
+			if !gte {
+				validateFlag = "--validate=false"
+			}
+			runKubectlOrDie("create", "-f", netexecPodPath, fmt.Sprintf("--namespace=%v", ns), validateFlag)
 			checkPodsRunningReady(c, ns, []string{netexecContainer}, podStartTimeout)
 			// Clean up
 			defer cleanup(netexecPodPath, ns, netexecPodSelector)
@@ -444,7 +463,7 @@ var _ = Describe("Kubectl client", func() {
 			nsFlag := fmt.Sprintf("--namespace=%v", ns)
 
 			By("executing a command with run and attach with stdin")
-			runOutput := newKubectlCommand(nsFlag, "run", "run-test", "--image=busybox", "--restart=Never", "--attach=true", "--stdin", "--", "sh", "-c", "cat && echo 'stdin closed'").
+			runOutput := newKubectlCommand(nsFlag, "run", "run-test", "--image="+busyboxImage, "--restart=Never", "--attach=true", "--stdin", "--", "sh", "-c", "cat && echo 'stdin closed'").
 				withStdinData("abcd1234").
 				execOrDie()
 			Expect(runOutput).To(ContainSubstring("abcd1234"))
@@ -452,7 +471,7 @@ var _ = Describe("Kubectl client", func() {
 			Expect(c.Extensions().Jobs(ns).Delete("run-test", nil)).To(BeNil())
 
 			By("executing a command with run and attach without stdin")
-			runOutput = newKubectlCommand(fmt.Sprintf("--namespace=%v", ns), "run", "run-test-2", "--image=busybox", "--restart=Never", "--attach=true", "--leave-stdin-open=true", "--", "sh", "-c", "cat && echo 'stdin closed'").
+			runOutput = newKubectlCommand(fmt.Sprintf("--namespace=%v", ns), "run", "run-test-2", "--image="+busyboxImage, "--restart=Never", "--attach=true", "--leave-stdin-open=true", "--", "sh", "-c", "cat && echo 'stdin closed'").
 				withStdinData("abcd1234").
 				execOrDie()
 			Expect(runOutput).ToNot(ContainSubstring("abcd1234"))
@@ -460,7 +479,7 @@ var _ = Describe("Kubectl client", func() {
 			Expect(c.Extensions().Jobs(ns).Delete("run-test-2", nil)).To(BeNil())
 
 			By("executing a command with run and attach with stdin with open stdin should remain running")
-			runOutput = newKubectlCommand(nsFlag, "run", "run-test-3", "--image=busybox", "--restart=Never", "--attach=true", "--leave-stdin-open=true", "--stdin", "--", "sh", "-c", "cat && echo 'stdin closed'").
+			runOutput = newKubectlCommand(nsFlag, "run", "run-test-3", "--image="+busyboxImage, "--restart=Never", "--attach=true", "--leave-stdin-open=true", "--stdin", "--", "sh", "-c", "cat && echo 'stdin closed'").
 				withStdinData("abcd1234\n").
 				execOrDie()
 			Expect(runOutput).ToNot(ContainSubstring("stdin closed"))
@@ -492,11 +511,11 @@ var _ = Describe("Kubectl client", func() {
 
 		It("should support port-forward", func() {
 			By("forwarding the container port to a local port")
-			cmd, listenPort := runPortForward(ns, simplePodName, simplePodPort)
-			defer tryKill(cmd)
+			cmd := runPortForward(ns, simplePodName, simplePodPort)
+			defer cmd.Stop()
 
 			By("curling local port output")
-			localAddr := fmt.Sprintf("http://localhost:%d", listenPort)
+			localAddr := fmt.Sprintf("http://localhost:%d", cmd.port)
 			body, err := curl(localAddr)
 			Logf("got: %s", body)
 			if err != nil {
@@ -508,7 +527,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Kubectl api-versions", func() {
+	KubeDescribe("Kubectl api-versions", func() {
 		It("should check if v1 is in available api versions [Conformance]", func() {
 			By("validating api verions")
 			output := runKubectlOrDie("api-versions")
@@ -518,7 +537,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Kubectl apply", func() {
+	KubeDescribe("Kubectl apply", func() {
 		It("should apply a new configuration to an existing RC", func() {
 			mkpath := func(file string) string {
 				return filepath.Join(testContext.RepoRoot, "examples/guestbook-go", file)
@@ -537,7 +556,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Kubectl cluster-info", func() {
+	KubeDescribe("Kubectl cluster-info", func() {
 		It("should check if Kubernetes master services is included in cluster-info [Conformance]", func() {
 			By("validating cluster-info")
 			output := runKubectlOrDie("cluster-info")
@@ -554,7 +573,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Kubectl describe", func() {
+	KubeDescribe("Kubectl describe", func() {
 		It("should check if kubectl describe prints relevant information for rc and pods [Conformance]", func() {
 			SkipUnlessServerVersionGTE(nodePortsOptionalVersion, c)
 
@@ -653,7 +672,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Kubectl expose", func() {
+	KubeDescribe("Kubectl expose", func() {
 		It("should create services for rc [Conformance]", func() {
 			mkpath := func(file string) string {
 				return filepath.Join(testContext.RepoRoot, "examples/guestbook-go", file)
@@ -723,7 +742,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Kubectl label", func() {
+	KubeDescribe("Kubectl label", func() {
 		var podPath string
 		var nsFlag string
 		BeforeEach(func() {
@@ -759,7 +778,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Kubectl logs", func() {
+	KubeDescribe("Kubectl logs", func() {
 		var rcPath string
 		var nsFlag string
 		containerName := "redis-master"
@@ -820,7 +839,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Kubectl patch", func() {
+	KubeDescribe("Kubectl patch", func() {
 		It("should add annotations for pods in rc [Conformance]", func() {
 			mkpath := func(file string) string {
 				return filepath.Join(testContext.RepoRoot, "examples/guestbook-go", file)
@@ -849,7 +868,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Kubectl version", func() {
+	KubeDescribe("Kubectl version", func() {
 		It("should check is all data is printed [Conformance]", func() {
 			version := runKubectlOrDie("version")
 			requiredItems := []string{"Client Version:", "Server Version:", "Major:", "Minor:", "GitCommit:"}
@@ -861,7 +880,49 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Kubectl run rc", func() {
+	KubeDescribe("Kubectl run default", func() {
+		var nsFlag string
+		var name string
+
+		var cleanUp func()
+
+		BeforeEach(func() {
+			nsFlag = fmt.Sprintf("--namespace=%v", ns)
+			gte, err := serverVersionGTE(deploymentsVersion, c)
+			if err != nil {
+				Failf("Failed to get server version: %v", err)
+			}
+			if gte {
+				name = "e2e-test-nginx-deployment"
+				cleanUp = func() { runKubectlOrDie("delete", "deployment", name, nsFlag) }
+			} else {
+				name = "e2e-test-nginx-rc"
+				cleanUp = func() { runKubectlOrDie("delete", "rc", name, nsFlag) }
+			}
+		})
+
+		AfterEach(func() {
+			cleanUp()
+		})
+
+		It("should create an rc or deployment from an image [Conformance]", func() {
+			By("running the image " + nginxImage)
+			runKubectlOrDie("run", name, "--image="+nginxImage, nsFlag)
+			By("verifying the pod controlled by " + name + " gets created")
+			label := labels.SelectorFromSet(labels.Set(map[string]string{"run": name}))
+			podlist, err := waitForPodsWithLabel(c, ns, label)
+			if err != nil {
+				Failf("Failed getting pod controlled by %s: %v", name, err)
+			}
+			pods := podlist.Items
+			if pods == nil || len(pods) != 1 || len(pods[0].Spec.Containers) != 1 || pods[0].Spec.Containers[0].Image != nginxImage {
+				runKubectlOrDie("get", "pods", "-L", "run", nsFlag)
+				Failf("Failed creating 1 pod with expected image %s. Number of pods = %v", nginxImage, len(pods))
+			}
+		})
+	})
+
+	KubeDescribe("Kubectl run rc", func() {
 		var nsFlag string
 		var rcName string
 
@@ -913,10 +974,9 @@ var _ = Describe("Kubectl client", func() {
 				Failf("Failed getting logs by rc %s: %v", rcName, err)
 			}
 		})
-
 	})
 
-	Describe("Kubectl run deployment", func() {
+	KubeDescribe("Kubectl run deployment", func() {
 		var nsFlag string
 		var dName string
 
@@ -933,7 +993,7 @@ var _ = Describe("Kubectl client", func() {
 			SkipUnlessServerVersionGTE(deploymentsVersion, c)
 
 			By("running the image " + nginxImage)
-			runKubectlOrDie("run", dName, "--image="+nginxImage, nsFlag)
+			runKubectlOrDie("run", dName, "--image="+nginxImage, "--generator=deployment/v1beta1", nsFlag)
 			By("verifying the deployment " + dName + " was created")
 			d, err := c.Extensions().Deployments(ns).Get(dName)
 			if err != nil {
@@ -956,10 +1016,9 @@ var _ = Describe("Kubectl client", func() {
 				Failf("Failed creating 1 pod with expected image %s. Number of pods = %v", nginxImage, len(pods))
 			}
 		})
-
 	})
 
-	Describe("Kubectl run job", func() {
+	KubeDescribe("Kubectl run job", func() {
 		var nsFlag string
 		var jobName string
 
@@ -1009,10 +1068,9 @@ var _ = Describe("Kubectl client", func() {
 				Failf("Failed creating a job with correct restart policy for --restart=OnFailure")
 			}
 		})
-
 	})
 
-	Describe("Kubectl run --rm job", func() {
+	KubeDescribe("Kubectl run --rm job", func() {
 		nsFlag := fmt.Sprintf("--namespace=%v", ns)
 		jobName := "e2e-test-rm-busybox-job"
 
@@ -1022,7 +1080,7 @@ var _ = Describe("Kubectl client", func() {
 			By("executing a command with run --rm and attach with stdin")
 			t := time.NewTimer(runJobTimeout)
 			defer t.Stop()
-			runOutput := newKubectlCommand(nsFlag, "run", jobName, "--image=busybox", "--rm=true", "--restart=Never", "--attach=true", "--stdin", "--", "sh", "-c", "cat && echo 'stdin closed'").
+			runOutput := newKubectlCommand(nsFlag, "run", jobName, "--image="+busyboxImage, "--rm=true", "--restart=Never", "--attach=true", "--stdin", "--", "sh", "-c", "cat && echo 'stdin closed'").
 				withStdinData("abcd1234").
 				withTimeout(t.C).
 				execOrDie()
@@ -1036,7 +1094,7 @@ var _ = Describe("Kubectl client", func() {
 		})
 	})
 
-	Describe("Proxy server", func() {
+	KubeDescribe("Proxy server", func() {
 		// TODO: test proxy options (static, prefix, etc)
 		It("should support proxy with --port 0 [Conformance]", func() {
 			By("starting the proxy server")
@@ -1147,9 +1205,9 @@ func curlUnix(url string, path string) (string, error) {
 	dial := func(proto, addr string) (net.Conn, error) {
 		return net.Dial("unix", path)
 	}
-	transport := &http.Transport{
+	transport := utilnet.SetTransportDefaults(&http.Transport{
 		Dial: dial,
-	}
+	})
 	return curlTransport(url, transport)
 }
 
@@ -1168,7 +1226,7 @@ func curlTransport(url string, transport *http.Transport) (string, error) {
 }
 
 func curl(url string) (string, error) {
-	return curlTransport(url, &http.Transport{})
+	return curlTransport(url, utilnet.SetTransportDefaults(&http.Transport{}))
 }
 
 func validateGuestbookApp(c *client.Client, ns string) {

@@ -61,6 +61,7 @@ import (
 	"k8s.io/kubernetes/pkg/types"
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/util/bandwidth"
+	"k8s.io/kubernetes/pkg/util/diff"
 	"k8s.io/kubernetes/pkg/util/mount"
 	utilruntime "k8s.io/kubernetes/pkg/util/runtime"
 	"k8s.io/kubernetes/pkg/util/sets"
@@ -547,12 +548,12 @@ func TestGetPodVolumesFromDisk(t *testing.T) {
 
 	volumesFound := kubelet.getPodVolumesFromDisk()
 	if len(volumesFound) != len(expectedPaths) {
-		t.Errorf("Expected to find %d cleaners, got %d", len(expectedPaths), len(volumesFound))
+		t.Errorf("Expected to find %d unmounters, got %d", len(expectedPaths), len(volumesFound))
 	}
 	for _, ep := range expectedPaths {
 		found := false
 		for _, cl := range volumesFound {
-			if ep == cl.Cleaner.GetPath() {
+			if ep == cl.Unmounter.GetPath() {
 				found = true
 				break
 			}
@@ -638,12 +639,12 @@ func TestCleanupOrphanedVolumes(t *testing.T) {
 
 	volumesFound := kubelet.getPodVolumesFromDisk()
 	if len(volumesFound) != len(pathsOnDisk) {
-		t.Errorf("Expected to find %d cleaners, got %d", len(pathsOnDisk), len(volumesFound))
+		t.Errorf("Expected to find %d unmounters, got %d", len(pathsOnDisk), len(volumesFound))
 	}
 	for _, ep := range pathsOnDisk {
 		found := false
 		for _, cl := range volumesFound {
-			if ep == cl.Cleaner.GetPath() {
+			if ep == cl.Unmounter.GetPath() {
 				found = true
 				break
 			}
@@ -660,10 +661,10 @@ func TestCleanupOrphanedVolumes(t *testing.T) {
 	}
 	volumesFound = kubelet.getPodVolumesFromDisk()
 	if len(volumesFound) != 0 {
-		t.Errorf("Expected to find 0 cleaners, got %d", len(volumesFound))
+		t.Errorf("Expected to find 0 unmounters, got %d", len(volumesFound))
 	}
 	for _, cl := range volumesFound {
-		t.Errorf("Found unexpected volume %s", cl.Cleaner.GetPath())
+		t.Errorf("Found unexpected volume %s", cl.Unmounter.GetPath())
 	}
 }
 
@@ -715,9 +716,9 @@ func TestMakeVolumeMounts(t *testing.T) {
 	}
 
 	podVolumes := kubecontainer.VolumeMap{
-		"disk":  kubecontainer.VolumeInfo{Builder: &stubVolume{path: "/mnt/disk"}},
-		"disk4": kubecontainer.VolumeInfo{Builder: &stubVolume{path: "/mnt/host"}},
-		"disk5": kubecontainer.VolumeInfo{Builder: &stubVolume{path: "/var/lib/kubelet/podID/volumes/empty/disk5"}},
+		"disk":  kubecontainer.VolumeInfo{Mounter: &stubVolume{path: "/mnt/disk"}},
+		"disk4": kubecontainer.VolumeInfo{Mounter: &stubVolume{path: "/mnt/host"}},
+		"disk5": kubecontainer.VolumeInfo{Mounter: &stubVolume{path: "/var/lib/kubelet/podID/volumes/empty/disk5"}},
 	}
 
 	pod := api.Pod{
@@ -728,7 +729,7 @@ func TestMakeVolumeMounts(t *testing.T) {
 		},
 	}
 
-	mounts, _ := makeMounts(&pod, "/pod", &container, "fakepodname", "", podVolumes)
+	mounts, _ := makeMounts(&pod, "/pod", &container, "fakepodname", "", "", podVolumes)
 
 	expectedMounts := []kubecontainer.Mount{
 		{
@@ -788,7 +789,7 @@ func TestGetContainerInfo(t *testing.T) {
 			Containers: []*kubecontainer.Container{
 				{
 					Name: "foo",
-					ID:   kubecontainer.ContainerID{"test", containerID},
+					ID:   kubecontainer.ContainerID{Type: "test", ID: containerID},
 				},
 			},
 		},
@@ -870,7 +871,7 @@ func TestGetContainerInfoWhenCadvisorFailed(t *testing.T) {
 			Namespace: "ns",
 			Containers: []*kubecontainer.Container{
 				{Name: "foo",
-					ID: kubecontainer.ContainerID{"test", containerID},
+					ID: kubecontainer.ContainerID{Type: "test", ID: containerID},
 				},
 			},
 		},
@@ -994,7 +995,7 @@ func TestGetContainerInfoWithNoMatchingContainers(t *testing.T) {
 			Namespace: "ns",
 			Containers: []*kubecontainer.Container{
 				{Name: "bar",
-					ID: kubecontainer.ContainerID{"test", "fakeID"},
+					ID: kubecontainer.ContainerID{Type: "test", ID: "fakeID"},
 				},
 			}},
 	}
@@ -1077,7 +1078,7 @@ func TestRunInContainer(t *testing.T) {
 	fakeCommandRunner := fakeContainerCommandRunner{}
 	kubelet.runner = &fakeCommandRunner
 
-	containerID := kubecontainer.ContainerID{"test", "abc1234"}
+	containerID := kubecontainer.ContainerID{Type: "test", ID: "abc1234"}
 	fakeRuntime.PodList = []*kubecontainer.Pod{
 		{
 			ID:        "12345678",
@@ -1189,7 +1190,7 @@ func TestDNSConfigurationParams(t *testing.T) {
 	for i, pod := range pods {
 		var err error
 		kubelet.volumeManager.SetVolumes(pod.UID, make(kubecontainer.VolumeMap, 0))
-		options[i], err = kubelet.GenerateRunContainerOptions(pod, &api.Container{})
+		options[i], err = kubelet.GenerateRunContainerOptions(pod, &api.Container{}, "")
 		if err != nil {
 			t.Fatalf("failed to generate container options: %v", err)
 		}
@@ -1210,7 +1211,7 @@ func TestDNSConfigurationParams(t *testing.T) {
 	kubelet.resolverConfig = "/etc/resolv.conf"
 	for i, pod := range pods {
 		var err error
-		options[i], err = kubelet.GenerateRunContainerOptions(pod, &api.Container{})
+		options[i], err = kubelet.GenerateRunContainerOptions(pod, &api.Container{}, "")
 		if err != nil {
 			t.Fatalf("failed to generate container options: %v", err)
 		}
@@ -1715,9 +1716,9 @@ func TestMakeEnvironmentVariables(t *testing.T) {
 				Name:      "dapi-test-pod-name",
 			},
 		}
-		testPod.Status.PodIP = "1.2.3.4"
+		podIP := "1.2.3.4"
 
-		result, err := kl.makeEnvironmentVariables(testPod, tc.container)
+		result, err := kl.makeEnvironmentVariables(testPod, tc.container, podIP)
 		if err != nil {
 			t.Errorf("[%v] Unexpected error: %v", tc.name, err)
 		}
@@ -2151,7 +2152,7 @@ func TestExecInContainerNoSuchContainer(t *testing.T) {
 			Namespace: podNamespace,
 			Containers: []*kubecontainer.Container{
 				{Name: "bar",
-					ID: kubecontainer.ContainerID{"test", "barID"}},
+					ID: kubecontainer.ContainerID{Type: "test", ID: "barID"}},
 			},
 		},
 	}
@@ -2214,7 +2215,7 @@ func TestExecInContainer(t *testing.T) {
 			Namespace: podNamespace,
 			Containers: []*kubecontainer.Container{
 				{Name: containerID,
-					ID: kubecontainer.ContainerID{"test", containerID},
+					ID: kubecontainer.ContainerID{Type: "test", ID: containerID},
 				},
 			},
 		},
@@ -2299,7 +2300,7 @@ func TestPortForward(t *testing.T) {
 			Containers: []*kubecontainer.Container{
 				{
 					Name: "foo",
-					ID:   kubecontainer.ContainerID{"test", "containerFoo"},
+					ID:   kubecontainer.ContainerID{Type: "test", ID: "containerFoo"},
 				},
 			},
 		},
@@ -2771,7 +2772,7 @@ func TestUpdateNewNodeStatus(t *testing.T) {
 	}
 
 	if !api.Semantic.DeepEqual(expectedNode, updatedNode) {
-		t.Errorf("unexpected objects: %s", util.ObjectDiff(expectedNode, updatedNode))
+		t.Errorf("unexpected objects: %s", diff.ObjectDiff(expectedNode, updatedNode))
 	}
 }
 
@@ -2846,7 +2847,7 @@ func TestUpdateNewNodeOutOfDiskStatusWithTransitionFrequency(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(expectedNodeOutOfDiskCondition, oodCondition) {
-		t.Errorf("unexpected objects: %s", util.ObjectDiff(expectedNodeOutOfDiskCondition, oodCondition))
+		t.Errorf("unexpected objects: %s", diff.ObjectDiff(expectedNodeOutOfDiskCondition, oodCondition))
 	}
 }
 
@@ -3282,7 +3283,7 @@ func TestUpdateNodeStatusWithRuntimeStateError(t *testing.T) {
 			LastTransitionTime: unversioned.Time{},
 		}
 		if !api.Semantic.DeepEqual(expectedNode, updatedNode) {
-			t.Errorf("unexpected objects: %s", util.ObjectDiff(expectedNode, updatedNode))
+			t.Errorf("unexpected objects: %s", diff.ObjectDiff(expectedNode, updatedNode))
 		}
 	}
 
@@ -3522,7 +3523,7 @@ func TestGetContainerInfoForMirrorPods(t *testing.T) {
 			Containers: []*kubecontainer.Container{
 				{
 					Name: "foo",
-					ID:   kubecontainer.ContainerID{"test", containerID},
+					ID:   kubecontainer.ContainerID{Type: "test", ID: containerID},
 				},
 			},
 		},
@@ -4164,7 +4165,7 @@ func TestCleanupBandwidthLimits(t *testing.T) {
 
 		err := testKube.kubelet.cleanupBandwidthLimits(test.pods)
 		if err != nil {
-			t.Errorf("unexpected error: %v (%s)", test.name)
+			t.Errorf("unexpected error: %v (%s)", test.name, err)
 		}
 		if !reflect.DeepEqual(shaper.ResetCIDRs, test.expectResetCIDRs) {
 			t.Errorf("[%s]\nexpected: %v, saw: %v", test.name, test.expectResetCIDRs, shaper.ResetCIDRs)

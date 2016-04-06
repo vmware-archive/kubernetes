@@ -34,6 +34,7 @@ import (
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/util/intstr"
+	utilnet "k8s.io/kubernetes/pkg/util/net"
 	"k8s.io/kubernetes/pkg/util/wait"
 )
 
@@ -69,7 +70,7 @@ type KubeProxyTestConfig struct {
 	nodes                []api.Node
 }
 
-var _ = Describe("KubeProxy", func() {
+var _ = KubeDescribe("KubeProxy", func() {
 	f := NewDefaultFramework("e2e-kubeproxy")
 	config := &KubeProxyTestConfig{
 		f: f,
@@ -129,7 +130,7 @@ func (config *KubeProxyTestConfig) hitLoadBalancer(epCount int) {
 	hostNames := make(map[string]bool)
 	tries := epCount*epCount + 5
 	for i := 0; i < tries; i++ {
-		transport := &http.Transport{}
+		transport := utilnet.SetTransportDefaults(&http.Transport{})
 		httpClient := createHTTPClient(transport)
 		resp, err := httpClient.Get(fmt.Sprintf("http://%s:%d/hostName", lbIP, loadBalancerHttpPort))
 		if err == nil {

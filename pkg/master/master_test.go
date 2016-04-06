@@ -32,7 +32,9 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/testapi"
 	"k8s.io/kubernetes/pkg/api/unversioned"
+	"k8s.io/kubernetes/pkg/apiserver"
 	utilnet "k8s.io/kubernetes/pkg/util/net"
+	"k8s.io/kubernetes/pkg/util/sets"
 
 	"k8s.io/kubernetes/pkg/apis/autoscaling"
 	"k8s.io/kubernetes/pkg/apis/batch"
@@ -93,9 +95,18 @@ func newMaster(t *testing.T) (*Master, *etcdtesting.EtcdTestServer, Config, *ass
 	config.KubeletClient = client.FakeKubeletClient{}
 	config.APIPrefix = "/api"
 	config.APIGroupPrefix = "/apis"
+	config.APIResourceConfigSource = DefaultAPIResourceConfigSource()
 
 	config.ProxyDialer = func(network, addr string) (net.Conn, error) { return nil, nil }
 	config.ProxyTLSClientConfig = &tls.Config{}
+
+	// TODO: this is kind of hacky.  The trouble is that the sync loop
+	// runs in a go-routine and there is no way to validate in the test
+	// that the sync routine has actually run.  The right answer here
+	// is probably to add some sort of callback that we can register
+	// to validate that it's actually been run, but for now we don't
+	// run the sync routine and register types manually.
+	config.disableThirdPartyControllerForTesting = true
 
 	master, err := New(&config)
 	if err != nil {
@@ -116,7 +127,6 @@ func TestNew(t *testing.T) {
 	assert.Equal(master.tunneler, config.Tunneler)
 	assert.Equal(master.APIPrefix, config.APIPrefix)
 	assert.Equal(master.APIGroupPrefix, config.APIGroupPrefix)
-	assert.Equal(master.ApiGroupVersionOverrides, config.APIGroupVersionOverrides)
 	assert.Equal(master.RequestContextMapper, config.RequestContextMapper)
 	assert.Equal(master.MasterCount, config.MasterCount)
 	assert.Equal(master.ClusterIP, config.PublicAddress)
@@ -130,6 +140,26 @@ func TestNew(t *testing.T) {
 	assert.Equal(masterDialerFunc, configDialerFunc)
 
 	assert.Equal(master.ProxyTransport.(*http.Transport).TLSClientConfig, config.ProxyTLSClientConfig)
+}
+
+// TestNamespaceSubresources ensures the namespace subresource parsing in apiserver/handlers.go doesn't drift
+func TestNamespaceSubresources(t *testing.T) {
+	master, etcdserver, _, _ := newMaster(t)
+	defer etcdserver.Terminate(t)
+
+	expectedSubresources := apiserver.NamespaceSubResourcesForTest
+	foundSubresources := sets.NewString()
+
+	for k := range master.v1ResourcesStorage {
+		parts := strings.Split(k, "/")
+		if len(parts) == 2 && parts[0] == "namespaces" {
+			foundSubresources.Insert(parts[1])
+		}
+	}
+
+	if !reflect.DeepEqual(expectedSubresources.List(), foundSubresources.List()) {
+		t.Errorf("Expected namespace subresources %#v, got %#v. Update apiserver/handlers.go#namespaceSubresources", expectedSubresources.List(), foundSubresources.List())
+	}
 }
 
 // TestGetServersToValidate verifies the unexported getServersToValidate function
@@ -340,7 +370,7 @@ func TestAPIVersionOfDiscoveryEndpoints(t *testing.T) {
 }
 
 func TestDiscoveryAtAPIS(t *testing.T) {
-	// TODO(caesarxuchao): make this pass  now that batch is added,
+	// TODO(caesarxuchao): make this pass now that batch is added,
 	// and rewrite it so that the indexes do not need to change each time a new api group is added.
 	/*
 		master, etcdserver, config, assert := newMaster(t)
@@ -476,12 +506,10 @@ func initThirdParty(t *testing.T, version string) (*Master, *etcdtesting.EtcdTes
 		},
 		Versions: []extensions.APIVersion{
 			{
-				APIGroup: "group",
-				Name:     version,
+				Name: version,
 			},
 		},
 	}
-	master.thirdPartyStorage = etcdstorage.NewEtcdStorage(etcdserver.Client, testapi.Extensions.Codec(), etcdtest.PathPrefix(), false)
 	_, master.ServiceClusterIPRange, _ = net.ParseCIDR("10.0.0.0/24")
 
 	if !assert.NoError(master.InstallThirdPartyResource(api)) {
@@ -541,7 +569,10 @@ func testInstallThirdPartyAPIListVersion(t *testing.T, version string) {
 			defer etcdserver.Terminate(t)
 
 			if test.items != nil {
-				storeThirdPartyList(master.thirdPartyStorage, "/ThirdPartyResourceData/company.com/foos/default", test.items)
+				err := storeThirdPartyList(master.thirdPartyStorage, "/ThirdPartyResourceData/company.com/foos/default", test.items)
+				if !assert.NoError(err) {
+					return
+				}
 			}
 
 			resp, err := http.Get(server.URL + "/apis/company.com/" + version + "/namespaces/default/foos")
@@ -948,4 +979,55 @@ func testInstallThirdPartyResourceRemove(t *testing.T, version string) {
 			t.Errorf("Web service still installed at %s: %#v", services[ix].RootPath(), services[ix])
 		}
 	}
+}
+
+func TestThirdPartyDiscovery(t *testing.T) {
+	for _, version := range versionsToTest {
+		testThirdPartyDiscovery(t, version)
+	}
+}
+
+func testThirdPartyDiscovery(t *testing.T, version string) {
+	_, etcdserver, server, assert := initThirdParty(t, version)
+	// TODO: Uncomment when fix #19254
+	// defer server.Close()
+	defer etcdserver.Terminate(t)
+
+	resp, err := http.Get(server.URL + "/apis/company.com/")
+	if !assert.NoError(err) {
+		return
+	}
+	assert.Equal(http.StatusOK, resp.StatusCode)
+
+	group := unversioned.APIGroup{}
+	assert.NoError(decodeResponse(resp, &group))
+	assert.Equal(group.APIVersion, "v1")
+	assert.Equal(group.Kind, "APIGroup")
+	assert.Equal(group.Name, "company.com")
+	assert.Equal(group.Versions, []unversioned.GroupVersionForDiscovery{
+		{
+			GroupVersion: "company.com/" + version,
+			Version:      version,
+		},
+	})
+	assert.Equal(group.PreferredVersion, unversioned.GroupVersionForDiscovery{})
+
+	resp, err = http.Get(server.URL + "/apis/company.com/" + version)
+	if !assert.NoError(err) {
+		return
+	}
+	assert.Equal(http.StatusOK, resp.StatusCode)
+
+	resourceList := unversioned.APIResourceList{}
+	assert.NoError(decodeResponse(resp, &resourceList))
+	assert.Equal(resourceList.APIVersion, "v1")
+	assert.Equal(resourceList.Kind, "APIResourceList")
+	assert.Equal(resourceList.GroupVersion, "company.com/"+version)
+	assert.Equal(resourceList.APIResources, []unversioned.APIResource{
+		{
+			Name:       "foos",
+			Namespaced: true,
+			Kind:       "Foo",
+		},
+	})
 }

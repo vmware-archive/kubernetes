@@ -296,6 +296,7 @@ func (DaemonEndpoint) SwaggerDoc() map[string]string {
 var map_DeleteOptions = map[string]string{
 	"":                   "DeleteOptions may be provided when deleting an API object",
 	"gracePeriodSeconds": "The duration in seconds before the object should be deleted. Value must be non-negative integer. The value zero indicates delete immediately. If this value is nil, the default grace period for the specified type will be used. Defaults to a per object value if not specified. zero means delete immediately.",
+	"preconditions":      "Must be fulfilled before a deletion is carried out. If not possible, a 409 Conflict status will be returned.",
 }
 
 func (DeleteOptions) SwaggerDoc() map[string]string {
@@ -1237,6 +1238,15 @@ func (PodTemplateSpec) SwaggerDoc() map[string]string {
 	return map_PodTemplateSpec
 }
 
+var map_Preconditions = map[string]string{
+	"":    "Preconditions must be fulfilled before an operation (update, delete, etc.) is carried out.",
+	"uid": "Specifies the target UID.",
+}
+
+func (Preconditions) SwaggerDoc() map[string]string {
+	return map_Preconditions
+}
+
 var map_PreferredSchedulingTerm = map[string]string{
 	"":           "An empty preferred scheduling term matches all objects with implicit weight 0 (i.e. it's a no-op). A null preferred scheduling term matches no objects (i.e. is also a no-op).",
 	"weight":     "Weight associated with matching the corresponding nodeSelectorTerm, in the range 1-100.",
@@ -1320,9 +1330,10 @@ func (ReplicationControllerSpec) SwaggerDoc() map[string]string {
 }
 
 var map_ReplicationControllerStatus = map[string]string{
-	"":                   "ReplicationControllerStatus represents the current status of a replication controller.",
-	"replicas":           "Replicas is the most recently oberved number of replicas. More info: http://releases.k8s.io/HEAD/docs/user-guide/replication-controller.md#what-is-a-replication-controller",
-	"observedGeneration": "ObservedGeneration reflects the generation of the most recently observed replication controller.",
+	"":                     "ReplicationControllerStatus represents the current status of a replication controller.",
+	"replicas":             "Replicas is the most recently oberved number of replicas. More info: http://releases.k8s.io/HEAD/docs/user-guide/replication-controller.md#what-is-a-replication-controller",
+	"fullyLabeledReplicas": "The number of pods that have labels matching the labels of the pod template of the replication controller.",
+	"observedGeneration":   "ObservedGeneration reflects the generation of the most recently observed replication controller.",
 }
 
 func (ReplicationControllerStatus) SwaggerDoc() map[string]string {

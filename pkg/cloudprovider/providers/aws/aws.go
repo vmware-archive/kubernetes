@@ -38,7 +38,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/elb"
-	"github.com/scalingdata/gcfg"
+	"gopkg.in/gcfg.v1"
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/cloudprovider"
@@ -79,6 +79,11 @@ const MaxReadThenCreateRetries = 30
 // TODO: Remove when user/admin can configure volume types and thus we don't
 // need hardcoded defaults.
 const DefaultVolumeType = "gp2"
+
+// Amazon recommends having no more that 40 volumes attached to an instance,
+// and at least one of those is for the system root volume.
+// See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/volume_limits.html#linux-specific-volume-limits
+const DefaultMaxEBSVolumes = 39
 
 // Used to call aws_credentials.Init() just once
 var once sync.Once
@@ -161,7 +166,7 @@ type EC2Metadata interface {
 
 type VolumeOptions struct {
 	CapacityGB int
-	Tags       *map[string]string
+	Tags       map[string]string
 }
 
 // Volumes is an interface for managing cloud-provisioned volumes
@@ -902,10 +907,17 @@ type mountDevice string
 // TODO: Also return number of mounts allowed?
 func (self *awsInstanceType) getEBSMountDevices() []mountDevice {
 	// See: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/block-device-mapping-concepts.html
+	// We will generate "ba", "bb", "bc"..."bz", "ca", ..., up to DefaultMaxEBSVolumes
 	devices := []mountDevice{}
-	for c := 'f'; c <= 'p'; c++ {
-		devices = append(devices, mountDevice(fmt.Sprintf("%c", c)))
+	count := 0
+	for first := 'b'; count < DefaultMaxEBSVolumes; first++ {
+		for second := 'a'; count < DefaultMaxEBSVolumes && second <= 'z'; second++ {
+			device := mountDevice(fmt.Sprintf("%c%c", first, second))
+			devices = append(devices, device)
+			count++
+		}
 	}
+
 	return devices
 }
 
@@ -932,9 +944,10 @@ type awsInstance struct {
 
 	mutex sync.Mutex
 
-	// We must cache because otherwise there is a race condition,
-	// where we assign a device mapping and then get a second request before we attach the volume
-	deviceMappings map[mountDevice]string
+	// We keep an active list of devices we have assigned but not yet
+	// attached, to avoid a race condition where we assign a device mapping
+	// and then get a second request before we attach the volume
+	attaching map[mountDevice]string
 }
 
 // newAWSInstance creates a new awsInstance object
@@ -953,8 +966,7 @@ func newAWSInstance(ec2Service EC2, instance *ec2.Instance) *awsInstance {
 		subnetID:         aws.StringValue(instance.SubnetId),
 	}
 
-	// We lazy-init deviceMappings
-	self.deviceMappings = nil
+	self.attaching = make(map[mountDevice]string)
 
 	return self
 }
@@ -1001,31 +1013,31 @@ func (self *awsInstance) getMountDevice(volumeID string, assign bool) (assigned 
 	self.mutex.Lock()
 	defer self.mutex.Unlock()
 
-	// We cache both for efficiency and correctness
-	if self.deviceMappings == nil {
-		info, err := self.describeInstance()
-		if err != nil {
-			return "", false, err
+	info, err := self.describeInstance()
+	if err != nil {
+		return "", false, err
+	}
+	deviceMappings := map[mountDevice]string{}
+	for _, blockDevice := range info.BlockDeviceMappings {
+		name := aws.StringValue(blockDevice.DeviceName)
+		if strings.HasPrefix(name, "/dev/sd") {
+			name = name[7:]
 		}
-		deviceMappings := map[mountDevice]string{}
-		for _, blockDevice := range info.BlockDeviceMappings {
-			name := aws.StringValue(blockDevice.DeviceName)
-			if strings.HasPrefix(name, "/dev/sd") {
-				name = name[7:]
-			}
-			if strings.HasPrefix(name, "/dev/xvd") {
-				name = name[8:]
-			}
-			if len(name) != 1 {
-				glog.Warningf("Unexpected EBS DeviceName: %q", aws.StringValue(blockDevice.DeviceName))
-			}
-			deviceMappings[mountDevice(name)] = aws.StringValue(blockDevice.Ebs.VolumeId)
+		if strings.HasPrefix(name, "/dev/xvd") {
+			name = name[8:]
 		}
-		self.deviceMappings = deviceMappings
+		if len(name) < 1 || len(name) > 2 {
+			glog.Warningf("Unexpected EBS DeviceName: %q", aws.StringValue(blockDevice.DeviceName))
+		}
+		deviceMappings[mountDevice(name)] = aws.StringValue(blockDevice.Ebs.VolumeId)
+	}
+
+	for mountDevice, volume := range self.attaching {
+		deviceMappings[mountDevice] = volume
 	}
 
 	// Check to see if this volume is already assigned a device on this machine
-	for mountDevice, mappingVolumeID := range self.deviceMappings {
+	for mountDevice, mappingVolumeID := range deviceMappings {
 		if volumeID == mappingVolumeID {
 			if assign {
 				glog.Warningf("Got assignment call for already-assigned volume: %s@%s", mountDevice, mappingVolumeID)
@@ -1042,7 +1054,7 @@ func (self *awsInstance) getMountDevice(volumeID string, assign bool) (assigned 
 	valid := instanceType.getEBSMountDevices()
 	chosen := mountDevice("")
 	for _, mountDevice := range valid {
-		_, found := self.deviceMappings[mountDevice]
+		_, found := deviceMappings[mountDevice]
 		if !found {
 			chosen = mountDevice
 			break
@@ -1050,31 +1062,31 @@ func (self *awsInstance) getMountDevice(volumeID string, assign bool) (assigned 
 	}
 
 	if chosen == "" {
-		glog.Warningf("Could not assign a mount device (all in use?).  mappings=%v, valid=%v", self.deviceMappings, valid)
-		return "", false, nil
+		glog.Warningf("Could not assign a mount device (all in use?).  mappings=%v, valid=%v", deviceMappings, valid)
+		return "", false, fmt.Errorf("Too many EBS volumes attached to node %s.", self.nodeName)
 	}
 
-	self.deviceMappings[chosen] = volumeID
+	self.attaching[chosen] = volumeID
 	glog.V(2).Infof("Assigned mount device %s -> volume %s", chosen, volumeID)
 
 	return chosen, false, nil
 }
 
-func (self *awsInstance) releaseMountDevice(volumeID string, mountDevice mountDevice) {
+func (self *awsInstance) endAttaching(volumeID string, mountDevice mountDevice) {
 	self.mutex.Lock()
 	defer self.mutex.Unlock()
 
-	existingVolumeID, found := self.deviceMappings[mountDevice]
+	existingVolumeID, found := self.attaching[mountDevice]
 	if !found {
-		glog.Errorf("releaseMountDevice on non-allocated device")
+		glog.Errorf("endAttaching on non-allocated device")
 		return
 	}
 	if volumeID != existingVolumeID {
-		glog.Errorf("releaseMountDevice on device assigned to different volume")
+		glog.Errorf("endAttaching on device assigned to different volume")
 		return
 	}
 	glog.V(2).Infof("Releasing mount device mapping: %s -> volume %s", mountDevice, volumeID)
-	delete(self.deviceMappings, mountDevice)
+	delete(self.attaching, mountDevice)
 }
 
 type awsDisk struct {
@@ -1144,6 +1156,8 @@ func (self *awsDisk) describeVolume() (*ec2.Volume, error) {
 	return volumes[0], nil
 }
 
+// waitForAttachmentStatus polls until the attachment status is the expected value
+// TODO(justinsb): return (bool, error)
 func (self *awsDisk) waitForAttachmentStatus(status string) error {
 	// TODO: There may be a faster way to get this when we're attaching locally
 	attempt := 0
@@ -1278,10 +1292,12 @@ func (c *AWSCloud) AttachDisk(diskName string, instanceName string, readOnly boo
 		ec2Device = "/dev/sd" + string(mountDevice)
 	}
 
-	attached := false
+	// attachEnded is set to true if the attach operation completed
+	// (successfully or not)
+	attachEnded := false
 	defer func() {
-		if !attached {
-			awsInstance.releaseMountDevice(disk.awsID, mountDevice)
+		if attachEnded {
+			awsInstance.endAttaching(disk.awsID, mountDevice)
 		}
 	}()
 
@@ -1294,6 +1310,7 @@ func (c *AWSCloud) AttachDisk(diskName string, instanceName string, readOnly boo
 
 		attachResponse, err := c.ec2.AttachVolume(request)
 		if err != nil {
+			attachEnded = true
 			// TODO: Check if the volume was concurrently attached?
 			return "", fmt.Errorf("Error attaching EBS volume: %v", err)
 		}
@@ -1306,7 +1323,7 @@ func (c *AWSCloud) AttachDisk(diskName string, instanceName string, readOnly boo
 		return "", err
 	}
 
-	attached = true
+	attachEnded = true
 
 	return hostDevice, nil
 }
@@ -1346,31 +1363,13 @@ func (aws *AWSCloud) DetachDisk(diskName string, instanceName string) (string, e
 		return "", errors.New("no response from DetachVolume")
 	}
 
-	// TODO: Fix this - just remove the cache?
-	// If we don't have a cache; we don't have to wait any more (the driver does it for us)
-	// Also, maybe we could get the locally connected drivers from the AWS metadata service?
-
-	// At this point we are waiting for the volume being detached. This
-	// releases the volume and invalidates the cache even when there is a timeout.
-	//
-	// TODO: A timeout leaves the cache in an inconsistent state. The volume is still
-	// detaching though the cache shows it as ready to be attached again. Subsequent
-	// attach operations will fail. The attach is being retried and eventually
-	// works though. An option would be to completely flush the cache upon timeouts.
-	//
-	defer func() {
-		// TODO: Not thread safe?
-		for mountDevice, existingVolumeID := range awsInstance.deviceMappings {
-			if existingVolumeID == disk.awsID {
-				awsInstance.releaseMountDevice(disk.awsID, mountDevice)
-				return
-			}
-		}
-	}()
-
 	err = disk.waitForAttachmentStatus("detached")
 	if err != nil {
 		return "", err
+	}
+
+	if mountDevice != "" {
+		awsInstance.endAttaching(disk.awsID, mountDevice)
 	}
 
 	hostDevicePath := "/dev/xvd" + string(mountDevice)
@@ -1400,8 +1399,17 @@ func (s *AWSCloud) CreateDisk(volumeOptions *VolumeOptions) (string, error) {
 	volumeName := "aws://" + az + "/" + awsID
 
 	// apply tags
-	if volumeOptions.Tags != nil {
-		if err := s.createTags(awsID, *volumeOptions.Tags); err != nil {
+	tags := make(map[string]string)
+	for k, v := range volumeOptions.Tags {
+		tags[k] = v
+	}
+
+	if s.getClusterName() != "" {
+		tags[TagNameKubernetesCluster] = s.getClusterName()
+	}
+
+	if len(tags) != 0 {
+		if err := s.createTags(awsID, tags); err != nil {
 			// delete the volume and hope it succeeds
 			_, delerr := s.DeleteDisk(volumeName)
 			if delerr != nil {
@@ -1478,7 +1486,7 @@ func (s *AWSCloud) describeLoadBalancer(name string) (*elb.LoadBalancerDescripti
 func (self *AWSCloud) findVPCID() (string, error) {
 	macs, err := self.metadata.GetMetadata("network/interfaces/macs/")
 	if err != nil {
-		return "", fmt.Errorf("Could not list interfaces of the instance", err)
+		return "", fmt.Errorf("Could not list interfaces of the instance: %v", err)
 	}
 
 	// loop over interfaces, first vpc id returned wins
@@ -1505,7 +1513,7 @@ func (s *AWSCloud) findSecurityGroup(securityGroupId string) (*ec2.SecurityGroup
 
 	groups, err := s.ec2.DescribeSecurityGroups(describeSecurityGroupsRequest)
 	if err != nil {
-		glog.Warning("Error retrieving security group", err)
+		glog.Warningf("Error retrieving security group: %q", err)
 		return nil, err
 	}
 
@@ -1514,7 +1522,7 @@ func (s *AWSCloud) findSecurityGroup(securityGroupId string) (*ec2.SecurityGroup
 	}
 	if len(groups) != 1 {
 		// This should not be possible - ids should be unique
-		return nil, fmt.Errorf("multiple security groups found with same id")
+		return nil, fmt.Errorf("multiple security groups found with same id %q", securityGroupId)
 	}
 	group := groups[0]
 	return group, nil
@@ -1672,7 +1680,7 @@ func (s *AWSCloud) setSecurityGroupIngress(securityGroupId string, permissions I
 func (s *AWSCloud) addSecurityGroupIngress(securityGroupId string, addPermissions []*ec2.IpPermission) (bool, error) {
 	group, err := s.findSecurityGroup(securityGroupId)
 	if err != nil {
-		glog.Warning("Error retrieving security group", err)
+		glog.Warningf("Error retrieving security group: %v", err)
 		return false, err
 	}
 
@@ -1728,7 +1736,7 @@ func (s *AWSCloud) addSecurityGroupIngress(securityGroupId string, addPermission
 func (s *AWSCloud) removeSecurityGroupIngress(securityGroupId string, removePermissions []*ec2.IpPermission) (bool, error) {
 	group, err := s.findSecurityGroup(securityGroupId)
 	if err != nil {
-		glog.Warning("Error retrieving security group", err)
+		glog.Warningf("Error retrieving security group: %v", err)
 		return false, err
 	}
 
@@ -1770,7 +1778,7 @@ func (s *AWSCloud) removeSecurityGroupIngress(securityGroupId string, removePerm
 	request.IpPermissions = changes
 	_, err = s.ec2.RevokeSecurityGroupIngress(request)
 	if err != nil {
-		glog.Warning("Error revoking security group ingress", err)
+		glog.Warningf("Error revoking security group ingress: %v", err)
 		return false, err
 	}
 
@@ -1835,7 +1843,7 @@ func (s *AWSCloud) ensureSecurityGroup(name string, description string) (string,
 
 		if len(securityGroups) >= 1 {
 			if len(securityGroups) > 1 {
-				glog.Warning("Found multiple security groups with name:", name)
+				glog.Warningf("Found multiple security groups with name: %q", name)
 			}
 			err := s.ensureClusterTags(aws.StringValue(securityGroups[0].GroupId), securityGroups[0].Tags)
 			if err != nil {
@@ -2033,7 +2041,7 @@ func (s *AWSCloud) findELBSubnets(internalELB bool) ([]string, error) {
 		}
 
 		// TODO: Should this be an error?
-		glog.Warning("Found multiple subnets in AZ %q; making arbitrary choice between subnets %q and %q", az, *existing.SubnetId, *subnet.SubnetId)
+		glog.Warningf("Found multiple subnets in AZ %q; making arbitrary choice between subnets %q and %q", az, *existing.SubnetId, *subnet.SubnetId)
 		continue
 	}
 
@@ -2091,31 +2099,27 @@ func isSubnetPublic(rt []*ec2.RouteTable, subnetID string) (bool, error) {
 }
 
 // EnsureLoadBalancer implements LoadBalancer.EnsureLoadBalancer
-// TODO(justinsb) It is weird that these take a region.  I suspect it won't work cross-region anyway.
-func (s *AWSCloud) EnsureLoadBalancer(name, region string, publicIP net.IP, ports []*api.ServicePort, hosts []string, serviceName types.NamespacedName, affinity api.ServiceAffinity, annotations map[string]string) (*api.LoadBalancerStatus, error) {
-	glog.V(2).Infof("EnsureLoadBalancer(%v, %v, %v, %v, %v, %v, %v)", name, region, publicIP, ports, hosts, serviceName, annotations)
+func (s *AWSCloud) EnsureLoadBalancer(apiService *api.Service, hosts []string, annotations map[string]string) (*api.LoadBalancerStatus, error) {
+	glog.V(2).Infof("EnsureLoadBalancer(%v, %v, %v, %v, %v, %v, %v)",
+		apiService.Namespace, apiService.Name, s.region, apiService.Spec.LoadBalancerIP, apiService.Spec.Ports, hosts, annotations)
 
-	if region != s.region {
-		return nil, fmt.Errorf("requested load balancer region '%s' does not match cluster region '%s'", region, s.region)
-	}
-
-	if affinity != api.ServiceAffinityNone {
+	if apiService.Spec.SessionAffinity != api.ServiceAffinityNone {
 		// ELB supports sticky sessions, but only when configured for HTTP/HTTPS
-		return nil, fmt.Errorf("unsupported load balancer affinity: %v", affinity)
+		return nil, fmt.Errorf("unsupported load balancer affinity: %v", apiService.Spec.SessionAffinity)
 	}
 
-	if len(ports) == 0 {
+	if len(apiService.Spec.Ports) == 0 {
 		return nil, fmt.Errorf("requested load balancer with no ports")
 	}
 
-	for _, port := range ports {
+	for _, port := range apiService.Spec.Ports {
 		if port.Protocol != api.ProtocolTCP {
 			return nil, fmt.Errorf("Only TCP LoadBalancer is supported for AWS ELB")
 		}
 	}
 
-	if publicIP != nil {
-		return nil, fmt.Errorf("publicIP cannot be specified for AWS ELB")
+	if apiService.Spec.LoadBalancerIP != "" {
+		return nil, fmt.Errorf("LoadBalancerIP cannot be specified for AWS ELB")
 	}
 
 	instances, err := s.getInstancesByNodeNames(hosts)
@@ -2154,11 +2158,14 @@ func (s *AWSCloud) EnsureLoadBalancer(name, region string, publicIP net.IP, port
 		return nil, fmt.Errorf("could not find any suitable subnets for creating the ELB")
 	}
 
+	loadBalancerName := cloudprovider.GetLoadBalancerName(apiService)
+	serviceName := types.NamespacedName{Namespace: apiService.Namespace, Name: apiService.Name}
+
 	// Create a security group for the load balancer
 	var securityGroupID string
 	{
-		sgName := "k8s-elb-" + name
-		sgDescription := fmt.Sprintf("Security group for Kubernetes ELB %s (%v)", name, serviceName)
+		sgName := "k8s-elb-" + loadBalancerName
+		sgDescription := fmt.Sprintf("Security group for Kubernetes ELB %s (%v)", loadBalancerName, serviceName)
 		securityGroupID, err = s.ensureSecurityGroup(sgName, sgDescription)
 		if err != nil {
 			glog.Error("Error creating load balancer security group: ", err)
@@ -2171,7 +2178,7 @@ func (s *AWSCloud) EnsureLoadBalancer(name, region string, publicIP net.IP, port
 		}
 
 		permissions := NewIPPermissionSet()
-		for _, port := range ports {
+		for _, port := range apiService.Spec.Ports {
 			portInt64 := int64(port.Port)
 			protocol := strings.ToLower(string(port.Protocol))
 
@@ -2192,7 +2199,7 @@ func (s *AWSCloud) EnsureLoadBalancer(name, region string, publicIP net.IP, port
 
 	// Figure out what mappings we want on the load balancer
 	listeners := []*elb.Listener{}
-	for _, port := range ports {
+	for _, port := range apiService.Spec.Ports {
 		if port.NodePort == 0 {
 			glog.Errorf("Ignoring port without NodePort defined: %v", port)
 			continue
@@ -2211,7 +2218,7 @@ func (s *AWSCloud) EnsureLoadBalancer(name, region string, publicIP net.IP, port
 	}
 
 	// Build the load balancer itself
-	loadBalancer, err := s.ensureLoadBalancer(serviceName, name, listeners, subnetIDs, securityGroupIDs, internalELB)
+	loadBalancer, err := s.ensureLoadBalancer(serviceName, loadBalancerName, listeners, subnetIDs, securityGroupIDs, internalELB)
 	if err != nil {
 		return nil, err
 	}
@@ -2223,7 +2230,7 @@ func (s *AWSCloud) EnsureLoadBalancer(name, region string, publicIP net.IP, port
 
 	err = s.updateInstanceSecurityGroupsForLoadBalancer(loadBalancer, instances)
 	if err != nil {
-		glog.Warning("Error opening ingress rules for the load balancer to the instances: ", err)
+		glog.Warningf("Error opening ingress rules for the load balancer to the instances: %v", err)
 		return nil, err
 	}
 
@@ -2233,7 +2240,7 @@ func (s *AWSCloud) EnsureLoadBalancer(name, region string, publicIP net.IP, port
 		return nil, err
 	}
 
-	glog.V(1).Infof("Loadbalancer %s (%v) has DNS name %s", name, serviceName, orEmpty(loadBalancer.DNSName))
+	glog.V(1).Infof("Loadbalancer %s (%v) has DNS name %s", loadBalancerName, serviceName, orEmpty(loadBalancer.DNSName))
 
 	// TODO: Wait for creation?
 
@@ -2242,12 +2249,9 @@ func (s *AWSCloud) EnsureLoadBalancer(name, region string, publicIP net.IP, port
 }
 
 // GetLoadBalancer is an implementation of LoadBalancer.GetLoadBalancer
-func (s *AWSCloud) GetLoadBalancer(name, region string) (*api.LoadBalancerStatus, bool, error) {
-	if region != s.region {
-		return nil, false, fmt.Errorf("requested load balancer region '%s' does not match cluster region '%s'", region, s.region)
-	}
-
-	lb, err := s.describeLoadBalancer(name)
+func (s *AWSCloud) GetLoadBalancer(service *api.Service) (*api.LoadBalancerStatus, bool, error) {
+	loadBalancerName := cloudprovider.GetLoadBalancerName(service)
+	lb, err := s.describeLoadBalancer(loadBalancerName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -2278,44 +2282,48 @@ func toStatus(lb *elb.LoadBalancerDescription) *api.LoadBalancerStatus {
 // Otherwise we will return an error.
 func findSecurityGroupForInstance(instance *ec2.Instance, taggedSecurityGroups map[string]*ec2.SecurityGroup) (*ec2.GroupIdentifier, error) {
 	instanceID := aws.StringValue(instance.InstanceId)
-	var best *ec2.GroupIdentifier
+
+	var tagged []*ec2.GroupIdentifier
+	var untagged []*ec2.GroupIdentifier
 	for _, group := range instance.SecurityGroups {
 		groupID := aws.StringValue(group.GroupId)
 		if groupID == "" {
 			glog.Warningf("Ignoring security group without id for instance %q: %v", instanceID, group)
 			continue
 		}
-		if best == nil {
-			best = group
-			continue
-		}
-
-		_, bestIsTagged := taggedSecurityGroups[*best.GroupId]
-		_, groupIsTagged := taggedSecurityGroups[groupID]
-
-		if bestIsTagged && !groupIsTagged {
-			// best is still best
-		} else if groupIsTagged && !bestIsTagged {
-			best = group
+		_, isTagged := taggedSecurityGroups[groupID]
+		if isTagged {
+			tagged = append(tagged, group)
 		} else {
-			// We create instances with one SG
-			// If users create multiple SGs, they must tag one of them as being k8s owned
-			return nil, fmt.Errorf("Multiple security groups found for instance (%s); ensure the k8s security group is tagged", instanceID)
+			untagged = append(untagged, group)
 		}
 	}
 
-	if best == nil {
-		glog.Warning("No security group found for instance ", instanceID)
+	if len(tagged) > 0 {
+		// We create instances with one SG
+		// If users create multiple SGs, they must tag one of them as being k8s owned
+		if len(tagged) != 1 {
+			return nil, fmt.Errorf("Multiple tagged security groups found for instance %s; ensure only the k8s security group is tagged", instanceID)
+		}
+		return tagged[0], nil
 	}
 
-	return best, nil
+	if len(untagged) > 0 {
+		// For back-compat, we will allow a single untagged SG
+		if len(untagged) != 1 {
+			return nil, fmt.Errorf("Multiple untagged security groups found for instance %s; ensure the k8s security group is tagged", instanceID)
+		}
+		return untagged[0], nil
+	}
+
+	glog.Warningf("No security group found for instance %q", instanceID)
+	return nil, nil
 }
 
 // Return all the security groups that are tagged as being part of our cluster
 func (s *AWSCloud) getTaggedSecurityGroups() (map[string]*ec2.SecurityGroup, error) {
 	request := &ec2.DescribeSecurityGroupsInput{}
-	filters := []*ec2.Filter{}
-	request.Filters = s.addFilters(filters)
+	request.Filters = s.addFilters(nil)
 	groups, err := s.ec2.DescribeSecurityGroups(request)
 	if err != nil {
 		return nil, fmt.Errorf("error querying security groups: %v", err)
@@ -2348,7 +2356,7 @@ func (s *AWSCloud) updateInstanceSecurityGroupsForLoadBalancer(lb *elb.LoadBalan
 		}
 		if loadBalancerSecurityGroupId != "" {
 			// We create LBs with one SG
-			glog.Warning("Multiple security groups for load balancer: ", orEmpty(lb.LoadBalancerName))
+			glog.Warningf("Multiple security groups for load balancer: %q", orEmpty(lb.LoadBalancerName))
 		}
 		loadBalancerSecurityGroupId = *securityGroup
 	}
@@ -2363,7 +2371,7 @@ func (s *AWSCloud) updateInstanceSecurityGroupsForLoadBalancer(lb *elb.LoadBalan
 	describeRequest.Filters = s.addFilters(filters)
 	actualGroups, err := s.ec2.DescribeSecurityGroups(describeRequest)
 	if err != nil {
-		return fmt.Errorf("error querying security groups: %v", err)
+		return fmt.Errorf("error querying security groups for ELB: %v", err)
 	}
 
 	taggedSecurityGroups, err := s.getTaggedSecurityGroups()
@@ -2457,18 +2465,15 @@ func (s *AWSCloud) updateInstanceSecurityGroupsForLoadBalancer(lb *elb.LoadBalan
 }
 
 // EnsureLoadBalancerDeleted implements LoadBalancer.EnsureLoadBalancerDeleted.
-func (s *AWSCloud) EnsureLoadBalancerDeleted(name, region string) error {
-	if region != s.region {
-		return fmt.Errorf("requested load balancer region '%s' does not match cluster region '%s'", region, s.region)
-	}
-
-	lb, err := s.describeLoadBalancer(name)
+func (s *AWSCloud) EnsureLoadBalancerDeleted(service *api.Service) error {
+	loadBalancerName := cloudprovider.GetLoadBalancerName(service)
+	lb, err := s.describeLoadBalancer(loadBalancerName)
 	if err != nil {
 		return err
 	}
 
 	if lb == nil {
-		glog.Info("Load balancer already deleted: ", name)
+		glog.Info("Load balancer already deleted: ", loadBalancerName)
 		return nil
 	}
 
@@ -2503,14 +2508,14 @@ func (s *AWSCloud) EnsureLoadBalancerDeleted(name, region string) error {
 		securityGroupIDs := map[string]struct{}{}
 		for _, securityGroupID := range lb.SecurityGroups {
 			if isNilOrEmpty(securityGroupID) {
-				glog.Warning("Ignoring empty security group in ", name)
+				glog.Warning("Ignoring empty security group in ", service.Name)
 				continue
 			}
 			securityGroupIDs[*securityGroupID] = struct{}{}
 		}
 
 		// Loop through and try to delete them
-		timeoutAt := time.Now().Add(time.Second * 300)
+		timeoutAt := time.Now().Add(time.Second * 600)
 		for {
 			for securityGroupID := range securityGroupIDs {
 				request := &ec2.DeleteSecurityGroupInput{}
@@ -2533,17 +2538,22 @@ func (s *AWSCloud) EnsureLoadBalancerDeleted(name, region string) error {
 			}
 
 			if len(securityGroupIDs) == 0 {
-				glog.V(2).Info("Deleted all security groups for load balancer: ", name)
+				glog.V(2).Info("Deleted all security groups for load balancer: ", service.Name)
 				break
 			}
 
 			if time.Now().After(timeoutAt) {
-				return fmt.Errorf("timed out waiting for load-balancer deletion: %s", name)
+				ids := []string{}
+				for id := range securityGroupIDs {
+					ids = append(ids, id)
+				}
+
+				return fmt.Errorf("timed out deleting ELB: %s. Could not delete security groups %v", service.Name, strings.Join(ids, ","))
 			}
 
-			glog.V(2).Info("Waiting for load-balancer to delete so we can delete security groups: ", name)
+			glog.V(2).Info("Waiting for load-balancer to delete so we can delete security groups: ", service.Name)
 
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 		}
 	}
 
@@ -2551,17 +2561,14 @@ func (s *AWSCloud) EnsureLoadBalancerDeleted(name, region string) error {
 }
 
 // UpdateLoadBalancer implements LoadBalancer.UpdateLoadBalancer
-func (s *AWSCloud) UpdateLoadBalancer(name, region string, hosts []string) error {
-	if region != s.region {
-		return fmt.Errorf("requested load balancer region '%s' does not match cluster region '%s'", region, s.region)
-	}
-
+func (s *AWSCloud) UpdateLoadBalancer(service *api.Service, hosts []string) error {
 	instances, err := s.getInstancesByNodeNames(hosts)
 	if err != nil {
 		return err
 	}
 
-	lb, err := s.describeLoadBalancer(name)
+	loadBalancerName := cloudprovider.GetLoadBalancerName(service)
+	lb, err := s.describeLoadBalancer(loadBalancerName)
 	if err != nil {
 		return err
 	}
@@ -2702,6 +2709,12 @@ func (s *AWSCloud) addFilters(filters []*ec2.Filter) []*ec2.Filter {
 	for k, v := range s.filterTags {
 		filters = append(filters, newEc2Filter("tag:"+k, v))
 	}
+	if len(filters) == 0 {
+		// We can't pass a zero-length Filters to AWS (it's an error)
+		// So if we end up with no filters; just return nil
+		return nil
+	}
+
 	return filters
 }
 

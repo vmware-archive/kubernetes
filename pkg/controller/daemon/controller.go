@@ -30,9 +30,9 @@ import (
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/cache"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	unversionedcore "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/unversioned"
+	unversionedextensions "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/extensions/unversioned"
 	"k8s.io/kubernetes/pkg/client/record"
-	unversionedcore "k8s.io/kubernetes/pkg/client/typed/generated/core/unversioned"
-	unversionedextensions "k8s.io/kubernetes/pkg/client/typed/generated/extensions/unversioned"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/framework"
 	"k8s.io/kubernetes/pkg/labels"
@@ -65,8 +65,9 @@ const (
 // DaemonSetsController is responsible for synchronizing DaemonSet objects stored
 // in the system with actual running pods.
 type DaemonSetsController struct {
-	kubeClient clientset.Interface
-	podControl controller.PodControlInterface
+	kubeClient    clientset.Interface
+	eventRecorder record.EventRecorder
+	podControl    controller.PodControlInterface
 
 	// An dsc is temporarily suspended after creating/deleting these many replicas.
 	// It resumes normal action after observing the watch events for them.
@@ -102,10 +103,11 @@ func NewDaemonSetsController(kubeClient clientset.Interface, resyncPeriod contro
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
 	// TODO: remove the wrapper when every clients have moved to use the clientset.
-	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{kubeClient.Core().Events("")})
+	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{Interface: kubeClient.Core().Events("")})
 
 	dsc := &DaemonSetsController{
-		kubeClient: kubeClient,
+		kubeClient:    kubeClient,
+		eventRecorder: eventBroadcaster.NewRecorder(api.EventSource{Component: "daemonset-controller"}),
 		podControl: controller.RealPodControl{
 			KubeClient: kubeClient,
 			Recorder:   eventBroadcaster.NewRecorder(api.EventSource{Component: "daemon-set"}),
@@ -131,7 +133,7 @@ func NewDaemonSetsController(kubeClient clientset.Interface, resyncPeriod contro
 			AddFunc: func(obj interface{}) {
 				ds := obj.(*extensions.DaemonSet)
 				glog.V(4).Infof("Adding daemon set %s", ds.Name)
-				dsc.enqueueDaemonSet(obj)
+				dsc.enqueueDaemonSet(ds)
 			},
 			UpdateFunc: func(old, cur interface{}) {
 				oldDS := old.(*extensions.DaemonSet)
@@ -152,12 +154,12 @@ func NewDaemonSetsController(kubeClient clientset.Interface, resyncPeriod contro
 				}
 
 				glog.V(4).Infof("Updating daemon set %s", oldDS.Name)
-				dsc.enqueueDaemonSet(cur)
+				dsc.enqueueDaemonSet(curDS)
 			},
 			DeleteFunc: func(obj interface{}) {
 				ds := obj.(*extensions.DaemonSet)
 				glog.V(4).Infof("Deleting daemon set %s", ds.Name)
-				dsc.enqueueDaemonSet(obj)
+				dsc.enqueueDaemonSet(ds)
 			},
 		},
 	)
@@ -246,10 +248,10 @@ func (dsc *DaemonSetsController) enqueueAllDaemonSets() {
 	}
 }
 
-func (dsc *DaemonSetsController) enqueueDaemonSet(obj interface{}) {
-	key, err := controller.KeyFunc(obj)
+func (dsc *DaemonSetsController) enqueueDaemonSet(ds *extensions.DaemonSet) {
+	key, err := controller.KeyFunc(ds)
 	if err != nil {
-		glog.Errorf("Couldn't get key for object %+v: %v", obj, err)
+		glog.Errorf("Couldn't get key for object %+v: %v", ds, err)
 		return
 	}
 
@@ -623,6 +625,12 @@ func (dsc *DaemonSetsController) syncDaemonSet(key string) error {
 	}
 	ds := obj.(*extensions.DaemonSet)
 
+	everything := unversioned.LabelSelector{}
+	if reflect.DeepEqual(ds.Spec.Selector, &everything) {
+		dsc.eventRecorder.Eventf(ds, api.EventTypeWarning, "SelectingAll", "This daemon set is selecting all pods. A non-empty selector is required.")
+		return nil
+	}
+
 	// Don't process a daemon set until all its creations and deletions have been processed.
 	// For example if daemon set foo asked for 3 new daemon pods in the previous call to manage,
 	// then we do not want to call manage on foo until the daemon pods have been created.
@@ -675,11 +683,13 @@ func (dsc *DaemonSetsController) nodeShouldRunDaemonPod(node *api.Node, ds *exte
 	}
 	_, notFittingCPU, notFittingMemory := predicates.CheckPodsExceedingFreeResources(pods, node.Status.Allocatable)
 	if len(notFittingCPU)+len(notFittingMemory) != 0 {
+		dsc.eventRecorder.Eventf(ds, api.EventTypeNormal, "FailedPlacement", "failed to place pod on %q: insufficent free resources", node.ObjectMeta.Name)
 		return false
 	}
 	ports := sets.String{}
 	for _, pod := range pods {
 		if errs := validation.AccumulateUniqueHostPorts(pod.Spec.Containers, &ports, field.NewPath("spec", "containers")); len(errs) > 0 {
+			dsc.eventRecorder.Eventf(ds, api.EventTypeNormal, "FailedPlacement", "failed to place pod on %q: host port conflict", node.ObjectMeta.Name)
 			return false
 		}
 	}

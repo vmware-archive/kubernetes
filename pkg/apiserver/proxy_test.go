@@ -36,6 +36,7 @@ import (
 
 	"golang.org/x/net/websocket"
 	"k8s.io/kubernetes/pkg/api/rest"
+	utilnet "k8s.io/kubernetes/pkg/util/net"
 )
 
 func TestProxyRequestContentLengthAndTransferEncoding(t *testing.T) {
@@ -211,7 +212,7 @@ func TestProxyRequestContentLengthAndTransferEncoding(t *testing.T) {
 		// Dial the proxy server
 		conn, err := net.Dial(server.Listener.Addr().Network(), server.Listener.Addr().String())
 		if err != nil {
-			t.Errorf("%s: unexpected error %v", err)
+			t.Errorf("%s: unexpected error %v", k, err)
 			continue
 		}
 		defer conn.Close()
@@ -227,28 +228,28 @@ func TestProxyRequestContentLengthAndTransferEncoding(t *testing.T) {
 		// Write the request headers
 		post := fmt.Sprintf("POST /%s/%s/%s/proxy/namespaces/default/foo/id/some/dir HTTP/1.1\r\n", prefix, newGroupVersion.Group, newGroupVersion.Version)
 		if _, err := fmt.Fprint(conn, post); err != nil {
-			t.Fatalf("%s: unexpected error %v", err)
+			t.Fatalf("%s: unexpected error %v", k, err)
 		}
 		for header, values := range item.reqHeaders {
 			for _, value := range values {
 				if _, err := fmt.Fprintf(conn, "%s: %s\r\n", header, value); err != nil {
-					t.Fatalf("%s: unexpected error %v", err)
+					t.Fatalf("%s: unexpected error %v", k, err)
 				}
 			}
 		}
 		// Header separator
 		if _, err := fmt.Fprint(conn, "\r\n"); err != nil {
-			t.Fatalf("%s: unexpected error %v", err)
+			t.Fatalf("%s: unexpected error %v", k, err)
 		}
 		// Body
 		if _, err := conn.Write(item.reqBody); err != nil {
-			t.Fatalf("%s: unexpected error %v", err)
+			t.Fatalf("%s: unexpected error %v", k, err)
 		}
 
 		// Read response
 		response, err := ioutil.ReadAll(conn)
 		if err != nil {
-			t.Errorf("%s: unexpected error %v", err)
+			t.Errorf("%s: unexpected error %v", k, err)
 			continue
 		}
 		if !strings.HasSuffix(string(response), successfulResponse) {
@@ -381,7 +382,7 @@ func TestProxyUpgrade(t *testing.T) {
 				ts.StartTLS()
 				return ts
 			},
-			ProxyTransport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+			ProxyTransport: utilnet.SetTransportDefaults(&http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}),
 		},
 		"https (valid hostname + RootCAs)": {
 			ServerFunc: func(h http.Handler) *httptest.Server {
@@ -396,7 +397,7 @@ func TestProxyUpgrade(t *testing.T) {
 				ts.StartTLS()
 				return ts
 			},
-			ProxyTransport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: localhostPool}},
+			ProxyTransport: utilnet.SetTransportDefaults(&http.Transport{TLSClientConfig: &tls.Config{RootCAs: localhostPool}}),
 		},
 		"https (valid hostname + RootCAs + custom dialer)": {
 			ServerFunc: func(h http.Handler) *httptest.Server {
@@ -411,7 +412,7 @@ func TestProxyUpgrade(t *testing.T) {
 				ts.StartTLS()
 				return ts
 			},
-			ProxyTransport: &http.Transport{Dial: net.Dial, TLSClientConfig: &tls.Config{RootCAs: localhostPool}},
+			ProxyTransport: utilnet.SetTransportDefaults(&http.Transport{Dial: net.Dial, TLSClientConfig: &tls.Config{RootCAs: localhostPool}}),
 		},
 	}
 

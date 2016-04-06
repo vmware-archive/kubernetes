@@ -45,6 +45,13 @@ var specialVerbs = sets.NewString("proxy", "redirect", "watch")
 // specialVerbsNoSubresources contains root verbs which do not allow subresources
 var specialVerbsNoSubresources = sets.NewString("proxy", "redirect")
 
+// namespaceSubresources contains subresources of namespace
+// this list allows the parser to distinguish between a namespace subresource, and a namespaced resource
+var namespaceSubresources = sets.NewString("status", "finalize")
+
+// NamespaceSubResourcesForTest exports namespaceSubresources for testing in pkg/master/master_test.go, so we never drift
+var NamespaceSubResourcesForTest = sets.NewString(namespaceSubresources.List()...)
+
 // Constant for the retry-after interval on rate limiting.
 // TODO: maybe make this dynamic? or user-adjustable?
 const RetryAfter = "1"
@@ -391,17 +398,12 @@ func (r *requestAttributeGetter) GetAttribs(req *http.Request) authorizer.Attrib
 	attribs.Path = requestInfo.Path
 	attribs.Verb = requestInfo.Verb
 
-	// If the request was for a resource in an API group, include that info
 	attribs.APIGroup = requestInfo.APIGroup
-
-	// If a path follows the conventions of the REST object store, then
-	// we can extract the resource.  Otherwise, not.
+	attribs.APIVersion = requestInfo.APIVersion
 	attribs.Resource = requestInfo.Resource
-
-	// If the request specifies a namespace, then the namespace is filled in.
-	// Assumes there is no empty string namespace.  Unspecified results
-	// in empty (does not understand defaulting rules.)
+	attribs.Subresource = requestInfo.Subresource
 	attribs.Namespace = requestInfo.Namespace
+	attribs.Name = requestInfo.Name
 
 	return &attribs
 }
@@ -549,7 +551,7 @@ func (r *RequestInfoResolver) GetRequestInfo(req *http.Request) (RequestInfo, er
 
 			// if there is another step after the namespace name and it is not a known namespace subresource
 			// move currentParts to include it as a resource in its own right
-			if len(currentParts) > 2 {
+			if len(currentParts) > 2 && !namespaceSubresources.Has(currentParts[2]) {
 				currentParts = currentParts[2:]
 			}
 		}

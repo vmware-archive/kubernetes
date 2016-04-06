@@ -21,7 +21,7 @@ refer to the docs that go with that version.
 <!-- TAG RELEASE_LINK, added by the munger automatically -->
 <strong>
 The latest release of this document can be found
-[here](http://releases.k8s.io/release-1.1/docs/devel/pull-requests.md).
+[here](http://releases.k8s.io/release-1.2/docs/devel/pull-requests.md).
 
 Documentation for other releases can be found at
 [releases.k8s.io](http://releases.k8s.io).
@@ -31,15 +31,26 @@ Documentation for other releases can be found at
 <!-- END STRIP_FOR_RELEASE -->
 
 <!-- END MUNGE: UNVERSIONED_WARNING -->
-Pull Request Process
-====================
+
+<!-- BEGIN MUNGE: GENERATED_TOC -->
+
+- [Pull Request Process](#pull-request-process)
+- [Life of a Pull Request](#life-of-a-pull-request)
+  - [Before sending a pull request](#before-sending-a-pull-request)
+  - [Release Notes](#release-notes)
+  - [Visual overview](#visual-overview)
+- [Other notes](#other-notes)
+- [Automation](#automation)
+
+<!-- END MUNGE: GENERATED_TOC -->
+
+# Pull Request Process
 
 An overview of how pull requests are managed for kubernetes. This document
 assumes the reader has already followed the [development guide](development.md)
 to set up their environment.
 
-Life of a Pull Request
-----------------------
+# Life of a Pull Request
 
 Unless in the last few weeks of a milestone when we need to reduce churn and stabilize, we aim to be always accepting pull requests.
 
@@ -52,7 +63,7 @@ There are several requirements for the submit-queue to work:
 
 Additionally, for infrequent or new contributors, we require the on call to apply the "ok-to-merge" label manually.  This is gated by the [whitelist](https://github.com/kubernetes/contrib/blob/master/mungegithub/whitelist.txt).
 
-### Before sending a pull request
+## Before sending a pull request
 
 The following will save time for both you and your reviewer:
 
@@ -60,12 +71,20 @@ The following will save time for both you and your reviewer:
 * Verify `hack/verify-generated-docs.sh` passes.
 * Verify `hack/test-go.sh` passes.
 
-### Visual overview
+## Release Notes
+
+1. Your PR title is the **release note** you want published at release time.
+1. Release note labels are only needed on master branch PRs.
+1. All pull requests are initiated with a `release-note-label-needed` label.
+1. For a PR to be ready to merge, the `release-note-label-needed` label must be removed and one of the other `release-note-*` labels must be added.
+1. `release-note-none` is a valid option if the PR does not need to be mentioned
+ at release time.
+
+## Visual overview
 
 ![PR workflow](pr_workflow.png)
 
-Other notes
------------
+# Other notes
 
 Pull requests that are purely support questions will be closed and
 redirected to [stackoverflow](http://stackoverflow.com/questions/tagged/kubernetes).
@@ -82,8 +101,7 @@ request that subsequently needs to be reopened. We want to limit the total numbe
 * Encourage code velocity
 
 
-Automation
-----------
+# Automation
 
 We use a variety of automation to manage pull requests.  This automation is described in detail
 [elsewhere.](automation.md)

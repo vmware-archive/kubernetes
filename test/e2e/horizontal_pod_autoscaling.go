@@ -28,33 +28,42 @@ import (
 const (
 	kindRC         = "replicationController"
 	kindDeployment = "deployment"
+	kindReplicaSet = "replicaset"
 	subresource    = "scale"
 )
 
 // These tests don't seem to be running properly in parallel: issue: #20338.
 //
-
-var _ = Describe("Horizontal pod autoscaling (scale resource: CPU)", func() {
+var _ = KubeDescribe("Horizontal pod autoscaling (scale resource: CPU)", func() {
 	var rc *ResourceConsumer
 	f := NewDefaultFramework("horizontal-pod-autoscaling")
 
 	titleUp := "Should scale from 1 pod to 3 pods and from 3 to 5 and verify decision stability"
 	titleDown := "Should scale from 5 pods to 3 pods and from 3 to 1 and verify decision stability"
 
-	// TODO(madhusudancs): Fix this when Scale group issues are resolved (see issue #18528).
 	// These tests take ~20 minutes each.
-	// Describe("[Serial] [Slow] Deployment", func() {
-	// 	// CPU tests via deployments
-	// 	It(titleUp, func() {
-	// 		scaleUp("deployment", kindDeployment, rc, f)
-	// 	})
-	// 	It(titleDown, func() {
-	// 		scaleDown("deployment", kindDeployment, rc, f)
-	// 	})
-	// })
+	KubeDescribe("[Serial] [Slow] Deployment", func() {
+		// CPU tests via deployments
+		It(titleUp, func() {
+			scaleUp("test-deployment", kindDeployment, rc, f)
+		})
+		It(titleDown, func() {
+			scaleDown("test-deployment", kindDeployment, rc, f)
+		})
+	})
 
 	// These tests take ~20 minutes each.
-	Describe("[Serial] [Slow] ReplicationController", func() {
+	KubeDescribe("[Serial] [Slow] ReplicaSet", func() {
+		// CPU tests via deployments
+		It(titleUp, func() {
+			scaleUp("rs", kindReplicaSet, rc, f)
+		})
+		It(titleDown, func() {
+			scaleDown("rs", kindReplicaSet, rc, f)
+		})
+	})
+	// These tests take ~20 minutes each.
+	KubeDescribe("[Serial] [Slow] ReplicationController", func() {
 		// CPU tests via replication controllers
 		It(titleUp, func() {
 			scaleUp("rc", kindRC, rc, f)
@@ -64,7 +73,7 @@ var _ = Describe("Horizontal pod autoscaling (scale resource: CPU)", func() {
 		})
 	})
 
-	Describe("ReplicationController light", func() {
+	KubeDescribe("ReplicationController light", func() {
 		It("Should scale from 1 pod to 2 pods", func() {
 			scaleTest := &HPAScaleTest{
 				initPods:                    1,

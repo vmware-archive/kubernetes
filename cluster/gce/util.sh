@@ -224,7 +224,7 @@ function upload-server-tars() {
     local staging_bucket="gs://kubernetes-staging-${project_hash}${suffix}"
 
     # Ensure the buckets are created
-    if ! gsutil ls "${staging_bucket}" > /dev/null 2>&1 ; then
+    if ! gsutil ls "${staging_bucket}" ; then
       echo "Creating ${staging_bucket}"
       gsutil mb -l "${region}" "${staging_bucket}"
     fi
@@ -249,14 +249,17 @@ function upload-server-tars() {
     fi
   done
 
-  if [[ "${OS_DISTRIBUTION}" == "trusty" || "${OS_DISTRIBUTION}" == "coreos" ]]; then
-    # TODO: Support fallback .tar.gz settings on CoreOS/Trusty
+  if [[ "${OS_DISTRIBUTION}" == "coreos" ]]; then
+    # TODO: Support fallback .tar.gz settings on CoreOS
     SERVER_BINARY_TAR_URL="${server_binary_tar_urls[0]}"
     SALT_TAR_URL="${salt_tar_urls[0]}"
     KUBE_MANIFESTS_TAR_URL="${kube_manifests_tar_urls[0]}"
   else
     SERVER_BINARY_TAR_URL=$(join_csv "${server_binary_tar_urls[@]}")
     SALT_TAR_URL=$(join_csv "${salt_tar_urls[@]}")
+    if [[ "${OS_DISTRIBUTION}" == "trusty" ]]; then
+      KUBE_MANIFESTS_TAR_URL=$(join_csv "${kube_manifests_tar_urls[@]}")
+    fi
   fi
 }
 
@@ -335,6 +338,19 @@ function detect-master () {
     exit 1
   fi
   echo "Using master: $KUBE_MASTER (external IP: $KUBE_MASTER_IP)"
+}
+
+# Reads kube-env metadata from master
+#
+# Assumed vars:
+#   KUBE_MASTER
+#   PROJECT
+#   ZONE
+function get-master-env() {
+  # TODO(zmerlynn): Make this more reliable with retries.
+  gcloud compute --project ${PROJECT} ssh --zone ${ZONE} ${KUBE_MASTER} --command \
+    "curl --fail --silent -H 'Metadata-Flavor: Google' \
+      'http://metadata/computeMetadata/v1/instance/attributes/kube-env'" 2>/dev/null
 }
 
 # Robustly try to create a static ip.
@@ -535,6 +551,7 @@ function kube-up {
   set_num_migs
 
   if [[ ${KUBE_USE_EXISTING_MASTER:-} == "true" ]]; then
+    parse-master-env
     create-nodes
     create-autoscaler
   else
@@ -675,6 +692,11 @@ function create-nodes-template() {
 
   local template_name="${NODE_INSTANCE_PREFIX}-template"
 
+  # For master on trusty, we support running nodes on ContainerVM or trusty.
+  if [[ "${OS_DISTRIBUTION}" == "trusty" ]] && \
+     [[ "${NODE_IMAGE}" == container* ]]; then
+    source "${KUBE_ROOT}/cluster/gce/debian/helper.sh"
+  fi
   create-node-instance-template $template_name
 }
 
@@ -684,11 +706,11 @@ function create-nodes-template() {
 # exports:
 # - NUM_MIGS
 function set_num_migs() {
-  local defaulted_max_instances_per_mig=${MAX_INSTANCES_PER_MIG:-500}
+  local defaulted_max_instances_per_mig=${MAX_INSTANCES_PER_MIG:-1000}
 
   if [[ ${defaulted_max_instances_per_mig} -le "0" ]]; then
-    echo "MAX_INSTANCES_PER_MIG cannot be negative. Assuming default 500"
-    defaulted_max_instances_per_mig=500
+    echo "MAX_INSTANCES_PER_MIG cannot be negative. Assuming default 1000"
+    defaulted_max_instances_per_mig=1000
   fi
   export NUM_MIGS=$(((${NUM_NODES} + ${defaulted_max_instances_per_mig} - 1) / ${defaulted_max_instances_per_mig}))
 }
@@ -1319,27 +1341,13 @@ function ssh-to-node {
   local cmd="$2"
   # Loop until we can successfully ssh into the box
   for try in $(seq 1 5); do
-    if gcloud compute ssh --ssh-flag="-o LogLevel=quiet" --project "${PROJECT}" --zone="${ZONE}" "${node}" --command "echo test > /dev/null"; then
+    if gcloud compute ssh --ssh-flag="-o LogLevel=quiet" --ssh-flag="-o ConnectTimeout=30" --project "${PROJECT}" --zone="${ZONE}" "${node}" --command "echo test > /dev/null"; then
       break
     fi
     sleep 5
   done
   # Then actually try the command.
-  gcloud compute ssh --ssh-flag="-o LogLevel=quiet" --project "${PROJECT}" --zone="${ZONE}" "${node}" --command "${cmd}"
-}
-
-# Restart the kube-proxy on a node ($1)
-function restart-kube-proxy {
-  if [[ "${OS_DISTRIBUTION}" == "trusty" ]]; then
-    ssh-to-node "$1" "sudo initctl restart kube-proxy"
-  else
-    ssh-to-node "$1" "sudo /etc/init.d/kube-proxy restart"
-  fi
-}
-
-# Restart the kube-apiserver on a node ($1)
-function restart-apiserver {
-  ssh-to-node "$1" "sudo docker ps | grep /kube-apiserver | cut -d ' ' -f 1 | xargs sudo docker kill"
+  gcloud compute ssh --ssh-flag="-o LogLevel=quiet" --ssh-flag="-o ConnectTimeout=30" --project "${PROJECT}" --zone="${ZONE}" "${node}" --command "${cmd}"
 }
 
 # Perform preparations required to run e2e tests

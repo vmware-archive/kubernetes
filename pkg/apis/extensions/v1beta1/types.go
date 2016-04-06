@@ -36,6 +36,14 @@ type ScaleStatus struct {
 
 	// label query over pods that should match the replicas count. More info: http://releases.k8s.io/HEAD/docs/user-guide/labels.md#label-selectors
 	Selector map[string]string `json:"selector,omitempty"`
+
+	// label selector for pods that should match the replicas count. This is a serializated
+	// version of both map-based and more expressive set-based selectors. This is done to
+	// avoid introspection in the clients. The string will be in the same format as the
+	// query-param syntax. If the target type only supports map-based selectors, both this
+	// field and map-based selector field are populated.
+	// More info: http://releases.k8s.io/HEAD/docs/user-guide/labels.md#label-selectors
+	TargetSelector string `json:"targetSelector,omitempty"`
 }
 
 // +genclient=true,noMethods=true
@@ -190,9 +198,6 @@ type ThirdPartyResourceList struct {
 type APIVersion struct {
 	// Name of this version (e.g. 'v1').
 	Name string `json:"name,omitempty"`
-
-	// The API group to add this object into, default 'experimental'.
-	APIGroup string `json:"apiGroup,omitempty"`
 }
 
 // An internal object, used for versioned storage in etcd.  Not exposed to the end user.
@@ -662,9 +667,10 @@ type IngressSpec struct {
 	Backend *IngressBackend `json:"backend,omitempty"`
 
 	// TLS configuration. Currently the Ingress only supports a single TLS
-	// port, 443, and assumes TLS termination. If multiple members of this
-	// list specify different hosts, they will be multiplexed on the same
-	// port according to the hostname specified through the SNI TLS extension.
+	// port, 443. If multiple members of this list specify different hosts, they
+	// will be multiplexed on the same port according to the hostname specified
+	// through the SNI TLS extension, if the ingress controller fulfilling the
+	// ingress supports SNI.
 	TLS []IngressTLS `json:"tls,omitempty"`
 
 	// A list of host rules used to configure the Ingress. If unspecified, or
@@ -890,7 +896,7 @@ type ReplicaSetSpec struct {
 	// Template is the object that describes the pod that will be created if
 	// insufficient replicas are detected.
 	// More info: http://releases.k8s.io/HEAD/docs/user-guide/replication-controller.md#pod-template
-	Template *v1.PodTemplateSpec `json:"template,omitempty"`
+	Template v1.PodTemplateSpec `json:"template,omitempty"`
 }
 
 // ReplicaSetStatus represents the current status of a ReplicaSet.
@@ -898,6 +904,9 @@ type ReplicaSetStatus struct {
 	// Replicas is the most recently oberved number of replicas.
 	// More info: http://releases.k8s.io/HEAD/docs/user-guide/replication-controller.md#what-is-a-replication-controller
 	Replicas int32 `json:"replicas"`
+
+	// The number of pods that have labels matching the labels of the pod template of the replicaset.
+	FullyLabeledReplicas int32 `json:"fullyLabeledReplicas,omitempty"`
 
 	// ObservedGeneration reflects the generation of the most recently observed ReplicaSet.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`

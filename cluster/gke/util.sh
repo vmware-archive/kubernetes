@@ -171,7 +171,7 @@ function test-setup() {
   "${KUBE_ROOT}/cluster/kube-up.sh"
 
   detect-nodes >&2
- 
+
   # At this point, CLUSTER_NAME should have been used, so its value is final.
   NODE_TAG=$($GCLOUD compute instances describe ${NODE_NAMES[0]} --project="${PROJECT}" --zone="${ZONE}" | grep -o "gke-${CLUSTER_NAME}-.\{8\}-node" | head -1)
   OLD_NODE_TAG="k8s-${CLUSTER_NAME}-node"
@@ -263,25 +263,13 @@ function ssh-to-node() {
   local cmd="$2"
   # Loop until we can successfully ssh into the box
   for try in $(seq 1 5); do
-    if gcloud compute ssh --ssh-flag="-o LogLevel=quiet" --project "${PROJECT}" --zone="${ZONE}" "${node}" --command "echo test > /dev/null"; then
+    if gcloud compute ssh --ssh-flag="-o LogLevel=quiet" --ssh-flag="-o ConnectTimeout=30" --project "${PROJECT}" --zone="${ZONE}" "${node}" --command "echo test > /dev/null"; then
       break
     fi
     sleep 5
   done
   # Then actually try the command.
-  gcloud compute ssh --ssh-flag="-o LogLevel=quiet" --project "${PROJECT}" --zone="${ZONE}" "${node}" --command "${cmd}"
-}
-
-# Restart the kube-proxy on a node ($1)
-function restart-kube-proxy() {
-  echo "... in gke:restart-kube-proxy()"  >&2
-  ssh-to-node "$1" "sudo /etc/init.d/kube-proxy restart"
-}
-
-# Restart the kube-proxy on master ($1)
-function restart-apiserver() {
-  echo "... in gke:restart-apiserver()"  >&2
-  ssh-to-node "$1" "sudo docker ps | grep /kube-apiserver | cut -d ' ' -f 1 | xargs sudo docker kill"
+  gcloud compute ssh --ssh-flag="-o LogLevel=quiet" --ssh-flag="-o ConnectTimeout=30" --project "${PROJECT}" --zone="${ZONE}" "${node}" --command "${cmd}"
 }
 
 # Execute after running tests to perform any required clean-up.  This is called

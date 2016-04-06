@@ -191,6 +191,7 @@ func NewMainKubelet(
 	cgroupRoot string,
 	containerRuntime string,
 	rktPath string,
+	rktAPIEndpoint string,
 	rktStage1Image string,
 	mounter mount.Interface,
 	writer kubeio.Writer,
@@ -223,7 +224,6 @@ func NewMainKubelet(
 	if resyncInterval <= 0 {
 		return nil, fmt.Errorf("invalid sync frequency %d", resyncInterval)
 	}
-	dockerClient = dockertools.NewInstrumentedDockerInterface(dockerClient)
 
 	serviceStore := cache.NewStore(cache.MetaNamespaceKeyFunc)
 	if kubeClient != nil {
@@ -259,7 +259,7 @@ func NewMainKubelet(
 		cache.NewReflector(listWatch, &api.Node{}, nodeStore, 0).Run()
 	}
 	nodeLister := &cache.StoreToNodeLister{Store: nodeStore}
-	nodeInfo := &predicates.CachedNodeInfo{nodeLister}
+	nodeInfo := &predicates.CachedNodeInfo{StoreToNodeLister: nodeLister}
 
 	// TODO: get the real node object of ourself,
 	// and use the real node name and UID.
@@ -405,7 +405,7 @@ func NewMainKubelet(
 			imageBackOff,
 			serializeImagePulls,
 			enableCustomMetrics,
-			hairpinMode == componentconfig.HairpinVeth,
+			klet.hairpinMode == componentconfig.HairpinVeth,
 			containerRuntimeOptions...,
 		)
 	case "rkt":
@@ -416,6 +416,7 @@ func NewMainKubelet(
 			InsecureOptions: "image,ondisk",
 		}
 		rktRuntime, err := rkt.New(
+			rktAPIEndpoint,
 			conf,
 			klet,
 			recorder,
@@ -1208,9 +1209,9 @@ func (kl *Kubelet) relabelVolumes(pod *api.Pod, volumes kubecontainer.VolumeMap)
 	volumeContext := fmt.Sprintf("%s:%s:%s:%s", rootDirSELinuxOptions.User, rootDirSELinuxOptions.Role, rootDirSELinuxOptions.Type, rootDirSELinuxOptions.Level)
 
 	for _, vol := range volumes {
-		if vol.Builder.GetAttributes().Managed && vol.Builder.GetAttributes().SupportsSELinux {
+		if vol.Mounter.GetAttributes().Managed && vol.Mounter.GetAttributes().SupportsSELinux {
 			// Relabel the volume and its content to match the 'Level' of the pod
-			err := filepath.Walk(vol.Builder.GetPath(), func(path string, info os.FileInfo, err error) error {
+			err := filepath.Walk(vol.Mounter.GetPath(), func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
@@ -1225,14 +1226,14 @@ func (kl *Kubelet) relabelVolumes(pod *api.Pod, volumes kubecontainer.VolumeMap)
 	return nil
 }
 
-func makeMounts(pod *api.Pod, podDir string, container *api.Container, hostName, hostDomain string, podVolumes kubecontainer.VolumeMap) ([]kubecontainer.Mount, error) {
+func makeMounts(pod *api.Pod, podDir string, container *api.Container, hostName, hostDomain, podIP string, podVolumes kubecontainer.VolumeMap) ([]kubecontainer.Mount, error) {
 	// Kubernetes only mounts on /etc/hosts if :
 	// - container does not use hostNetwork and
 	// - container is not a infrastructure(pause) container
 	// - container is not already mounting on /etc/hosts
 	// When the pause container is being created, its IP is still unknown. Hence, PodIP will not have been set.
-	mountEtcHostsFile := (pod.Spec.SecurityContext == nil || !pod.Spec.SecurityContext.HostNetwork) && len(pod.Status.PodIP) > 0
-	glog.V(3).Infof("container: %v/%v/%v podIP: %q creating hosts mount: %v", pod.Namespace, pod.Name, container.Name, pod.Status.PodIP, mountEtcHostsFile)
+	mountEtcHostsFile := (pod.Spec.SecurityContext == nil || !pod.Spec.SecurityContext.HostNetwork) && len(podIP) > 0
+	glog.V(3).Infof("container: %v/%v/%v podIP: %q creating hosts mount: %v", pod.Namespace, pod.Name, container.Name, podIP, mountEtcHostsFile)
 	mounts := []kubecontainer.Mount{}
 	for _, mount := range container.VolumeMounts {
 		mountEtcHostsFile = mountEtcHostsFile && (mount.MountPath != etcHostsPath)
@@ -1246,20 +1247,20 @@ func makeMounts(pod *api.Pod, podDir string, container *api.Container, hostName,
 		// If the volume supports SELinux and it has not been
 		// relabeled already and it is not a read-only volume,
 		// relabel it and mark it as labeled
-		if vol.Builder.GetAttributes().Managed && vol.Builder.GetAttributes().SupportsSELinux && !vol.SELinuxLabeled {
+		if vol.Mounter.GetAttributes().Managed && vol.Mounter.GetAttributes().SupportsSELinux && !vol.SELinuxLabeled {
 			vol.SELinuxLabeled = true
 			relabelVolume = true
 		}
 		mounts = append(mounts, kubecontainer.Mount{
 			Name:           mount.Name,
 			ContainerPath:  mount.MountPath,
-			HostPath:       vol.Builder.GetPath(),
+			HostPath:       vol.Mounter.GetPath(),
 			ReadOnly:       mount.ReadOnly,
 			SELinuxRelabel: relabelVolume,
 		})
 	}
 	if mountEtcHostsFile {
-		hostsMount, err := makeHostsMount(podDir, pod.Status.PodIP, hostName, hostDomain)
+		hostsMount, err := makeHostsMount(podDir, podIP, hostName, hostDomain)
 		if err != nil {
 			return nil, err
 		}
@@ -1332,9 +1333,10 @@ func makePortMappings(container *api.Container) (ports []kubecontainer.PortMappi
 	return
 }
 
-func generatePodHostNameAndDomain(pod *api.Pod, clusterDomain string) (string, string) {
+func (kl *Kubelet) GeneratePodHostNameAndDomain(pod *api.Pod) (string, string) {
 	// TODO(vmarmol): Handle better.
 	// Cap hostname at 63 chars (specification is 64bytes which is 63 chars and the null terminating char).
+	clusterDomain := kl.clusterDomain
 	const hostnameMaxLen = 63
 	podAnnotations := pod.Annotations
 	if podAnnotations == nil {
@@ -1361,10 +1363,10 @@ func generatePodHostNameAndDomain(pod *api.Pod, clusterDomain string) (string, s
 
 // GenerateRunContainerOptions generates the RunContainerOptions, which can be used by
 // the container runtime to set parameters for launching a container.
-func (kl *Kubelet) GenerateRunContainerOptions(pod *api.Pod, container *api.Container) (*kubecontainer.RunContainerOptions, error) {
+func (kl *Kubelet) GenerateRunContainerOptions(pod *api.Pod, container *api.Container, podIP string) (*kubecontainer.RunContainerOptions, error) {
 	var err error
 	opts := &kubecontainer.RunContainerOptions{CgroupParent: kl.cgroupRoot}
-	hostname, hostDomainName := generatePodHostNameAndDomain(pod, kl.clusterDomain)
+	hostname, hostDomainName := kl.GeneratePodHostNameAndDomain(pod)
 	opts.Hostname = hostname
 	vol, ok := kl.volumeManager.GetVolumes(pod.UID)
 	if !ok {
@@ -1382,11 +1384,11 @@ func (kl *Kubelet) GenerateRunContainerOptions(pod *api.Pod, container *api.Cont
 		}
 	}
 
-	opts.Mounts, err = makeMounts(pod, kl.getPodDir(pod.UID), container, hostname, hostDomainName, vol)
+	opts.Mounts, err = makeMounts(pod, kl.getPodDir(pod.UID), container, hostname, hostDomainName, podIP, vol)
 	if err != nil {
 		return nil, err
 	}
-	opts.Envs, err = kl.makeEnvironmentVariables(pod, container)
+	opts.Envs, err = kl.makeEnvironmentVariables(pod, container, podIP)
 	if err != nil {
 		return nil, err
 	}
@@ -1463,7 +1465,7 @@ func (kl *Kubelet) getServiceEnvVarMap(ns string) (map[string]string, error) {
 }
 
 // Make the service environment variables for a pod in the given namespace.
-func (kl *Kubelet) makeEnvironmentVariables(pod *api.Pod, container *api.Container) ([]kubecontainer.EnvVar, error) {
+func (kl *Kubelet) makeEnvironmentVariables(pod *api.Pod, container *api.Container, podIP string) ([]kubecontainer.EnvVar, error) {
 	var result []kubecontainer.EnvVar
 	// Note:  These are added to the docker.Config, but are not included in the checksum computed
 	// by dockertools.BuildDockerName(...).  That way, we can still determine whether an
@@ -1510,7 +1512,7 @@ func (kl *Kubelet) makeEnvironmentVariables(pod *api.Pod, container *api.Contain
 			// Step 1b: resolve alternate env var sources
 			switch {
 			case envVar.ValueFrom.FieldRef != nil:
-				runtimeVal, err = kl.podFieldSelectorRuntimeValue(envVar.ValueFrom.FieldRef, pod)
+				runtimeVal, err = kl.podFieldSelectorRuntimeValue(envVar.ValueFrom.FieldRef, pod, podIP)
 				if err != nil {
 					return result, err
 				}
@@ -1557,14 +1559,14 @@ func (kl *Kubelet) makeEnvironmentVariables(pod *api.Pod, container *api.Contain
 	return result, nil
 }
 
-func (kl *Kubelet) podFieldSelectorRuntimeValue(fs *api.ObjectFieldSelector, pod *api.Pod) (string, error) {
+func (kl *Kubelet) podFieldSelectorRuntimeValue(fs *api.ObjectFieldSelector, pod *api.Pod, podIP string) (string, error) {
 	internalFieldPath, _, err := api.Scheme.ConvertFieldLabel(fs.APIVersion, "Pod", fs.FieldPath, "")
 	if err != nil {
 		return "", err
 	}
 	switch internalFieldPath {
 	case "status.podIP":
-		return pod.Status.PodIP, nil
+		return podIP, nil
 	}
 	return fieldpath.ExtractFieldPathAsString(pod, internalFieldPath)
 }
@@ -1795,6 +1797,9 @@ func (kl *Kubelet) syncPod(pod *api.Pod, mirrorPod *api.Pod, podStatus *kubecont
 		return err
 	}
 
+	if !kl.shapingEnabled() {
+		return nil
+	}
 	ingress, egress, err := extractBandwidthResources(pod)
 	if err != nil {
 		return err
@@ -1980,12 +1985,12 @@ func (kl *Kubelet) cleanupOrphanedVolumes(pods []*api.Pod, runningPods []*kubeco
 			// TODO(yifan): Refactor this hacky string manipulation.
 			kl.volumeManager.DeleteVolumes(types.UID(parts[0]))
 			// Get path reference count
-			refs, err := mount.GetMountRefs(kl.mounter, cleanerTuple.Cleaner.GetPath())
+			refs, err := mount.GetMountRefs(kl.mounter, cleanerTuple.Unmounter.GetPath())
 			if err != nil {
 				return fmt.Errorf("Could not get mount path references %v", err)
 			}
 			//TODO (jonesdl) This should not block other kubelet synchronization procedures
-			err = cleanerTuple.Cleaner.TearDown()
+			err = cleanerTuple.Unmounter.TearDown()
 			if err != nil {
 				glog.Errorf("Could not tear down volume %q: %v", name, err)
 			}
@@ -2111,7 +2116,7 @@ func (kl *Kubelet) deletePod(pod *api.Pod) error {
 	if runningPod.IsEmpty() {
 		return fmt.Errorf("pod not found")
 	}
-	podPair := kubecontainer.PodPair{pod, &runningPod}
+	podPair := kubecontainer.PodPair{APIPod: pod, RunningPod: &runningPod}
 
 	kl.podKillingCh <- &podPair
 	// TODO: delete the mirror pod here?
@@ -2156,7 +2161,7 @@ func (kl *Kubelet) HandlePodCleanups() error {
 	}
 	for _, pod := range runningPods {
 		if _, found := desiredPods[pod.ID]; !found {
-			kl.podKillingCh <- &kubecontainer.PodPair{nil, pod}
+			kl.podKillingCh <- &kubecontainer.PodPair{APIPod: nil, RunningPod: pod}
 		}
 	}
 
@@ -2386,6 +2391,10 @@ func (kl *Kubelet) syncLoopIteration(updates <-chan kubetypes.PodUpdate, handler
 		switch u.Op {
 		case kubetypes.ADD:
 			glog.V(2).Infof("SyncLoop (ADD, %q): %q", u.Source, format.Pods(u.Pods))
+			// After restarting, kubelet will get all existing pods through
+			// ADD as if they are new pods. These pods will then go through the
+			// admission process and *may* be rejcted. This can be resolved
+			// once we have checkpointing.
 			handler.HandlePodAdditions(u.Pods)
 		case kubetypes.UPDATE:
 			glog.V(2).Infof("SyncLoop (UPDATE, %q): %q", u.Source, format.Pods(u.Pods))
@@ -2727,11 +2736,14 @@ func (kl *Kubelet) reconcileCBR0(podCIDR string) error {
 	if err := ensureCbr0(cidr, kl.hairpinMode == componentconfig.PromiscuousBridge, kl.babysitDaemons); err != nil {
 		return err
 	}
-	if kl.shaper == nil {
-		glog.V(5).Info("Shaper is nil, creating")
-		kl.shaper = bandwidth.NewTCShaper("cbr0")
+	if kl.shapingEnabled() {
+		if kl.shaper == nil {
+			glog.V(5).Info("Shaper is nil, creating")
+			kl.shaper = bandwidth.NewTCShaper("cbr0")
+		}
+		return kl.shaper.ReconcileInterface()
 	}
-	return kl.shaper.ReconcileInterface()
+	return nil
 }
 
 // updateNodeStatus updates node status to master with retries.
@@ -3379,7 +3391,8 @@ func (kl *Kubelet) convertStatusToAPIStatus(pod *api.Pod, podStatus *kubecontain
 		} else if reason == kubecontainer.ErrImagePullBackOff ||
 			reason == kubecontainer.ErrImageInspect ||
 			reason == kubecontainer.ErrImagePull ||
-			reason == kubecontainer.ErrImageNeverPull {
+			reason == kubecontainer.ErrImageNeverPull ||
+			reason == kubecontainer.RegistryUnavailable {
 			// mark it as waiting, reason will be filled bellow
 			containerStatus.State = api.ContainerState{Waiting: &api.ContainerStateWaiting{}}
 		} else if reason == kubecontainer.ErrRunContainer {
@@ -3587,6 +3600,15 @@ func (kl *Kubelet) updatePodCIDR(cidr string) {
 		kl.networkPlugin.Event(network.NET_PLUGIN_EVENT_POD_CIDR_CHANGE, details)
 	}
 }
+
+func (kl *Kubelet) shapingEnabled() bool {
+	// Disable shaping if a network plugin is defined and supports shaping
+	if kl.networkPlugin != nil && kl.networkPlugin.Capabilities().Has(network.NET_PLUGIN_CAPABILITY_SHAPING) {
+		return false
+	}
+	return true
+}
+
 func (kl *Kubelet) GetNodeConfig() cm.NodeConfig {
 	return kl.containerManager.GetNodeConfig()
 }

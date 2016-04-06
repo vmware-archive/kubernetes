@@ -28,7 +28,10 @@ import (
 )
 
 const (
-	serviceCreateTimeout = 2 * time.Minute
+	retryTimeout      = time.Minute * 4
+	pollInterval      = time.Second * 5
+	imageRetryTimeout = time.Minute * 2
+	imagePullInterval = time.Second * 15
 )
 
 var _ = Describe("Container Conformance Test", func() {
@@ -40,12 +43,67 @@ var _ = Describe("Container Conformance Test", func() {
 	})
 
 	Describe("container conformance blackbox test", func() {
+		Context("when testing images that exist", func() {
+			var conformImages []ConformanceImage
+			conformImageTags := []string{
+				"gcr.io/google_containers/busybox:1.24",
+				"gcr.io/google_containers/mounttest:0.2",
+				"gcr.io/google_containers/nettest:1.7",
+				"gcr.io/google_containers/nginx:1.7.9",
+			}
+			It("it should pull successfully [Conformance]", func() {
+				for _, imageTag := range conformImageTags {
+					image, _ := NewConformanceImage("docker", imageTag)
+					conformImages = append(conformImages, image)
+				}
+				for _, image := range conformImages {
+					// Pulling images from gcr.io is flaky, so retry failures
+					Eventually(func() error {
+						return image.Pull()
+					}, imageRetryTimeout, imagePullInterval).ShouldNot(HaveOccurred())
+				}
+			})
+			It("it should list pulled images [Conformance]", func() {
+				image, _ := NewConformanceImage("docker", "")
+				tags, _ := image.List()
+				for _, tag := range conformImageTags {
+					Expect(tags).To(ContainElement(tag))
+				}
+			})
+			It("it should remove successfully [Conformance]", func() {
+				for _, image := range conformImages {
+					if err := image.Remove(); err != nil {
+						Expect(err).NotTo(HaveOccurred())
+						break
+					}
+				}
+			})
+		})
+		Context("when testing image that does not exist", func() {
+			var invalidImage ConformanceImage
+			var invalidImageTag string
+			It("it should not pull successfully [Conformance]", func() {
+				invalidImageTag = "foo.com/foo/foo"
+				invalidImage, _ = NewConformanceImage("docker", invalidImageTag)
+				err := invalidImage.Pull()
+				Expect(err).To(HaveOccurred())
+			})
+			It("it should not list pulled images [Conformance]", func() {
+				image, _ := NewConformanceImage("docker", "")
+				tags, _ := image.List()
+				Expect(tags).NotTo(ContainElement(invalidImageTag))
+			})
+			It("it should not remove successfully [Conformance]", func() {
+				err := invalidImage.Remove()
+				Expect(err).To(HaveOccurred())
+			})
+		})
 		Context("when running a container that terminates", func() {
 			var terminateCase ConformanceContainer
-			BeforeEach(func() {
+			It("it should run successfully to completion [Conformance]", func() {
 				terminateCase = ConformanceContainer{
 					Container: api.Container{
-						Image:           "gcr.io/google_containers/busybox:1.24",
+						Image:           "gcr.io/google_containers/busybox",
 						Name:            "busybox",
 						Command:         []string{"sh", "-c", "env"},
 						ImagePullPolicy: api.PullIfNotPresent,
@@ -54,20 +112,14 @@ var _ = Describe("Container Conformance Test", func() {
 					Phase:    api.PodSucceeded,
 					NodeName: *nodeName,
 				}
-			})
-			It("it should start successfully [Conformance]", func() {
 				err := terminateCase.Create()
 				Expect(err).NotTo(HaveOccurred())
 
-				phase := api.PodPending
-				for start := time.Now(); time.Since(start) < serviceCreateTimeout; time.Sleep(time.Second * 30) {
-					ccontainer, err := terminateCase.Get()
-					if err != nil || ccontainer.Phase != api.PodPending {
-						phase = ccontainer.Phase
-						break
-					}
-				}
-				Expect(phase).Should(Equal(terminateCase.Phase))
+				// TODO: Check that the container enters running state by sleeping in the container #23309
+				Eventually(func() (api.PodPhase, error) {
+					pod, err := terminateCase.Get()
+					return pod.Phase, err
+				}, retryTimeout, pollInterval).Should(Equal(terminateCase.Phase))
 			})
 			It("it should report its phase as 'succeeded' [Conformance]", func() {
 				ccontainer, err := terminateCase.Get()
@@ -81,7 +133,7 @@ var _ = Describe("Container Conformance Test", func() {
 		})
 		Context("when running a container with invalid image", func() {
 			var invalidImageCase ConformanceContainer
-			BeforeEach(func() {
+			It("it should not start successfully [Conformance]", func() {
 				invalidImageCase = ConformanceContainer{
 					Container: api.Container{
 						Image:           "foo.com/foo/foo",
@@ -93,20 +145,12 @@ var _ = Describe("Container Conformance Test", func() {
 					Phase:    api.PodPending,
 					NodeName: *nodeName,
 				}
-			})
-			It("it should not start successfully [Conformance]", func() {
 				err := invalidImageCase.Create()
 				Expect(err).NotTo(HaveOccurred())
-
-				phase := api.PodPending
-				for start := time.Now(); time.Since(start) < serviceCreateTimeout; time.Sleep(time.Second * 30) {
-					ccontainer, err := invalidImageCase.Get()
-					if err != nil || ccontainer.Phase != api.PodPending {
-						phase = ccontainer.Phase
-						break
-					}
-				}
-				Expect(phase).Should(Equal(invalidImageCase.Phase))
+				Eventually(func() (api.PodPhase, error) {
+					pod, err := invalidImageCase.Get()
+					return pod.Phase, err
+				}, retryTimeout, pollInterval).Should(Equal(invalidImageCase.Phase))
 			})
 			It("it should report its phase as 'pending' [Conformance]", func() {
 				ccontainer, err := invalidImageCase.Get()

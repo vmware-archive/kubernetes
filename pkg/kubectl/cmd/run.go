@@ -25,6 +25,9 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/meta"
+	"k8s.io/kubernetes/pkg/api/unversioned"
+	batchv1 "k8s.io/kubernetes/pkg/apis/batch/v1"
+	"k8s.io/kubernetes/pkg/apis/extensions/v1beta1"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/kubectl"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
@@ -84,11 +87,12 @@ func NewCmdRun(f *cmdutil.Factory, cmdIn io.Reader, cmdOut, cmdErr io.Writer) *c
 	addRunFlags(cmd)
 	cmdutil.AddApplyAnnotationFlags(cmd)
 	cmdutil.AddRecordFlag(cmd)
+	cmdutil.AddInclude3rdPartyFlags(cmd)
 	return cmd
 }
 
 func addRunFlags(cmd *cobra.Command) {
-	cmd.Flags().String("generator", "", "The name of the API generator to use.  Default is 'deployment/v1beta1' if --restart=Always, otherwise the default is 'job/v1beta1'.")
+	cmd.Flags().String("generator", "", "The name of the API generator to use.  Default is 'deployment/v1beta1' if --restart=Always, otherwise the default is 'job/v1'.  This will happen only for cluster version at least 1.2, for olders we will fallback to 'run/v1' for --restart=Always, 'run-pod/v1' for others.")
 	cmd.Flags().String("image", "", "The image for the container to run.")
 	cmd.MarkFlagRequired("image")
 	cmd.Flags().IntP("replicas", "r", 1, "Number of replicas to create for this container. Default is 1.")
@@ -146,10 +150,29 @@ func Run(f *cmdutil.Factory, cmdIn io.Reader, cmdOut, cmdErr io.Writer, cmd *cob
 
 	generatorName := cmdutil.GetFlagString(cmd, "generator")
 	if len(generatorName) == 0 {
+		client, err := f.Client()
+		if err != nil {
+			return err
+		}
+		resourcesList, err := client.Discovery().ServerResources()
+		if err != nil {
+			// this cover the cases where old servers do not expose discovery
+			resourcesList = nil
+		}
 		if restartPolicy == api.RestartPolicyAlways {
-			generatorName = "deployment/v1beta1"
+			if contains(resourcesList, v1beta1.SchemeGroupVersion.WithResource("deployments")) {
+				generatorName = "deployment/v1beta1"
+			} else {
+				generatorName = "run/v1"
+			}
 		} else {
-			generatorName = "job/v1beta1"
+			if contains(resourcesList, batchv1.SchemeGroupVersion.WithResource("jobs")) {
+				generatorName = "job/v1"
+			} else if contains(resourcesList, v1beta1.SchemeGroupVersion.WithResource("jobs")) {
+				generatorName = "job/v1beta1"
+			} else {
+				generatorName = "run-pod/v1"
+			}
 		}
 	}
 	generators := f.Generators("run")
@@ -234,7 +257,7 @@ func Run(f *cmdutil.Factory, cmdIn io.Reader, cmdOut, cmdErr io.Writer, cmd *cob
 			if err != nil {
 				return err
 			}
-			_, typer := f.Object()
+			_, typer := f.Object(cmdutil.GetIncludeThirdPartyAPIs(cmd))
 			r := resource.NewBuilder(mapper, typer, resource.ClientMapperFunc(f.ClientForMapping), f.Decoder(true)).
 				ContinueOnError().
 				NamespaceParam(namespace).DefaultNamespace().
@@ -248,10 +271,27 @@ func Run(f *cmdutil.Factory, cmdIn io.Reader, cmdOut, cmdErr io.Writer, cmd *cob
 
 	outputFormat := cmdutil.GetFlagString(cmd, "output")
 	if outputFormat != "" {
-		return f.PrintObject(cmd, obj, cmdOut)
+		return f.PrintObject(cmd, mapper, obj, cmdOut)
 	}
 	cmdutil.PrintSuccess(mapper, false, cmdOut, mapping.Resource, args[0], "created")
 	return nil
+}
+
+// TODO turn this into reusable method checking available resources
+func contains(resourcesList map[string]*unversioned.APIResourceList, resource unversioned.GroupVersionResource) bool {
+	if resourcesList == nil {
+		return false
+	}
+	resourcesGroup, ok := resourcesList[resource.GroupVersion().String()]
+	if !ok {
+		return false
+	}
+	for _, item := range resourcesGroup.APIResources {
+		if resource.Resource == item.Name {
+			return true
+		}
+	}
+	return false
 }
 
 func waitForPodRunning(c *client.Client, pod *api.Pod, out io.Writer) (status api.PodPhase, err error) {
@@ -382,7 +422,7 @@ func generateService(f *cmdutil.Factory, cmd *cobra.Command, args []string, serv
 	}
 
 	if cmdutil.GetFlagString(cmd, "output") != "" {
-		return f.PrintObject(cmd, obj, out)
+		return f.PrintObject(cmd, mapper, obj, out)
 	}
 	cmdutil.PrintSuccess(mapper, false, out, mapping.Resource, args[0], "created")
 
@@ -401,7 +441,7 @@ func createGeneratedObject(f *cmdutil.Factory, cmd *cobra.Command, generator kub
 		return nil, "", nil, nil, err
 	}
 
-	mapper, typer := f.Object()
+	mapper, typer := f.Object(cmdutil.GetIncludeThirdPartyAPIs(cmd))
 	groupVersionKind, err := typer.ObjectKind(obj)
 	if err != nil {
 		return nil, "", nil, nil, err
@@ -441,7 +481,7 @@ func createGeneratedObject(f *cmdutil.Factory, cmd *cobra.Command, generator kub
 			ClientMapper: resource.ClientMapperFunc(f.ClientForMapping),
 			Decoder:      f.Decoder(true),
 		}
-		info, err := resourceMapper.InfoForObject(obj)
+		info, err := resourceMapper.InfoForObject(obj, nil)
 		if err != nil {
 			return nil, "", nil, nil, err
 		}

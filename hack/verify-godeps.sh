@@ -18,6 +18,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# As of go 1.6, the vendor experiment is enabled by default.
+export GO15VENDOREXPERIMENT=0
+
 #### HACK ####
 # Sometimes godep just can't handle things. This lets use manually put
 # some deps in place first, so godep won't fall over.
@@ -39,9 +42,9 @@ preload-dep() {
 KUBE_ROOT=$(dirname "${BASH_SOURCE}")/..
 source "${KUBE_ROOT}/hack/lib/init.sh"
 
-branch="${1:-master}"
-# notice this uses ... to find the first shared ancestor
-if ! git diff origin/"${branch}"...HEAD | grep 'Godeps/' > /dev/null; then
+readonly branch=${1:-${KUBE_VERIFY_GIT_BRANCH:-master}}
+if ! [[ ${KUBE_FORCE_VERIFY_CHECKS:-} =~ ^[yY]$ ]] && \
+  ! kube::util::has_changes_against_upstream_branch "${branch}" 'Godeps/'; then
   exit 0
 fi
 

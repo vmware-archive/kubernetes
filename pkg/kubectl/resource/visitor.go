@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 
 	"k8s.io/kubernetes/pkg/api/meta"
+	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/api/validation"
 	"k8s.io/kubernetes/pkg/runtime"
 	utilerrors "k8s.io/kubernetes/pkg/util/errors"
@@ -337,8 +338,15 @@ func (v FlattenListVisitor) Visit(fn VisitorFunc) error {
 		}{v.Mapper, v.Mapper.Decoder}); len(errs) > 0 {
 			return utilerrors.NewAggregate(errs)
 		}
+
+		// If we have a GroupVersionKind on the list, prioritize that when asking for info on the objects contained in the list
+		var preferredGVKs []unversioned.GroupVersionKind
+		if info.Mapping != nil && !info.Mapping.GroupVersionKind.IsEmpty() {
+			preferredGVKs = append(preferredGVKs, info.Mapping.GroupVersionKind)
+		}
+
 		for i := range items {
-			item, err := v.InfoForObject(items[i])
+			item, err := v.InfoForObject(items[i], preferredGVKs)
 			if err != nil {
 				return err
 			}
@@ -466,14 +474,15 @@ func (v *StreamVisitor) Visit(fn VisitorFunc) error {
 			}
 			return err
 		}
-		ext.RawJSON = bytes.TrimSpace(ext.RawJSON)
-		if len(ext.RawJSON) == 0 || bytes.Equal(ext.RawJSON, []byte("null")) {
+		// TODO: This needs to be able to handle object in other encodings and schemas.
+		ext.Raw = bytes.TrimSpace(ext.Raw)
+		if len(ext.Raw) == 0 || bytes.Equal(ext.Raw, []byte("null")) {
 			continue
 		}
-		if err := ValidateSchema(ext.RawJSON, v.Schema); err != nil {
+		if err := ValidateSchema(ext.Raw, v.Schema); err != nil {
 			return fmt.Errorf("error validating %q: %v", v.Source, err)
 		}
-		info, err := v.InfoForData(ext.RawJSON, v.Source)
+		info, err := v.InfoForData(ext.Raw, v.Source)
 		if err != nil {
 			if fnErr := fn(info, err); fnErr != nil {
 				return fnErr

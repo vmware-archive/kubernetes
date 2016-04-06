@@ -30,11 +30,9 @@ import (
 // This test requires that --terminated-pod-gc-threshold=100 be set on the controller manager
 //
 // Slow by design (7 min)
-var _ = Describe("Garbage collector [Slow]", func() {
+var _ = KubeDescribe("Garbage collector [Feature:GarbageCollector] [Slow]", func() {
 	f := NewDefaultFramework("garbage-collector")
 	It("should handle the creation of 1000 pods", func() {
-		SkipUnlessProviderIs("gce")
-
 		var count int
 		for count < 1000 {
 			pod, err := createTerminatingPod(f)
@@ -61,7 +59,7 @@ var _ = Describe("Garbage collector [Slow]", func() {
 		gcThreshold := 100
 
 		By(fmt.Sprintf("Waiting for gc controller to gc all but %d pods", gcThreshold))
-		pollErr := wait.Poll(30*time.Second, timeout, func() (bool, error) {
+		pollErr := wait.Poll(1*time.Minute, timeout, func() (bool, error) {
 			pods, err = f.Client.Pods(f.Namespace.Name).List(api.ListOptions{})
 			if err != nil {
 				Logf("Failed to list pod %v", err)
@@ -84,9 +82,11 @@ func createTerminatingPod(f *Framework) (*api.Pod, error) {
 	pod := &api.Pod{
 		ObjectMeta: api.ObjectMeta{
 			Name: string(uuid),
+			Annotations: map[string]string{
+				"scheduler.alpha.kubernetes.io/name": "please don't schedule my pods",
+			},
 		},
 		Spec: api.PodSpec{
-			NodeName: "nonexistant-node",
 			Containers: []api.Container{
 				{
 					Name:  string(uuid),

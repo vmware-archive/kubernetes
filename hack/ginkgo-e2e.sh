@@ -38,7 +38,7 @@ e2e_test=$(kube::util::find-binary "e2e.test")
 
 export KUBECTL KUBE_CONFIG_FILE
 
-source "${KUBE_ROOT}/cluster/kube-env.sh"
+source "${KUBE_ROOT}/cluster/kube-util.sh"
 
 # ---- Do cloud-provider-specific setup
 if [[ -n "${KUBERNETES_CONFORMANCE_TEST:-}" ]]; then
@@ -52,8 +52,6 @@ if [[ -n "${KUBERNETES_CONFORMANCE_TEST:-}" ]]; then
     )
 else
     echo "Setting up for KUBERNETES_PROVIDER=\"${KUBERNETES_PROVIDER}\"."
-
-    source "${KUBE_ROOT}/cluster/${KUBERNETES_PROVIDER}/util.sh"
 
     prepare-e2e
 
@@ -104,8 +102,10 @@ export PATH=$(dirname "${e2e_test}"):"${PATH}"
   --repo-root="${KUBE_ROOT}" \
   --node-instance-group="${NODE_INSTANCE_GROUP:-}" \
   --prefix="${KUBE_GCE_INSTANCE_PREFIX:-e2e}" \
+  ${KUBE_OS_DISTRIBUTION:+"--os-distro=${KUBE_OS_DISTRIBUTION}"} \
   ${NUM_NODES:+"--num-nodes=${NUM_NODES}"} \
   ${E2E_CLEAN_START:+"--clean-start=true"} \
   ${E2E_MIN_STARTUP_PODS:+"--minStartupPods=${E2E_MIN_STARTUP_PODS}"} \
   ${E2E_REPORT_DIR:+"--report-dir=${E2E_REPORT_DIR}"} \
+  ${E2E_REPORT_PREFIX:+"--report-prefix=${E2E_REPORT_PREFIX}"} \
   "${@:-}"

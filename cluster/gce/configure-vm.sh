@@ -77,8 +77,6 @@ function set-broken-motd() {
 function reset-motd() {
   # kubelet is installed both on the master and nodes, and the version is easy to parse (unlike kubectl)
   local -r version="$(/usr/local/bin/kubelet --version=true | cut -f2 -d " ")"
-  # This regex grabs the minor version, e.g. v1.2.
-  local -r minor="$(echo ${version} | sed -r "s/(v[0-9]+\.[0-9]+).*/\1/g")"
   # This logic grabs either a release tag (v1.2.1 or v1.2.1-alpha.1),
   # or the git hash that's in the build info.
   local gitref="$(echo "${version}" | sed -r "s/(v[0-9]+\.[0-9]+\.[0-9]+)(-[a-z]+\.[0-9]+)?.*/\1\2/g")"
@@ -95,8 +93,8 @@ If it isn't, the closest tag is at:
 
 Welcome to Kubernetes ${version}!
 
-You can find documentation for this release at:
-  http://kubernetes.io/${minor}/
+You can find documentation for Kubernetes at:
+  http://docs.kubernetes.io/
 
 You can download the build image for this release at:
   https://storage.googleapis.com/kubernetes-release/release/${version}/kubernetes-src.tar.gz
@@ -106,6 +104,7 @@ It is based on the Kubernetes source at:
 ${devel}
 For Kubernetes copyright and licensing information, see:
   /usr/local/share/doc/kubernetes/LICENSES
+
 EOF
 }
 
@@ -415,6 +414,7 @@ instance_prefix: '$(echo "$INSTANCE_PREFIX" | sed -e "s/'/''/g")'
 node_instance_prefix: '$(echo "$NODE_INSTANCE_PREFIX" | sed -e "s/'/''/g")'
 cluster_cidr: '$(echo "$CLUSTER_IP_RANGE" | sed -e "s/'/''/g")'
 allocate_node_cidrs: '$(echo "$ALLOCATE_NODE_CIDRS" | sed -e "s/'/''/g")'
+non_masquerade_cidr: '$(echo "$NON_MASQUERADE_CIDR" | sed -e "s/'/''/g")'
 service_cluster_ip_range: '$(echo "$SERVICE_CLUSTER_IP_RANGE" | sed -e "s/'/''/g")'
 enable_cluster_monitoring: '$(echo "$ENABLE_CLUSTER_MONITORING" | sed -e "s/'/''/g")'
 enable_cluster_logging: '$(echo "$ENABLE_CLUSTER_LOGGING" | sed -e "s/'/''/g")'
@@ -585,7 +585,7 @@ function create-salt-master-auth() {
     # NB: If this list ever changes, this script actually has to
     # change to detect the existence of this file, kill any deleted
     # old tokens and add any new tokens (to handle the upgrade case).
-    local -r service_accounts=("system:scheduler" "system:controller_manager" "system:logging" "system:monitoring" "system:dns")
+    local -r service_accounts=("system:scheduler" "system:controller_manager" "system:logging" "system:monitoring")
     for account in "${service_accounts[@]}"; do
       token=$(dd if=/dev/urandom bs=128 count=1 2>/dev/null | base64 | tr -d "=+/" | dd bs=32 count=1 2>/dev/null)
       echo "${token},${account},${account}" >> "${KNOWN_TOKENS_FILE}"

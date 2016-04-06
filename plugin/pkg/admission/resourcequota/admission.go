@@ -30,6 +30,7 @@ import (
 	"k8s.io/kubernetes/pkg/admission"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
+	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/quota"
 	"k8s.io/kubernetes/pkg/quota/install"
@@ -180,6 +181,16 @@ func (q *quotaAdmission) Admit(a admission.Attributes) (err error) {
 	}
 	if len(resourceQuotas) == 0 {
 		return nil
+	}
+
+	// Usage of some resources cannot be counted in isolation. For example when
+	// the resource represents a number of unique references to external
+	// resource. In such a case an evaluator needs to process other objects in
+	// the same namespace which needs to be known.
+	if accessor, err := meta.Accessor(inputObject); namespace != "" && err == nil {
+		if accessor.GetNamespace() == "" {
+			accessor.SetNamespace(namespace)
+		}
 	}
 
 	// there is at least one quota that definitely matches our object

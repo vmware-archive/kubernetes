@@ -28,8 +28,8 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/cache"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	unversionedcore "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/unversioned"
 	"k8s.io/kubernetes/pkg/client/record"
-	unversionedcore "k8s.io/kubernetes/pkg/client/typed/generated/core/unversioned"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/framework"
 	"k8s.io/kubernetes/pkg/labels"
@@ -97,7 +97,7 @@ type ReplicationManager struct {
 func NewReplicationManager(kubeClient clientset.Interface, resyncPeriod controller.ResyncPeriodFunc, burstReplicas int, lookupCacheSize int) *ReplicationManager {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(glog.Infof)
-	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{kubeClient.Core().Events("")})
+	eventBroadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{Interface: kubeClient.Core().Events("")})
 
 	rm := &ReplicationManager{
 		kubeClient: kubeClient,
@@ -540,8 +540,21 @@ func (rm *ReplicationManager) syncReplicationController(key string) error {
 		rm.manageReplicas(filteredPods, &rc)
 	}
 
+	// Count the number of pods that have labels matching the labels of the pod
+	// template of the replication controller, the matching pods may have more
+	// labels than are in the template. Because the label of podTemplateSpec is
+	// a superset of the selector of the replication controller, so the possible
+	// matching pods must be part of the filteredPods.
+	fullyLabeledReplicasCount := 0
+	templateLabel := labels.Set(rc.Spec.Template.Labels).AsSelector()
+	for _, pod := range filteredPods {
+		if templateLabel.Matches(labels.Set(pod.Labels)) {
+			fullyLabeledReplicasCount++
+		}
+	}
+
 	// Always updates status as pods come up or die.
-	if err := updateReplicaCount(rm.kubeClient.Core().ReplicationControllers(rc.Namespace), rc, len(filteredPods)); err != nil {
+	if err := updateReplicaCount(rm.kubeClient.Core().ReplicationControllers(rc.Namespace), rc, len(filteredPods), fullyLabeledReplicasCount); err != nil {
 		// Multiple things could lead to this update failing. Requeuing the controller ensures
 		// we retry with some fairness.
 		glog.V(2).Infof("Failed to update replica count for controller %v/%v; requeuing; error: %v", rc.Namespace, rc.Name, err)

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright 2015 The Kubernetes Authors All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -73,6 +73,7 @@ process_content () {
   local ensure_pattern
   local package_root_url
   local dir_root
+  local godeps_root
   local find_maxdepth
   local find_names
   local -a local_files=()
@@ -111,12 +112,17 @@ process_content () {
 
   # Find LOCAL files first - only root and package level
   for dir_root in ${package} ${package_root}; do
-    # One (set) of these is fine
-    local_files+=($(find ${GODEPS_SRC}/${dir_root} -xdev -follow \
-                        -maxdepth ${find_maxdepth} -type f "${find_names[@]}"))
+    for godeps_root in ${GODEPS_SRC} ${GODEPS_AUX}; do
+      [[ -d ${godeps_root}/${dir_root} ]] || continue
+
+      # One (set) of these is fine
+      local_files+=($(find ${godeps_root}/${dir_root} \
+                           -xdev -follow -maxdepth ${find_maxdepth} \
+                           -type f "${find_names[@]}"))
+    done
   done
   # Uniquely sort the array
-  IFS=$'\n' local_files=($(sort -u <<<"${local_files[*]-}"))
+  IFS=$'\n' local_files=($(LC_ALL=C sort -u <<<"${local_files[*]-}"))
   unset IFS
 
   for f in ${local_files[@]-}; do
@@ -131,7 +137,8 @@ process_content () {
     for f in ${remote_files[@]}; do
       file_state "${package_root_url}/master/${f}" && continue
       if ! FILE_CONTENT[${package}-${type}]="$(\
-          curl --fail -s https://${package_root_url}/master/${f})" || \
+          curl --fail --retry 10 -s \
+           https://${package_root_url}/master/${f})" || \
          ! $(echo "${FILE_CONTENT[${package}-${type}]-}" |\
           egrep -qw "${ensure_pattern}") ||
          [[ "${FILE_CONTENT[${package}-${type}]-}" =~ \<\ *html ]] ; then
@@ -142,9 +149,9 @@ process_content () {
 
       if [[ -n "${FILE_CONTENT[${package}-${type}]-}" ]]; then
         if ((CREATE_MISSING)); then
-          mkdir -p ${GODEPS_SRC}/${package_root}
+          mkdir -p ${GODEPS_AUX}/${package_root}
           echo "${FILE_CONTENT[${package}-${type}]}" \
-           > ${GODEPS_SRC}/${package_root}/${f}
+           > ${GODEPS_AUX}/${package_root}/${f}
         fi
         break
       fi
@@ -171,6 +178,7 @@ GODEPS_STATE="Godeps/.license_file_state"
 
 GODEPS_LICENSE_FILE=${1:-"Godeps/LICENSES"}
 GODEPS_SRC="Godeps/_workspace/src"
+GODEPS_AUX="Godeps/_workspace_aux/src"
 declare -Ag FILE_CONTENT
 
 
@@ -184,7 +192,7 @@ cat ${KUBE_ROOT}/LICENSE
 
 # Loop through every package in Godeps.json
 for PACKAGE in $(cat Godeps/Godeps.json |\
-                 jq -r ".Deps[].ImportPath" |sort -f); do
+                 jq -r ".Deps[].ImportPath" | LC_ALL=C sort -f); do
 
   process_content ${PACKAGE} LICENSE
   process_content ${PACKAGE} COPYRIGHT

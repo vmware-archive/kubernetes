@@ -31,18 +31,18 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("ReplicaSet", func() {
+var _ = KubeDescribe("ReplicaSet", func() {
 	framework := NewDefaultFramework("replicaset")
 
 	It("should serve a basic image on each replica with a public image [Conformance]", func() {
-		ReplicaSetServeImageOrFail(framework, "basic", "gcr.io/google_containers/serve_hostname:1.1")
+		ReplicaSetServeImageOrFail(framework, "basic", "gcr.io/google_containers/serve_hostname:v1.4")
 	})
 
 	It("should serve a basic image on each replica with a private image", func() {
 		// requires private images
 		SkipUnlessProviderIs("gce", "gke")
 
-		ReplicaSetServeImageOrFail(framework, "private", "b.gcr.io/k8s_authenticated_test/serve_hostname:1.1")
+		ReplicaSetServeImageOrFail(framework, "private", "b.gcr.io/k8s_authenticated_test/serve_hostname:v1.4")
 	})
 })
 
@@ -65,7 +65,7 @@ func ReplicaSetServeImageOrFail(f *Framework, test string, image string) {
 			Selector: &unversioned.LabelSelector{MatchLabels: map[string]string{
 				"name": name,
 			}},
-			Template: &api.PodTemplateSpec{
+			Template: api.PodTemplateSpec{
 				ObjectMeta: api.ObjectMeta{
 					Labels: map[string]string{"name": name},
 				},

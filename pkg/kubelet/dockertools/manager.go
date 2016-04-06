@@ -60,7 +60,7 @@ import (
 const (
 	DockerType = "docker"
 
-	minimumDockerAPIVersion = "1.18"
+	minimumDockerAPIVersion = "1.20"
 
 	// ndots specifies the minimum number of dots that a domain name must contain for the resolver to consider it as FQDN (fully-qualified)
 	// we want to able to consider SRV lookup names like _dns._udp.kube-dns.default.svc to be considered relative.
@@ -199,6 +199,8 @@ func NewDockerManager(
 	enableCustomMetrics bool,
 	hairpinMode bool,
 	options ...kubecontainer.Option) *DockerManager {
+	// Wrap the docker client with instrumentedDockerInterface
+	client = newInstrumentedDockerInterface(client)
 
 	// Work out the location of the Docker runtime, defaulting to /var/lib/docker
 	// if there are any problems.
@@ -807,7 +809,7 @@ func (dm *DockerManager) podInfraContainerChanged(pod *api.Pod, podInfraContaine
 			glog.V(4).Infof("host: %v, %v", pod.Spec.SecurityContext.HostNetwork, networkMode)
 			return true, nil
 		}
-	} else {
+	} else if dm.networkPlugin.Name() != "cni" && dm.networkPlugin.Name() != "kubenet" {
 		// Docker only exports ports from the pod infra container. Let's
 		// collect all of the relevant ports and export them.
 		for _, container := range pod.Spec.Containers {
@@ -964,21 +966,6 @@ func (dm *DockerManager) checkVersionCompatibility() error {
 	return nil
 }
 
-// The first version of docker that supports exec natively is 1.3.0 == API 1.15
-var dockerAPIVersionWithExec = "1.15"
-
-func (dm *DockerManager) nativeExecSupportExists() (bool, error) {
-	version, err := dm.APIVersion()
-	if err != nil {
-		return false, err
-	}
-	result, err := version.Compare(dockerAPIVersionWithExec)
-	if result >= 0 {
-		return true, err
-	}
-	return false, err
-}
-
 func (dm *DockerManager) defaultSecurityOpt() ([]string, error) {
 	version, err := dm.APIVersion()
 	if err != nil {
@@ -995,32 +982,8 @@ func (dm *DockerManager) defaultSecurityOpt() ([]string, error) {
 	return nil, nil
 }
 
-func (dm *DockerManager) getRunInContainerCommand(containerID kubecontainer.ContainerID, cmd []string) (*exec.Cmd, error) {
-	args := append([]string{"exec"}, cmd...)
-	command := exec.Command("/usr/sbin/nsinit", args...)
-	command.Dir = fmt.Sprintf("/var/lib/docker/execdriver/native/%s", containerID.ID)
-	return command, nil
-}
-
-func (dm *DockerManager) runInContainerUsingNsinit(containerID kubecontainer.ContainerID, cmd []string) ([]byte, error) {
-	c, err := dm.getRunInContainerCommand(containerID, cmd)
-	if err != nil {
-		return nil, err
-	}
-	return c.CombinedOutput()
-}
-
-// RunInContainer uses nsinit to run the command inside the container identified by containerID
+// RunInContainer run the command inside the container identified by containerID
 func (dm *DockerManager) RunInContainer(containerID kubecontainer.ContainerID, cmd []string) ([]byte, error) {
-	// If native exec support does not exist in the local docker daemon use nsinit.
-	useNativeExec, err := dm.nativeExecSupportExists()
-	if err != nil {
-		return nil, err
-	}
-	if !useNativeExec {
-		glog.V(2).Infof("Using nsinit to run the command %+v inside container %s", cmd, containerID)
-		return dm.runInContainerUsingNsinit(containerID, cmd)
-	}
 	glog.V(2).Infof("Using docker native exec to run cmd %+v inside container %s", cmd, containerID)
 	createOpts := docker.CreateExecOptions{
 		Container:    containerID.ID,
@@ -1392,10 +1355,6 @@ func (dm *DockerManager) killContainer(containerID kubecontainer.ContainerID, co
 		gracePeriod = minimumGracePeriodInSeconds
 	}
 	err := dm.client.StopContainer(ID, uint(gracePeriod))
-	if _, ok := err.(*docker.ContainerNotRunning); ok && err != nil {
-		glog.V(4).Infof("Container %q has already exited", name)
-		return nil
-	}
 	if err == nil {
 		glog.V(2).Infof("Container %q exited after %s", name, unversioned.Now().Sub(start.Time))
 	} else {
@@ -1491,7 +1450,7 @@ func (dm *DockerManager) applyOOMScoreAdj(container *api.Container, containerInf
 
 // Run a single container from a pod. Returns the docker container ID
 // If do not need to pass labels, just pass nil.
-func (dm *DockerManager) runContainerInPod(pod *api.Pod, container *api.Container, netMode, ipcMode, pidMode string, restartCount int) (kubecontainer.ContainerID, error) {
+func (dm *DockerManager) runContainerInPod(pod *api.Pod, container *api.Container, netMode, ipcMode, pidMode, podIP string, restartCount int) (kubecontainer.ContainerID, error) {
 	start := time.Now()
 	defer func() {
 		metrics.ContainerManagerLatency.WithLabelValues("runContainerInPod").Observe(metrics.SinceInMicroseconds(start))
@@ -1502,7 +1461,7 @@ func (dm *DockerManager) runContainerInPod(pod *api.Pod, container *api.Containe
 		glog.Errorf("Can't make a ref to pod %v, container %v: '%v'", pod.Name, container.Name, err)
 	}
 
-	opts, err := dm.runtimeHelper.GenerateRunContainerOptions(pod, container)
+	opts, err := dm.runtimeHelper.GenerateRunContainerOptions(pod, container, podIP)
 	if err != nil {
 		return kubecontainer.ContainerID{}, fmt.Errorf("GenerateRunContainerOptions: %v", err)
 	}
@@ -1635,7 +1594,7 @@ func (dm *DockerManager) createPodInfraContainer(pod *api.Pod) (kubecontainer.Do
 	}
 
 	// Currently we don't care about restart count of infra container, just set it to 0.
-	id, err := dm.runContainerInPod(pod, container, netNamespace, getIPCMode(pod), getPidMode(pod), 0)
+	id, err := dm.runContainerInPod(pod, container, netNamespace, getIPCMode(pod), getPidMode(pod), "", 0)
 	if err != nil {
 		return "", kubecontainer.ErrRunContainer, err.Error()
 	}
@@ -1832,6 +1791,19 @@ func (dm *DockerManager) SyncPod(pod *api.Pod, _ api.PodStatus, podStatus *kubec
 		}
 	}
 
+	// We pass the value of the podIP down to runContainerInPod, which in turn
+	// passes it to various other functions, in order to facilitate
+	// functionality that requires this value (hosts file and downward API)
+	// and avoid races determining the pod IP in cases where a container
+	// requires restart but the podIP isn't in the status manager yet.
+	//
+	// We default to the IP in the passed-in pod status, and overwrite it if the
+	// infra container needs to be (re)started.
+	podIP := ""
+	if podStatus != nil {
+		podIP = podStatus.IP
+	}
+
 	// If we should create infra container then we do it first.
 	podInfraContainerID := containerChanges.InfraContainerId
 	if containerChanges.StartInfraContainer && (len(containerChanges.ContainersToStart) > 0) {
@@ -1884,9 +1856,8 @@ func (dm *DockerManager) SyncPod(pod *api.Pod, _ api.PodStatus, podStatus *kubec
 				}
 			}
 
-			// Find the pod IP after starting the infra container in order to expose
-			// it safely via the downward API without a race and be able to use podIP in kubelet-managed /etc/hosts file.
-			pod.Status.PodIP = dm.determineContainerIP(pod.Name, pod.Namespace, podInfraContainer)
+			// Overwrite the podIP passed in the pod status, since we just started the infra container.
+			podIP = dm.determineContainerIP(pod.Name, pod.Namespace, podInfraContainer)
 		}
 	}
 
@@ -1934,7 +1905,7 @@ func (dm *DockerManager) SyncPod(pod *api.Pod, _ api.PodStatus, podStatus *kubec
 		// and IPC namespace.  PID mode cannot point to another container right now.
 		// See createPodInfraContainer for infra container setup.
 		namespaceMode := fmt.Sprintf("container:%v", podInfraContainerID)
-		_, err = dm.runContainerInPod(pod, container, namespaceMode, namespaceMode, getPidMode(pod), restartCount)
+		_, err = dm.runContainerInPod(pod, container, namespaceMode, namespaceMode, getPidMode(pod), podIP, restartCount)
 		if err != nil {
 			startContainerResult.Fail(kubecontainer.ErrRunContainer, err.Error())
 			// TODO(bburns) : Perhaps blacklist a container after N failures?

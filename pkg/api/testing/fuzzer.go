@@ -180,7 +180,8 @@ func FuzzerFor(t *testing.T, version unversioned.GroupVersion, src rand.Source) 
 			if true { //c.RandBool() {
 				*j = &runtime.Unknown{
 					// We do not set TypeMeta here because it is not carried through a round trip
-					RawJSON: []byte(`{"apiVersion":"unknown.group/unknown","kind":"Something","someKey":"someValue"}`),
+					Raw:         []byte(`{"apiVersion":"unknown.group/unknown","kind":"Something","someKey":"someValue"}`),
+					ContentType: runtime.ContentTypeJSON,
 				}
 			} else {
 				types := []runtime.Object{&api.Pod{}, &api.ReplicationController{}}
@@ -391,11 +392,6 @@ func FuzzerFor(t *testing.T, version unversioned.GroupVersion, src rand.Source) 
 			c.FuzzNoCustom(s)
 			s.Allocatable = s.Capacity
 		},
-		func(s *extensions.APIVersion, c fuzz.Continue) {
-			// We can't use c.RandString() here because it may generate empty
-			// string, which will cause tests failure.
-			s.APIGroup = "something"
-		},
 		func(s *extensions.HorizontalPodAutoscalerSpec, c fuzz.Continue) {
 			c.FuzzNoCustom(s) // fuzz self without calling this function again
 			minReplicas := int(c.Rand.Int31())
@@ -412,6 +408,25 @@ func FuzzerFor(t *testing.T, version unversioned.GroupVersion, src rand.Source) 
 			psp.RunAsUser.Rule = runAsUserRules[c.Rand.Intn(len(runAsUserRules))]
 			seLinuxRules := []extensions.SELinuxStrategy{extensions.SELinuxStrategyRunAsAny, extensions.SELinuxStrategyMustRunAs}
 			psp.SELinux.Rule = seLinuxRules[c.Rand.Intn(len(seLinuxRules))]
+		},
+		func(s *extensions.Scale, c fuzz.Continue) {
+			c.FuzzNoCustom(s) // fuzz self without calling this function again
+			// TODO: Implement a fuzzer to generate valid keys, values and operators for
+			// selector requirements.
+			if s.Status.Selector != nil {
+				s.Status.Selector = &unversioned.LabelSelector{
+					MatchLabels: map[string]string{
+						"testlabelkey": "testlabelval",
+					},
+					MatchExpressions: []unversioned.LabelSelectorRequirement{
+						{
+							Key:      "testkey",
+							Operator: unversioned.LabelSelectorOpIn,
+							Values:   []string{"val1", "val2", "val3"},
+						},
+					},
+				}
+			}
 		},
 	)
 	return f

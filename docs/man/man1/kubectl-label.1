@@ -35,6 +35,10 @@ If \-\-resource\-version is specified, then updates will use this resource versi
     Filename, directory, or URL to a file identifying the resource to update the labels
 
 .PP
+\fB\-\-include\-extended\-apis\fP=true
+    If true, include definitions of new APIs via calls to the API server. [default true]
+
+.PP
 \fB\-\-no\-headers\fP=false
     When using the default output, don't print headers.
 
@@ -46,7 +50,7 @@ If \-\-resource\-version is specified, then updates will use this resource versi
 
 .PP
 \fB\-\-output\-version\fP=""
-    Output the formatted object with the given version (default api\-version).
+    Output the formatted object with the given group version (for ex: 'extensions/v1beta1').
 
 .PP
 \fB\-\-overwrite\fP=false
@@ -55,6 +59,10 @@ If \-\-resource\-version is specified, then updates will use this resource versi
 .PP
 \fB\-\-record\fP=false
     Record current kubectl command in the resource annotation.
+
+.PP
+\fB\-R\fP, \fB\-\-recursive\fP=false
+    If true, process directory recursively.
 
 .PP
 \fB\-\-resource\-version\fP=""
@@ -89,7 +97,7 @@ If \-\-resource\-version is specified, then updates will use this resource versi
 
 .PP
 \fB\-\-api\-version\fP=""
-    The API version to use when talking to the server
+    DEPRECATED: The API version to use when talking to the server
 
 .PP
 \fB\-\-certificate\-authority\fP=""

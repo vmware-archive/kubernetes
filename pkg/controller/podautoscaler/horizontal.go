@@ -28,9 +28,9 @@ import (
 	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/cache"
+	unversionedcore "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/unversioned"
+	unversionedextensions "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/extensions/unversioned"
 	"k8s.io/kubernetes/pkg/client/record"
-	unversionedcore "k8s.io/kubernetes/pkg/client/typed/generated/core/unversioned"
-	unversionedextensions "k8s.io/kubernetes/pkg/client/typed/generated/extensions/unversioned"
 	"k8s.io/kubernetes/pkg/controller/framework"
 	"k8s.io/kubernetes/pkg/controller/podautoscaler/metrics"
 	"k8s.io/kubernetes/pkg/runtime"
@@ -65,19 +65,8 @@ type HorizontalController struct {
 var downscaleForbiddenWindow = 5 * time.Minute
 var upscaleForbiddenWindow = 3 * time.Minute
 
-func NewHorizontalController(evtNamespacer unversionedcore.EventsGetter, scaleNamespacer unversionedextensions.ScalesGetter, hpaNamespacer unversionedextensions.HorizontalPodAutoscalersGetter, metricsClient metrics.MetricsClient, resyncPeriod time.Duration) *HorizontalController {
-	broadcaster := record.NewBroadcaster()
-	broadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{evtNamespacer.Events("")})
-	recorder := broadcaster.NewRecorder(api.EventSource{Component: "horizontal-pod-autoscaler"})
-
-	controller := &HorizontalController{
-		metricsClient:   metricsClient,
-		eventRecorder:   recorder,
-		scaleNamespacer: scaleNamespacer,
-		hpaNamespacer:   hpaNamespacer,
-	}
-
-	controller.store, controller.controller = framework.NewInformer(
+func newInformer(controller *HorizontalController, resyncPeriod time.Duration) (cache.Store, *framework.Controller) {
+	return framework.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(options api.ListOptions) (runtime.Object, error) {
 				return controller.hpaNamespacer.HorizontalPodAutoscalers(api.NamespaceAll).List(options)
@@ -111,6 +100,22 @@ func NewHorizontalController(evtNamespacer unversionedcore.EventsGetter, scaleNa
 			// We are not interested in deletions.
 		},
 	)
+}
+
+func NewHorizontalController(evtNamespacer unversionedcore.EventsGetter, scaleNamespacer unversionedextensions.ScalesGetter, hpaNamespacer unversionedextensions.HorizontalPodAutoscalersGetter, metricsClient metrics.MetricsClient, resyncPeriod time.Duration) *HorizontalController {
+	broadcaster := record.NewBroadcaster()
+	broadcaster.StartRecordingToSink(&unversionedcore.EventSinkImpl{evtNamespacer.Events("")})
+	recorder := broadcaster.NewRecorder(api.EventSource{Component: "horizontal-pod-autoscaler"})
+
+	controller := &HorizontalController{
+		metricsClient:   metricsClient,
+		eventRecorder:   recorder,
+		scaleNamespacer: scaleNamespacer,
+		hpaNamespacer:   hpaNamespacer,
+	}
+	store, frameworkController := newInformer(controller, resyncPeriod)
+	controller.store = store
+	controller.controller = frameworkController
 
 	return controller
 }
@@ -129,7 +134,20 @@ func (a *HorizontalController) computeReplicasForCPUUtilization(hpa *extensions.
 		targetUtilization = hpa.Spec.CPUUtilization.TargetPercentage
 	}
 	currentReplicas := scale.Status.Replicas
-	currentUtilization, timestamp, err := a.metricsClient.GetCPUUtilization(hpa.Namespace, scale.Status.Selector)
+
+	if scale.Status.Selector == nil {
+		errMsg := "selector is required"
+		a.eventRecorder.Event(hpa, api.EventTypeWarning, "SelectorRequired", errMsg)
+		return 0, nil, time.Time{}, fmt.Errorf(errMsg)
+	}
+
+	selector, err := unversioned.LabelSelectorAsSelector(scale.Status.Selector)
+	if err != nil {
+		errMsg := fmt.Sprintf("couldn't convert selector string to a corresponding selector object: %v", err)
+		a.eventRecorder.Event(hpa, api.EventTypeWarning, "InvalidSelector", errMsg)
+		return 0, nil, time.Time{}, fmt.Errorf(errMsg)
+	}
+	currentUtilization, timestamp, err := a.metricsClient.GetCPUUtilization(hpa.Namespace, selector)
 
 	// TODO: what to do on partial errors (like metrics obtained for 75% of pods).
 	if err != nil {
@@ -177,7 +195,19 @@ func (a *HorizontalController) computeReplicasForCustomMetrics(hpa *extensions.H
 	}
 
 	for _, customMetricTarget := range targetList.Items {
-		value, currentTimestamp, err := a.metricsClient.GetCustomMetric(customMetricTarget.Name, hpa.Namespace, scale.Status.Selector)
+		if scale.Status.Selector == nil {
+			errMsg := "selector is required"
+			a.eventRecorder.Event(hpa, api.EventTypeWarning, "SelectorRequired", errMsg)
+			return 0, "", "", time.Time{}, fmt.Errorf("selector is required")
+		}
+
+		selector, err := unversioned.LabelSelectorAsSelector(scale.Status.Selector)
+		if err != nil {
+			errMsg := fmt.Sprintf("couldn't convert selector string to a corresponding selector object: %v", err)
+			a.eventRecorder.Event(hpa, api.EventTypeWarning, "InvalidSelector", errMsg)
+			return 0, "", "", time.Time{}, fmt.Errorf("couldn't convert selector string to a corresponding selector object: %v", err)
+		}
+		value, currentTimestamp, err := a.metricsClient.GetCustomMetric(customMetricTarget.Name, hpa.Namespace, selector)
 		// TODO: what to do on partial errors (like metrics obtained for 75% of pods).
 		if err != nil {
 			a.eventRecorder.Event(hpa, api.EventTypeWarning, "FailedGetCustomMetrics", err.Error())

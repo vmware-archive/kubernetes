@@ -21,7 +21,7 @@ refer to the docs that go with that version.
 <!-- TAG RELEASE_LINK, added by the munger automatically -->
 <strong>
 The latest release of this document can be found
-[here](http://releases.k8s.io/release-1.1/docs/devel/writing-a-getting-started-guide.md).
+[here](http://releases.k8s.io/release-1.2/docs/devel/writing-a-getting-started-guide.md).
 
 Documentation for other releases can be found at
 [releases.k8s.io](http://releases.k8s.io).
@@ -68,7 +68,7 @@ These guidelines say *what* to do.  See the Rationale section for *why*.
    own repo.
  - Add or update a row in [The Matrix](../../docs/getting-started-guides/README.md).
  - State the binary version of Kubernetes that you tested clearly in your Guide doc.
- - Setup a cluster and run the [conformance test](development.md#conformance-testing) against it, and report the
+ - Setup a cluster and run the [conformance tests](e2e-tests.md#conformance-tests) against it, and report the
    results in your PR.
  - Versioned distros should typically not modify or add code in `cluster/`.  That is just scripts for developer
    distros.

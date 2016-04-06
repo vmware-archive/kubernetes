@@ -88,8 +88,8 @@
 {% endif -%}
 
 {% set non_masquerade_cidr = "" -%}
-{% if grains.non_masquerade_cidr is defined -%}
-  {% set non_masquerade_cidr = "--non-masquerade-cidr=" + grains.non_masquerade_cidr -%}
+{% if pillar.get('non_masquerade_cidr','') -%}
+  {% set non_masquerade_cidr = "--non-masquerade-cidr=" + pillar.non_masquerade_cidr -%}
 {% endif -%}
 
 # The master kubelet cannot wait for the flannel daemon because it is responsible
@@ -144,6 +144,8 @@
 {% set network_plugin = "" -%}
 {% if pillar.get('network_provider', '').lower() == 'opencontrail' %}
   {% set network_plugin = "--network-plugin=opencontrail" %}
+{% elif pillar.get('network_provider', '').lower() == 'cni' %}
+  {% set network_plugin = "--network-plugin=cni --network-plugin-dir=/etc/cni/net.d/" %}
 {% elif pillar.get('network_provider', '').lower() == 'kubenet' %}
   {% set network_plugin = "--network-plugin=kubenet" -%}
   {% if reconcile_cidr_args == '' -%}
