@@ -58,7 +58,7 @@ function detect-master {
     if [ -z "${KUBE_MASTER_IP-}" ]; then
         # Make sure to ignore lines where it's not attached to a portgroup
         # Make sure to ignore lines that have a network interface but no address
-        KUBE_MASTER_IP=$($PHOTON vm networks ${KUBE_MASTER_ID} | grep -v "^-" | grep -E '\d+\.\d+\.\d+\.\d+' | head -1 | awk -Ft '{print $3}')
+        KUBE_MASTER_IP=$($PHOTON vm networks ${KUBE_MASTER_ID} | grep -v "^-" | grep -E '\d+\.\d+\.\d+\.\d+' | head -1 | awk -F'\t' '{print $3}')
     fi
     if [ -z "${KUBE_MASTER_IP-}" ]; then
         kube::log::error "Could not find Kubernetes master node IP. Make sure you've launched a cluster with 'kube-up.sh'" >&2
@@ -100,7 +100,7 @@ function detect-nodes {
 
         # Make sure to ignore lines where it's not attached to a portgroup
         # Make sure to ignore lines that have a network interface but no address
-        local node_ip=$($PHOTON vm networks ${node_id} | grep -v "^-" | grep -E '\d+\.\d+\.\d+\.\d+'| head -1 | awk -Ft '{print $3}')
+        local node_ip=$($PHOTON vm networks ${node_id} | grep -v "^-" | grep -E '\d+\.\d+\.\d+\.\d+'| head -1 | awk -F'\t' '{print $3}')
         KUBE_NODE_IP_ADDRESSES+=("${node_ip}")
 
         if [ -z $silent ]; then
@@ -292,7 +292,7 @@ function pc-create-vm {
     fi
 
     # Find the IP address of the VM
-    _VM_IP=$(PHOTON -n vm networks ${_VM_ID} | head -1 | awk -Ft '{print $3}')
+    _VM_IP=$(PHOTON -n vm networks ${_VM_ID} | head -1 | awk -F'\t' '{print $3}')
     kube::log::status "VM ${vm_name} has IP: ${_VM_IP}"
 }
 
@@ -825,7 +825,7 @@ function verify-photon-config {
 function verify-photon-flavors {
     local rc=0
 
-    $PHOTON flavor list | awk -Ft '{print $2}' | grep "^${PHOTON_MASTER_FLAVOR}$" > /dev/null 2>&1 || rc=$?
+    $PHOTON flavor list | awk -F'\t' '{print $2}' | grep "^${PHOTON_MASTER_FLAVOR}$" > /dev/null 2>&1 || rc=$?
     if [ $rc -ne 0 ]; then
         kube::log::error "ERROR: Cannot find VM flavor named ${PHOTON_MASTER_FLAVOR}"
         exit 1
@@ -833,14 +833,14 @@ function verify-photon-flavors {
 
     if [ "${PHOTON_MASTER_FLAVOR}" != "${PHOTON_NODE_FLAVOR}" ]; then
         rc=0
-        $PHOTON flavor list | awk -Ft '{print $2}' | grep "^${PHOTON_NODE_FLAVOR}$" > /dev/null 2>&1 || rc=$?
+        $PHOTON flavor list | awk -F'\t' '{print $2}' | grep "^${PHOTON_NODE_FLAVOR}$" > /dev/null 2>&1 || rc=$?
         if [ $rc -ne 0 ]; then
             kube::log::error "ERROR: Cannot find VM flavor named ${PHOTON_NODE_FLAVOR}"
             exit 1
         fi
     fi
 
-    $PHOTON flavor list | awk -Ft '{print $2}' | grep "^${PHOTON_DISK_FLAVOR}$" > /dev/null 2>&1 || rc=$?
+    $PHOTON flavor list | awk -F'\t' '{print $2}' | grep "^${PHOTON_DISK_FLAVOR}$" > /dev/null 2>&1 || rc=$?
     if [ $rc -ne 0 ]; then
         kube::log::error "ERROR: Cannot find disk flavor named ${PHOTON_DISK_FLAVOR}"
         exit 1
