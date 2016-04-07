@@ -14,25 +14,59 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=ERROR"
-
 ##########################################################
 #
-# Parameters needed for interacting with Photon Controller
+# These parameters describe objects we are using from
+# Photon Controller. They are all assumed to be pre-existing
+#
+# Note: if you want help in creating them, you can use 
+# the setup-prereq.sh script, which will create any of these
+# that do not already exist.
 #
 ##########################################################
 
 # Pre-created tenant for Kubernetes to use
-PHOTON_TENANT=kube
+PHOTON_TENANT=kube-tenant
 
 # Pre-created project in PHOTON_TENANT for Kubernetes to use
-PHOTON_PROJECT=kube
+PHOTON_PROJECT=kube-project
 
-# Pre-created VM flavor for Kubernetes to use
-PHOTON_VM_FLAVOR=kube-vm
+# Pre-created VM flavor for Kubernetes master to use
+# Can be same as master
+# We recommend at least 1GB of memory
+PHOTON_MASTER_FLAVOR=kube-vm
+
+# Pre-created VM flavor for Kubernetes node to use
+# Can be same as master
+# We recommend at least 2GB of memory
+PHOTON_NODE_FLAVOR=kube-vm
 
 # Pre-created disk flavor for Kubernetes to use
 PHOTON_DISK_FLAVOR=kube-disk
 
 # Pre-created Debian 8 image with kube user uploaded to Photon Controller
-PHOTON_IMAGE_ID="image-id-goes-here"
+# Note: While Photon Controller allows multiple images to have the same
+# name, we assume that there is exactly one image with this name.
+PHOTON_IMAGE=kube
+
+##########################################################
+# 
+# Parameters just for the setup-prereq.sh script: not used
+# elsewhere. If you create the above objects by hand, you 
+# do not need to edit these. 
+# 
+# Note that setup-prereq.sh also creates the objects 
+# above.
+# 
+##########################################################
+
+# The specifications for the master and node flavors
+SETUP_MASTER_FLAVOR_SPEC="vm 1 COUNT, vm.cpu 1 COUNT, vm.memory 2 GB"
+SETUP_NODE_FLAVOR_SPEC=${SETUP_MASTER_FLAVOR_SPEC}
+
+# The specification for the ephemeral disk flavor. 
+SETUP_DISK_FLAVOR_SPEC="ephemeral-disk 1 COUNT"
+
+# The specification for the tenant resource ticket and the project resources
+SETUP_TICKET_SPEC="vm.memory 1000 GB, vm 1000 COUNT"
+SETUP_PROJECT_SPEC="${SETUP_TICKET_SPEC}"
