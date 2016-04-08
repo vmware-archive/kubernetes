@@ -331,7 +331,7 @@ function pc-delete-vm {
 #
 function find-image-id {
     local rc=0
-    PHOTON_IMAGE_ID=$($PHOTON image list | head -1 | grep "\t${PHOTON_IMAGE}\t" | grep READY | awk -F'\t' '{print $1}')
+    PHOTON_IMAGE_ID=$($PHOTON image list | head -1 | grep $'\t'${PHOTON_IMAGE}$'\t' | grep READY | awk -F'\t' '{print $1}')
     if [ $rc -ne 0 ]; then
         kube::log::error "Cannot find image \"${PHOTON_IMAGE}\""
         fail=1
@@ -855,21 +855,21 @@ function verify-photon-image {
     local rc
 
     rc=0
-    $PHOTON image list | grep "\t${PHOTON_IMAGE}\t"  > /dev/null 2>&1 || rc=$?
+    $PHOTON image list | grep $'\t'${PHOTON_IMAGE}$'\t'  > /dev/null 2>&1 || rc=$?
     if [ $rc -ne 0 ]; then
         kube::log::error "ERROR: Cannot find image \"${PHOTON_IMAGE}\""
         exit 1
     fi
 
     rc=0
-    $PHOTON image list | grep "\t${PHOTON_IMAGE}\t" | grep ERROR > /dev/null 2>&1 || rc=$?
+    $PHOTON image list | grep $'\t'${PHOTON_IMAGE}$'\t' | grep ERROR > /dev/null 2>&1 || rc=$?
     if [ $rc -eq 0 ]; then
         echo "Warning: You have at least one ${PHOTON_IMAGE} image in the ERROR state. You may want to investigate."
         echo "Images in the ERROR state will be ignored."
     fi
 
     rc=0
-    num_images=$($PHOTON image list | grep "\t${PHOTON_IMAGE}\t" | grep READY | wc -l)
+    num_images=$($PHOTON image list | grep $'\t'${PHOTON_IMAGE}$'\t' | grep READY | wc -l)
     if [ "$num_images" -gt 1 ]; then
         echo "ERROR: You have more than one READY ${PHOTON_IMAGE} image. Ensure there is only one"
         exit 1
