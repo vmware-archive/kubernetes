@@ -331,7 +331,7 @@ function pc-delete-vm {
 #
 function find-image-id {
     local rc=0
-    PHOTON_IMAGE_ID=$($PHOTON image list | head -1 | grep "\t${PHOTON_IMAGE}\t" | grep READY | awk '{print $1}')
+    PHOTON_IMAGE_ID=$($PHOTON image list | head -1 | grep "\t${PHOTON_IMAGE}\t" | grep READY | awk -F'\t' '{print $1}')
     if [ $rc -ne 0 ]; then
         kube::log::error "Cannot find image \"${PHOTON_IMAGE}\""
         fail=1
