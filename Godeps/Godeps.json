@@ -1054,6 +1054,16 @@
 		{
 			"ImportPath": "speter.net/go/exp/math/dec/inf",
 			"Rev": "42ca6cd68aa922bc3f32f1e056e61b65945d9ad7"
+		},
+		{
+			"ImportPath": "github.com/vmware/photon-controller-go-sdk/photon",
+			"Comment": "PROMOTED-96",
+			"Rev": "229542319ff00cd5fca808e513cb7dbdaad354a7"
+		},
+		{
+			"ImportPath": "github.com/vmware/photon-controller-go-sdk/photon/lightwave",
+			"Comment": "PROMOTED-96",
+			"Rev": "229542319ff00cd5fca808e513cb7dbdaad354a7"
 		}
 	]
 }

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Copyright 2016 The Kubernetes Authors All rights reserved.
 #
@@ -397,7 +397,7 @@ function gen-master-start {
     (
         echo "#! /bin/bash"
         echo "readonly MY_NAME=${MASTER_NAME}"
-        grep -v "^#" "${KUBE_ROOT}/cluster/vsphere/templates/hostname.sh"
+        grep -v "^#" "${KUBE_ROOT}/cluster/photon-controller/templates/hostname.sh"
         echo "cd /home/kube/cache/kubernetes-install"
         echo "readonly MASTER_NAME='${MASTER_NAME}'"
         echo "readonly MASTER_IP_RANGE='${MASTER_IP_RANGE}'"
@@ -417,9 +417,9 @@ function gen-master-start {
         echo "readonly SALT_TAR='${SALT_TAR##*/}'"
         echo "readonly MASTER_HTPASSWD='${htpasswd}'"
         echo "readonly E2E_STORAGE_TEST_ENVIRONMENT='${E2E_STORAGE_TEST_ENVIRONMENT:-}'"
-        grep -v "^#" "${KUBE_ROOT}/cluster/vsphere/templates/create-dynamic-salt-files.sh"
-        grep -v "^#" "${KUBE_ROOT}/cluster/vsphere/templates/install-release.sh"
-        grep -v "^#" "${KUBE_ROOT}/cluster/vsphere/templates/salt-master.sh"
+        grep -v "^#" "${KUBE_ROOT}/cluster/photon-controller/templates/create-dynamic-salt-files.sh"
+        grep -v "^#" "${KUBE_ROOT}/cluster/photon-controller/templates/install-release.sh"
+        grep -v "^#" "${KUBE_ROOT}/cluster/photon-controller/templates/salt-master.sh"
     ) > "${KUBE_TEMP}/master-start.sh"
 }
 
@@ -432,11 +432,11 @@ function gen-node-start {
         (
             echo "#! /bin/bash"
             echo "readonly MY_NAME=${NODE_NAMES[$i]}"
-            grep -v "^#" "${KUBE_ROOT}/cluster/vsphere/templates/hostname.sh"
+            grep -v "^#" "${KUBE_ROOT}/cluster/photon-controller/templates/hostname.sh"
             echo "KUBE_MASTER=${KUBE_MASTER}"
             echo "KUBE_MASTER_IP=${KUBE_MASTER_IP}"
             echo "NODE_IP_RANGE=$NODE_IP_RANGES"
-            grep -v "^#" "${KUBE_ROOT}/cluster/vsphere/templates/salt-minion.sh"
+            grep -v "^#" "${KUBE_ROOT}/cluster/photon-controller/templates/salt-minion.sh"
         ) > "${KUBE_TEMP}/node-start-${i}.sh"
   done
 }

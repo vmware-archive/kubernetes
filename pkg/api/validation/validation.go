@@ -551,6 +551,15 @@ func validateVolumeSource(source *api.VolumeSource, fldPath *field.Path) field.E
 		numVolumes++
 		allErrs = append(allErrs, validateAzureFile(source.AzureFile, fldPath.Child("azureFile"))...)
 	}
+	if source.PhotonControllerDisk != nil {
+		if numVolumes > 0 {
+			allErrs = append(allErrs, field.Forbidden(fldPath.Child("photonControllerDisk"), "may not specify more than 1 volume type"))
+		} else {
+			numVolumes++
+			allErrs = append(allErrs, validatePhotonControllerPersistentDiskSource(source.PhotonControllerDisk, fldPath.Child("photonControllerDisk"))...)
+		}
+	}
+
 	if numVolumes == 0 {
 		allErrs = append(allErrs, field.Required(fldPath, "must specify a volume type"))
 	}
@@ -772,6 +781,17 @@ func validateAzureFile(azure *api.AzureFileVolumeSource, fldPath *field.Path) fi
 	return allErrs
 }
 
+func validatePhotonControllerPersistentDiskSource(disk *api.PhotonControllerPersistentDiskSource, fldPath *field.Path) field.ErrorList {
+	allErrs := field.ErrorList{}
+	if disk.DiskID == "" {
+		allErrs = append(allErrs, field.Required(fldPath.Child("diskID"), ""))
+	}
+	if disk.FSType == "" {
+		allErrs = append(allErrs, field.Required(fldPath.Child("fsType"), ""))
+	}
+	return allErrs
+}
+
 func ValidatePersistentVolumeName(name string, prefix bool) (bool, string) {
 	return NameIsDNSSubdomain(name, prefix)
 }
@@ -899,6 +919,14 @@ func ValidatePersistentVolume(pv *api.PersistentVolume) field.ErrorList {
 	if pv.Spec.AzureFile != nil {
 		numVolumes++
 		allErrs = append(allErrs, validateAzureFile(pv.Spec.AzureFile, specPath.Child("azureFile"))...)
+	}
+	if pv.Spec.PhotonControllerDisk != nil {
+		if numVolumes > 0 {
+			allErrs = append(allErrs, field.Forbidden(specPath.Child("photonControllerDisk"), "may not specify more than 1 volume type"))
+		} else {
+			numVolumes++
+			allErrs = append(allErrs, validatePhotonControllerPersistentDiskSource(pv.Spec.PhotonControllerDisk, specPath.Child("photonControllerDisk"))...)
+		}
 	}
 	if numVolumes == 0 {
 		allErrs = append(allErrs, field.Required(specPath, "must specify a volume type"))

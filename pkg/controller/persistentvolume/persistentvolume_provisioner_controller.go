@@ -66,11 +66,16 @@ func NewPersistentVolumeProvisionerController(client controllerClient, syncPerio
 		clusterName: clusterName,
 	}
 
+	glog.V(1).Infof("SUFIANDAR: Number of Plugins: %d", len(plugins))
+	for _, p := range plugins {
+		glog.V(1).Infof("SUFIANDAR: PluginName: %s", p.Name())
+	}
+
 	if err := controller.pluginMgr.InitPlugins(plugins, controller); err != nil {
 		return nil, fmt.Errorf("Could not initialize volume plugins for PersistentVolumeProvisionerController: %+v", err)
 	}
 
-	glog.V(5).Infof("Initializing provisioner: %s", controller.provisioner.Name())
+	glog.V(1).Infof("Initializing provisioner: %s", controller.provisioner.Name())
 	controller.provisioner.Init(controller)
 
 	controller.volumeStore, controller.volumeController = framework.NewInformer(
@@ -155,7 +160,7 @@ func (controller *PersistentVolumeProvisionerController) handleUpdateClaim(oldOb
 }
 
 func (controller *PersistentVolumeProvisionerController) reconcileClaim(claim *api.PersistentVolumeClaim) error {
-	glog.V(5).Infof("Synchronizing PersistentVolumeClaim[%s] for dynamic provisioning", claim.Name)
+	glog.V(1).Infof("Synchronizing PersistentVolumeClaim[%s] for dynamic provisioning", claim.Name)
 
 	// The claim may have been modified by parallel call to reconcileClaim, load
 	// the current version.
@@ -175,19 +180,19 @@ func (controller *PersistentVolumeProvisionerController) reconcileClaim(claim *a
 
 	// no provisioning requested, return Pending. Claim may be pending indefinitely without a match.
 	if !keyExists(qosProvisioningKey, claim.Annotations) {
-		glog.V(5).Infof("PersistentVolumeClaim[%s] no provisioning required", claim.Name)
+		glog.V(1).Infof("PersistentVolumeClaim[%s] no provisioning required", claim.Name)
 		return nil
 	}
 	if len(claim.Spec.VolumeName) != 0 {
-		glog.V(5).Infof("PersistentVolumeClaim[%s] already bound. No provisioning required", claim.Name)
+		glog.V(1).Infof("PersistentVolumeClaim[%s] already bound. No provisioning required", claim.Name)
 		return nil
 	}
 	if isAnnotationMatch(pvProvisioningRequiredAnnotationKey, pvProvisioningCompletedAnnotationValue, claim.Annotations) {
-		glog.V(5).Infof("PersistentVolumeClaim[%s] is already provisioned.", claim.Name)
+		glog.V(1).Infof("PersistentVolumeClaim[%s] is already provisioned.", claim.Name)
 		return nil
 	}
 
-	glog.V(5).Infof("PersistentVolumeClaim[%s] provisioning", claim.Name)
+	glog.V(1).Infof("PersistentVolumeClaim[%s] provisioning", claim.Name)
 	provisioner, err := controller.newProvisioner(controller.provisioner, claim, nil)
 	if err != nil {
 		return fmt.Errorf("Unexpected error getting new provisioner for claim %s: %v\n", claim.Name, err)
@@ -210,7 +215,7 @@ func (controller *PersistentVolumeProvisionerController) reconcileClaim(claim *a
 	newVolume.Annotations[pvProvisioningRequiredAnnotationKey] = "true"
 	newVolume.Annotations[qosProvisioningKey] = storageClass
 	newVolume, err = controller.client.CreatePersistentVolume(newVolume)
-	glog.V(5).Infof("Unprovisioned PersistentVolume[%s] created for PVC[%s], which will be fulfilled in the storage provider", newVolume.Name, claim.Name)
+	glog.V(1).Infof("Unprovisioned PersistentVolume[%s] created for PVC[%s], which will be fulfilled in the storage provider", newVolume.Name, claim.Name)
 	if err != nil {
 		return fmt.Errorf("PersistentVolumeClaim[%s] failed provisioning: %+v", claim.Name, err)
 	}
@@ -225,7 +230,7 @@ func (controller *PersistentVolumeProvisionerController) reconcileClaim(claim *a
 }
 
 func (controller *PersistentVolumeProvisionerController) reconcileVolume(pv *api.PersistentVolume) error {
-	glog.V(5).Infof("PersistentVolume[%s] reconciling", pv.Name)
+	glog.V(1).Infof("PersistentVolume[%s] reconciling", pv.Name)
 
 	// The PV may have been modified by parallel call to reconcileVolume, load
 	// the current version.
@@ -236,7 +241,7 @@ func (controller *PersistentVolumeProvisionerController) reconcileVolume(pv *api
 	pv = newPv
 
 	if pv.Spec.ClaimRef == nil {
-		glog.V(5).Infof("PersistentVolume[%s] is not bound to a claim.  No provisioning required", pv.Name)
+		glog.V(1).Infof("PersistentVolume[%s] is not bound to a claim.  No provisioning required", pv.Name)
 		return nil
 	}
 
@@ -253,13 +258,13 @@ func (controller *PersistentVolumeProvisionerController) reconcileVolume(pv *api
 
 	// no provisioning required, volume is ready and Bound
 	if !keyExists(pvProvisioningRequiredAnnotationKey, pv.Annotations) {
-		glog.V(5).Infof("PersistentVolume[%s] does not require provisioning", pv.Name)
+		glog.V(1).Infof("PersistentVolume[%s] does not require provisioning", pv.Name)
 		return nil
 	}
 
 	// provisioning is completed, volume is ready.
 	if isProvisioningComplete(pv) {
-		glog.V(5).Infof("PersistentVolume[%s] is bound and provisioning is complete", pv.Name)
+		glog.V(1).Infof("PersistentVolume[%s] is bound and provisioning is complete", pv.Name)
 		if pv.Spec.ClaimRef.Namespace != claim.Namespace || pv.Spec.ClaimRef.Name != claim.Name {
 			return fmt.Errorf("pre-bind mismatch - expected %s but found %s/%s", claimToClaimKey(claim), pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name)
 		}
@@ -267,7 +272,7 @@ func (controller *PersistentVolumeProvisionerController) reconcileVolume(pv *api
 	}
 
 	// provisioning is incomplete.  Attempt to provision the volume.
-	glog.V(5).Infof("PersistentVolume[%s] provisioning in progress", pv.Name)
+	glog.V(1).Infof("PersistentVolume[%s] provisioning in progress", pv.Name)
 	err = provisionVolume(pv, controller)
 	if err != nil {
 		return fmt.Errorf("Error provisioning PersistentVolume[%s]: %v", pv.Name, err)
@@ -329,7 +334,7 @@ func provisionVolume(pv *api.PersistentVolume, controller *PersistentVolumeProvi
 
 // Run starts all of this controller's control loops
 func (controller *PersistentVolumeProvisionerController) Run() {
-	glog.V(5).Infof("Starting PersistentVolumeProvisionerController\n")
+	glog.V(1).Infof("Starting PersistentVolumeProvisionerController\n")
 	if controller.stopChannels == nil {
 		controller.stopChannels = make(map[string]chan struct{})
 	}
@@ -347,7 +352,7 @@ func (controller *PersistentVolumeProvisionerController) Run() {
 
 // Stop gracefully shuts down this controller
 func (controller *PersistentVolumeProvisionerController) Stop() {
-	glog.V(5).Infof("Stopping PersistentVolumeProvisionerController\n")
+	glog.V(1).Infof("Stopping PersistentVolumeProvisionerController\n")
 	for name, stopChan := range controller.stopChannels {
 		close(stopChan)
 		delete(controller.stopChannels, name)

@@ -75,7 +75,12 @@ func NewPersistentVolumeRecycler(kubeClient clientset.Interface, syncPeriod time
 		releasedVolumes: make(map[string]releasedVolumeStatus),
 	}
 
-	if err := recycler.pluginMgr.InitPlugins(plugins, recycler); err != nil {
+	glog.V(1).Infof("SUFIANDAR: Number of Plugins: %d", len(plugins))
+	for _, p := range plugins {
+		glog.V(1).Infof("SUFIANDAR: PluginName: %s", p.Name())
+	}
+
+		if err := recycler.pluginMgr.InitPlugins(plugins, recycler); err != nil {
 		return nil, fmt.Errorf("Could not initialize volume plugins for PVClaimBinder: %+v", err)
 	}
 

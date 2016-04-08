@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-NUM_NODES=4
+NUM_NODES=1
 DISK=./kube/kube.vmdk
 GUEST_ID=debian7_64Guest
 

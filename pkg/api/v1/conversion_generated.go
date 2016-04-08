@@ -2042,6 +2042,15 @@ func autoConvert_api_PersistentVolumeSource_To_v1_PersistentVolumeSource(in *api
 	} else {
 		out.AzureFile = nil
 	}
+	// unable to generate simple pointer conversion for api.PhotonControllerPersistentDiskSource -> v1.PhotonControllerPersistentDiskSource
+	if in.PhotonControllerDisk != nil {
+		out.PhotonControllerDisk = new(PhotonControllerPersistentDiskSource)
+		if err := Convert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in.PhotonControllerDisk, out.PhotonControllerDisk, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
+	}
 	return nil
 }
 
@@ -2105,6 +2114,21 @@ func autoConvert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus(in *api
 
 func Convert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus(in *api.PersistentVolumeStatus, out *PersistentVolumeStatus, s conversion.Scope) error {
 	return autoConvert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus(in, out, s)
+}
+
+func autoConvert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in *api.PhotonControllerPersistentDiskSource, out *PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*api.PhotonControllerPersistentDiskSource))(in)
+	}
+	out.DiskID = in.DiskID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
+func Convert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in *api.PhotonControllerPersistentDiskSource, out *PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	return autoConvert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in, out, s)
 }
 
 func autoConvert_api_Pod_To_v1_Pod(in *api.Pod, out *Pod, s conversion.Scope) error {
@@ -3312,6 +3336,15 @@ func autoConvert_api_VolumeSource_To_v1_VolumeSource(in *api.VolumeSource, out *
 		}
 	} else {
 		out.ConfigMap = nil
+	}
+	// unable to generate simple pointer conversion for api.PhotonControllerPersistentDiskSource -> v1.PhotonControllerPersistentDiskSource
+	if in.PhotonControllerDisk != nil {
+		out.PhotonControllerDisk = new(PhotonControllerPersistentDiskSource)
+		if err := Convert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in.PhotonControllerDisk, out.PhotonControllerDisk, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
 	}
 	return nil
 }
@@ -5288,6 +5321,15 @@ func autoConvert_v1_PersistentVolumeSource_To_api_PersistentVolumeSource(in *Per
 	} else {
 		out.AzureFile = nil
 	}
+	// unable to generate simple pointer conversion for v1.PhotonControllerPersistentDiskSource -> api.PhotonControllerPersistentDiskSource
+	if in.PhotonControllerDisk != nil {
+		out.PhotonControllerDisk = new(api.PhotonControllerPersistentDiskSource)
+		if err := Convert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in.PhotonControllerDisk, out.PhotonControllerDisk, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
+	}
 	return nil
 }
 
@@ -5342,6 +5384,21 @@ func autoConvert_v1_PersistentVolumeStatus_To_api_PersistentVolumeStatus(in *Per
 
 func Convert_v1_PersistentVolumeStatus_To_api_PersistentVolumeStatus(in *PersistentVolumeStatus, out *api.PersistentVolumeStatus, s conversion.Scope) error {
 	return autoConvert_v1_PersistentVolumeStatus_To_api_PersistentVolumeStatus(in, out, s)
+}
+
+func autoConvert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in *PhotonControllerPersistentDiskSource, out *api.PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*PhotonControllerPersistentDiskSource))(in)
+	}
+	out.DiskID = in.DiskID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
+func Convert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in *PhotonControllerPersistentDiskSource, out *api.PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	return autoConvert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in, out, s)
 }
 
 func autoConvert_v1_Pod_To_api_Pod(in *Pod, out *api.Pod, s conversion.Scope) error {
@@ -6508,6 +6565,15 @@ func autoConvert_v1_VolumeSource_To_api_VolumeSource(in *VolumeSource, out *api.
 	} else {
 		out.ConfigMap = nil
 	}
+	// unable to generate simple pointer conversion for v1.PhotonControllerPersistentDiskSource -> api.PhotonControllerPersistentDiskSource
+	if in.PhotonControllerDisk != nil {
+		out.PhotonControllerDisk = new(api.PhotonControllerPersistentDiskSource)
+		if err := Convert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in.PhotonControllerDisk, out.PhotonControllerDisk, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
+	}
 	return nil
 }
 
@@ -6603,6 +6669,7 @@ func init() {
 		autoConvert_api_PersistentVolumeSpec_To_v1_PersistentVolumeSpec,
 		autoConvert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus,
 		autoConvert_api_PersistentVolume_To_v1_PersistentVolume,
+		autoConvert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource,
 		autoConvert_api_PodAttachOptions_To_v1_PodAttachOptions,
 		autoConvert_api_PodCondition_To_v1_PodCondition,
 		autoConvert_api_PodExecOptions_To_v1_PodExecOptions,
@@ -6735,6 +6802,7 @@ func init() {
 		autoConvert_v1_PersistentVolumeSpec_To_api_PersistentVolumeSpec,
 		autoConvert_v1_PersistentVolumeStatus_To_api_PersistentVolumeStatus,
 		autoConvert_v1_PersistentVolume_To_api_PersistentVolume,
+		autoConvert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource,
 		autoConvert_v1_PodAttachOptions_To_api_PodAttachOptions,
 		autoConvert_v1_PodCondition_To_api_PodCondition,
 		autoConvert_v1_PodExecOptions_To_api_PodExecOptions,
