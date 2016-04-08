@@ -21,7 +21,7 @@
 ##########################################################
 
 # Default number of minion nodes to make. You can change this as needed
-NUM_NODES=1
+NUM_NODES=3
 
 # Range of IPs assigned to pods
 NODE_IP_RANGES="10.244.0.0/16"
@@ -45,7 +45,7 @@ MASTER_NAME="${INSTANCE_PREFIX}-master"
 NODE_NAMES=($(eval echo ${INSTANCE_PREFIX}-minion-{1..${NUM_NODES}}))
 
 # Name and password for the VM user
-# The password is only used for the intial setup, and in 
+# The password is only used for the intial setup, and in
 # the future it will be eliminated
 VM_USER=kube
 VM_PASSWORD=kube
@@ -62,8 +62,8 @@ ENABLE_CLUSTER_LOGGING=false
 ELASTICSEARCH_LOGGING_REPLICAS=1
 
 # Optional: Cluster monitoring to setup as part of the cluster bring up:
-#   none     - No cluster monitoring setup 
-#   influxdb - Heapster, InfluxDB, and Grafana 
+#   none     - No cluster monitoring setup
+#   influxdb - Heapster, InfluxDB, and Grafana
 #   google   - Heapster, Google Cloud Monitoring, and Google Cloud Logging
 ENABLE_CLUSTER_MONITORING="${KUBE_ENABLE_CLUSTER_MONITORING:-influxdb}"
 
@@ -74,8 +74,21 @@ DNS_DOMAIN="cluster.local"
 DNS_REPLICAS=1
 
 # Optional: Install Kubernetes UI
-# This is currently disabled because it's not fully working
-ENABLE_CLUSTER_UI=false
+ENABLE_CLUSTER_UI=true
+
+# We need to configure subject alternate names (SANs) for the master's certificate
+# we generate.  While users will connect via the external IP, pods (like the UI)
+# will connect via the cluster IP, from the SERVICE_CLUSTER_IP_RANGE.
+#
+# This calculation of the service IP should work, but if you choose an
+# alternate subnet, there's a small chance you'd need to modify the
+# service_ip, below.  We'll choose an IP like 10.244.240.1 by taking
+# the first three octets of the SERVICE_CLUSTER_IP_RANGE and tacking
+# on a .1
+octets=($(echo "$SERVICE_CLUSTER_IP_RANGE" | sed -e 's|/.*||' -e 's/\./ /g'))
+((octets[3]+=1))
+service_ip=$(echo "${octets[*]}" | sed 's/ /./g')
+MASTER_EXTRA_SANS="IP:${service_ip},DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc,DNS:kubernetes.default.svc.${DNS_DOMAIN},DNS:${MASTER_NAME}"
 
 # Optional: if set to true, kube-up will configure the cluster to run e2e tests.
 E2E_STORAGE_TEST_ENVIRONMENT=${KUBE_E2E_STORAGE_TEST_ENVIRONMENT:-false}

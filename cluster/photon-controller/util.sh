@@ -417,6 +417,7 @@ function gen-master-start {
         echo "readonly SALT_TAR='${SALT_TAR##*/}'"
         echo "readonly MASTER_HTPASSWD='${htpasswd}'"
         echo "readonly E2E_STORAGE_TEST_ENVIRONMENT='${E2E_STORAGE_TEST_ENVIRONMENT:-}'"
+        echo "readonly MASTER_EXTRA_SANS='${MASTER_EXTRA_SANS:-}'"
         grep -v "^#" "${KUBE_ROOT}/cluster/photon-controller/templates/create-dynamic-salt-files.sh"
         grep -v "^#" "${KUBE_ROOT}/cluster/photon-controller/templates/install-release.sh"
         grep -v "^#" "${KUBE_ROOT}/cluster/photon-controller/templates/salt-master.sh"
