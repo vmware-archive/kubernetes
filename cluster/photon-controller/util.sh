@@ -72,11 +72,11 @@ function detect-master {
 }
 
 #
-# detect-nodes will query Photon Controller for the Kubernetes minions
-# It assumes that the VM name for the minions are unique.
+# detect-nodes will query Photon Controller for the Kubernetes nodes
+# It assumes that the VM name for the nodes are unique.
 # It assumes that NODE_NAMES has been set
-# It will set KUBE_NODE_IP_ADDRESSES to be the VM IPs of the minions
-# It will set the KUBE_NODE_IDS to be the VM IDs of the minions
+# It will set KUBE_NODE_IP_ADDRESSES to be the VM IPs of the nodes
+# It will set the KUBE_NODE_IDS to be the VM IDs of the nodes
 # If the silent parameter is passed, it will not print when the nodes
 # are found: this is used internally just to find the MASTER
 #
@@ -104,7 +104,7 @@ function detect-nodes {
         KUBE_NODE_IP_ADDRESSES+=("${node_ip}")
 
         if [ -z $silent ]; then
-            kube::log::status "Minion: ${NODE_NAMES[$i]} (${KUBE_NODE_IP_ADDRESSES[$i]})"
+            kube::log::status "Node: ${NODE_NAMES[$i]} (${KUBE_NODE_IP_ADDRESSES[$i]})"
         fi
     done
 
@@ -159,7 +159,7 @@ function kube-up {
     install-kubernetes-on-nodes
 
     wait-master-api
-    wait-minion-apis
+    wait-node-apis
 
     setup-pod-routes
 
@@ -425,7 +425,7 @@ function gen-master-start {
 }
 
 #
-# Generate the scripts for each minion to install salt
+# Generate the scripts for each node to install salt
 #
 function gen-node-start {
     local i
@@ -461,7 +461,7 @@ function gen-master-salt {
 
 #
 # Create scripts that will be run on the Kubernets master. Each of these
-# will invoke salt to configure one of the minions
+# will invoke salt to configure one of the nodes
 #
 function gen-node-salt {
     local i
@@ -493,7 +493,7 @@ function install-salt-on-master {
 }
 
 function install-nodes {
-    kube::log::status "Creating minions and installing salt on them..."
+    kube::log::status "Creating nodes and installing salt on them..."
 
     # Start each of the VMs in parallel
     local node
@@ -511,7 +511,7 @@ function install-nodes {
         wait "${job}" || fail=$((fail + 1))
     done
     if (( $fail != 0 )); then
-        kube::log::error "Failed to start ${fail}/${NUM_NODES} minions"
+        kube::log::error "Failed to start ${fail}/${NUM_NODES} nodes"
         exit 1
     fi
 }
@@ -554,7 +554,7 @@ function install-kubernetes-on-nodes {
         wait "${job}" || fail=$((fail + 1))
     done
     if (( $fail != 0 )); then
-        kube::log::error "Failed to start install Kubernetes on ${fail} out of ${NUM_NODES} minions"
+        kube::log::error "Failed to start install Kubernetes on ${fail} out of ${NUM_NODES} nodess"
         exit 1
     fi
 }
@@ -590,9 +590,9 @@ function wait-master-api {
 }
 
 #
-# Wait for the Kubernetes healthz API to be responsive on each minion
+# Wait for the Kubernetes healthz API to be responsive on each node
 #
-function wait-minion-apis {
+function wait-node-apis {
     local curl_output="--fail --output /dev/null --silent"
     local curl_net="--max-time 1"
 
@@ -603,10 +603,10 @@ function wait-minion-apis {
 }
 
 #
-# Configure the minions so the pods can communicate
-# Each minion will have a bridge named cbr0 for the NODE_IP_RANGES
-# defined in config-default.sh. This finds the IP address (assigned
-# by Kubernetes) to minion and configures routes so they can communicate
+# Configure the nodes so the pods can communicate
+# Each node will have a bridge named cbr0 for the NODE_IP_RANGES
+# defined in config-default.sh. This finds the IP subnet (assigned
+# by Kubernetes) to nodes and configures routes so they can communicate
 #
 # Also configure the master to be able to talk to the nodes. This is
 # useful so that you can get to the UI from the master.
