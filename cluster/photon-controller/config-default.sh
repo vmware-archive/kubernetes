@@ -20,7 +20,7 @@
 #
 ##########################################################
 
-# Default number of minion nodes to make. You can change this as needed
+# Default number of nodes to make. You can change this as needed
 NUM_NODES=3
 
 # Range of IPs assigned to pods
@@ -38,26 +38,30 @@ SERVICE_CLUSTER_IP_RANGE="10.244.240.0/20"
 #
 ##########################################################
 
+# The instance prefix is the beginning of the name given to each VM we create
+# If this is changed, you can have multiple kubernetes clusters per project
+# Note that even if you don't change it, each tenant/project can have its own
+# Kubernetes cluster
 INSTANCE_PREFIX=kubernetes
 
-# Naming scheme for nodes
+# Naming scheme for VMs (masters & nodes)
 MASTER_NAME="${INSTANCE_PREFIX}-master"
-NODE_NAMES=($(eval echo ${INSTANCE_PREFIX}-minion-{1..${NUM_NODES}}))
+NODE_NAMES=($(eval echo ${INSTANCE_PREFIX}-node-{1..${NUM_NODES}}))
 
-# Name and password for the VM user
-# The password is only used for the intial setup, and in
-# the future it will be eliminated
+# Name of the user used to configure the VM
+# We use cloud-init to create the user
 VM_USER=kube
-VM_PASSWORD=kube
-
-# Optional: Enable node logging.
-ENABLE_NODE_LOGGING=false
-LOGGING_DESTINATION=elasticsearch
 
 # SSH options for how we connect to the Kubernetes VMs
 SSH_OPTS="-oStrictHostKeyChecking=no -oLogLevel=ERROR"
 
-# Optional: When set to true, Elasticsearch and Kibana will be setup as part of the cluster bring up.
+# Optional: Enable node logging.
+# Note: currently untested
+ENABLE_NODE_LOGGING=false
+LOGGING_DESTINATION=elasticsearch
+
+# Optional: When set to true, Elasticsearch and Kibana will be setup
+# Note: currently untested
 ENABLE_CLUSTER_LOGGING=false
 ELASTICSEARCH_LOGGING_REPLICAS=1
 
@@ -65,6 +69,7 @@ ELASTICSEARCH_LOGGING_REPLICAS=1
 #   none     - No cluster monitoring setup
 #   influxdb - Heapster, InfluxDB, and Grafana
 #   google   - Heapster, Google Cloud Monitoring, and Google Cloud Logging
+# Note: currently untested
 ENABLE_CLUSTER_MONITORING="${KUBE_ENABLE_CLUSTER_MONITORING:-influxdb}"
 
 # Optional: Install cluster DNS.
