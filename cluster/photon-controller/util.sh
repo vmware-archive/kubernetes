@@ -48,7 +48,7 @@ function detect-master {
     # We don't want silent failure: we check for failure
     set +o pipefail
     if [ -z ${KUBE_MASTER_ID} ]; then
-        KUBE_MASTER_ID=$($PHOTON vm list ${tenant_args} | grep "\tkubernetes-master\t" | awk '{print $1}')
+        KUBE_MASTER_ID=$($PHOTON vm list ${tenant_args} | grep $'\t'"kubernetes-master"$'\t' | awk '{print $1}')
     fi
     if [ -z ${KUBE_MASTER_ID} ]; then
         kube::log::error "Could not find Kubernetes master node ID. Make sure you've launched a cluster with kube-up.sh"
@@ -91,7 +91,7 @@ function detect-nodes {
     set +o pipefail
     for (( i=0; i<${#NODE_NAMES[@]}; i++)); do
 
-        local node_id=$($PHOTON vm list ${tenant_args} | grep "\t${NODE_NAMES[$i]}\t" | awk '{print $1}')
+        local node_id=$($PHOTON vm list ${tenant_args} | grep $'\t'${NODE_NAMES[$i]}$'\t' | awk '{print $1}')
         if [ -z ${node_id} ]; then
             kube::log::error "Could not find ${NODE_NAMES[$i]}"
             failure=1
@@ -881,13 +881,13 @@ function verify-photon-tenant {
     local rc
 
     rc=0
-    $PHOTON tenant list | grep "\t${PHOTON_TENANT}$" > /dev/null 2>&1 || rc=$?
+    $PHOTON tenant list | grep $'\t'${PHOTON_TENANT}$'\t' > /dev/null 2>&1 || rc=$?
     if [ $rc -ne 0 ]; then
         echo "ERROR: Cannot find tenant \"${PHOTON_TENANT}\""
         exit 1
     fi
 
-    $PHOTON project list --tenant ${PHOTON_TENANT} | grep "\t${PHOTON_PROJECT}\t" > /dev/null 2>&1  || rc=$?
+    $PHOTON project list --tenant ${PHOTON_TENANT} | grep $'\t'${PHOTON_PROJECT}$'\t' > /dev/null 2>&1  || rc=$?
     if [ $rc -ne 0 ]; then
         echo "ERROR: Cannot find project \"${PHOTON_PROJECT}\""
         exit 1
