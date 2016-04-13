@@ -1030,6 +1030,7 @@ var map_PersistentVolumeSource = map[string]string{
 	"flocker":              "Flocker represents a Flocker volume attached to a kubelet's host machine and exposed to the pod for its usage. This depends on the Flocker control service being running",
 	"flexVolume":           "FlexVolume represents a generic volume resource that is provisioned/attached using a exec based plugin. This is an alpha feature and may change in future.",
 	"azureFile":            "AzureFile represents an Azure File Service mount on the host and bind mount to the pod.",
+	"photonControllerDisk": "PhotonControllerDisk represents a persistentDisk that should populate this volume",
 }
 
 func (PersistentVolumeSource) SwaggerDoc() map[string]string {
@@ -1057,6 +1058,18 @@ var map_PersistentVolumeStatus = map[string]string{
 
 func (PersistentVolumeStatus) SwaggerDoc() map[string]string {
 	return map_PersistentVolumeStatus
+}
+
+var map_PhotonControllerPersistentDiskSource = map[string]string{
+	"":          "Represents a Persistent Disk resource in Photon Controller.\n\nA Photon Controller Persistent Disk must exist before mounting to a container. The disk must also be in the same Project as the kubelet. A Photon Controller can only be mounted as read/write once. Photon Controller Persistent Disks support ownership management and SELinux relabeling.",
+	"diskID":    "Unique ID of the persistent disk resource in AWS (Amazon EBS volume). More info: blah",
+	"fsType":    "Filesystem type of the volume that you want to mount. Tip: Ensure that the filesystem type is supported by the host operating system. Examples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified. More info: blah",
+	"partition": "The partition in the volume that you want to mount. If omitted, the default is to mount by volume name. Examples: For volume /dev/sda1, you specify the partition as \"1\". Similarly, the volume partition for /dev/sda is \"0\" (or you can leave the property empty).",
+	"readOnly":  "Specify \"true\" to force and set the ReadOnly property in VolumeMounts to \"true\". If omitted, the default is \"false\". More info: blah",
+}
+
+func (PhotonControllerPersistentDiskSource) SwaggerDoc() map[string]string {
+	return map_PhotonControllerPersistentDiskSource
 }
 
 var map_Pod = map[string]string{
@@ -1595,15 +1608,16 @@ var map_VolumeSource = map[string]string{
 	"iscsi":                 "ISCSI represents an ISCSI Disk resource that is attached to a kubelet's host machine and then exposed to the pod. More info: http://releases.k8s.io/HEAD/examples/iscsi/README.md",
 	"glusterfs":             "Glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime. More info: http://releases.k8s.io/HEAD/examples/glusterfs/README.md",
 	"persistentVolumeClaim": "PersistentVolumeClaimVolumeSource represents a reference to a PersistentVolumeClaim in the same namespace. More info: http://releases.k8s.io/HEAD/docs/user-guide/persistent-volumes.md#persistentvolumeclaims",
-	"rbd":         "RBD represents a Rados Block Device mount on the host that shares a pod's lifetime. More info: http://releases.k8s.io/HEAD/examples/rbd/README.md",
-	"flexVolume":  "FlexVolume represents a generic volume resource that is provisioned/attached using a exec based plugin. This is an alpha feature and may change in future.",
-	"cinder":      "Cinder represents a cinder volume attached and mounted on kubelets host machine More info: http://releases.k8s.io/HEAD/examples/mysql-cinder-pd/README.md",
-	"cephfs":      "CephFS represents a Ceph FS mount on the host that shares a pod's lifetime",
-	"flocker":     "Flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running",
-	"downwardAPI": "DownwardAPI represents downward API about the pod that should populate this volume",
-	"fc":          "FC represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.",
-	"azureFile":   "AzureFile represents an Azure File Service mount on the host and bind mount to the pod.",
-	"configMap":   "ConfigMap represents a configMap that should populate this volume",
+	"rbd":                  "RBD represents a Rados Block Device mount on the host that shares a pod's lifetime. More info: http://releases.k8s.io/HEAD/examples/rbd/README.md",
+	"flexVolume":           "FlexVolume represents a generic volume resource that is provisioned/attached using a exec based plugin. This is an alpha feature and may change in future.",
+	"cinder":               "Cinder represents a cinder volume attached and mounted on kubelets host machine More info: http://releases.k8s.io/HEAD/examples/mysql-cinder-pd/README.md",
+	"cephfs":               "CephFS represents a Ceph FS mount on the host that shares a pod's lifetime",
+	"flocker":              "Flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running",
+	"downwardAPI":          "DownwardAPI represents downward API about the pod that should populate this volume",
+	"fc":                   "FC represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.",
+	"azureFile":            "AzureFile represents an Azure File Service mount on the host and bind mount to the pod.",
+	"configMap":            "ConfigMap represents a configMap that should populate this volume",
+	"photonControllerDisk": "PhotonControllerDisk represents a persistentDisk that should populate this volume",
 }
 
 func (VolumeSource) SwaggerDoc() map[string]string {

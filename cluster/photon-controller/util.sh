@@ -881,7 +881,7 @@ function verify-photon-tenant {
     local rc
 
     rc=0
-    $PHOTON tenant list | grep $'\t'${PHOTON_TENANT}  > /dev/null 2>&1 || rc=$?
+    $PHOTON tenant list | grep $'\t'${PHOTON_TENANT} > /dev/null 2>&1 || rc=$?
     if [ $rc -ne 0 ]; then
         echo "ERROR: Cannot find tenant \"${PHOTON_TENANT}\""
         exit 1

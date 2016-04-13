@@ -61,7 +61,7 @@ PHOTON_IMAGE=kube
 ##########################################################
 
 # The specifications for the master and node flavors
-SETUP_MASTER_FLAVOR_SPEC="vm 1 COUNT, vm.cpu 1 COUNT, vm.memory 2 GB"
+SETUP_MASTER_FLAVOR_SPEC="vm 1 COUNT, vm.cpu 1 COUNT, vm.memory 1 GB"
 SETUP_NODE_FLAVOR_SPEC=${SETUP_MASTER_FLAVOR_SPEC}
 
 # The specification for the ephemeral disk flavor. 

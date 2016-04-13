@@ -845,6 +845,21 @@ func Convert_api_PersistentVolumeClaimVolumeSource_To_v1_PersistentVolumeClaimVo
 	return autoConvert_api_PersistentVolumeClaimVolumeSource_To_v1_PersistentVolumeClaimVolumeSource(in, out, s)
 }
 
+func autoConvert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in *api.PhotonControllerPersistentDiskSource, out *v1.PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*api.PhotonControllerPersistentDiskSource))(in)
+	}
+	out.DiskID = in.DiskID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
+func Convert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in *api.PhotonControllerPersistentDiskSource, out *v1.PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	return autoConvert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in, out, s)
+}
+
 func autoConvert_api_PodSpec_To_v1_PodSpec(in *api.PodSpec, out *v1.PodSpec, s conversion.Scope) error {
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*api.PodSpec))(in)
@@ -1331,6 +1346,15 @@ func autoConvert_api_VolumeSource_To_v1_VolumeSource(in *api.VolumeSource, out *
 		}
 	} else {
 		out.ConfigMap = nil
+	}
+	// unable to generate simple pointer conversion for api.PhotonControllerPersistentDiskSource -> v1.PhotonControllerPersistentDiskSource
+	if in.PhotonControllerDisk != nil {
+		out.PhotonControllerDisk = new(v1.PhotonControllerPersistentDiskSource)
+		if err := Convert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in.PhotonControllerDisk, out.PhotonControllerDisk, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
 	}
 	return nil
 }
@@ -2177,6 +2201,21 @@ func Convert_v1_PersistentVolumeClaimVolumeSource_To_api_PersistentVolumeClaimVo
 	return autoConvert_v1_PersistentVolumeClaimVolumeSource_To_api_PersistentVolumeClaimVolumeSource(in, out, s)
 }
 
+func autoConvert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in *v1.PhotonControllerPersistentDiskSource, out *api.PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*v1.PhotonControllerPersistentDiskSource))(in)
+	}
+	out.DiskID = in.DiskID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
+func Convert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in *v1.PhotonControllerPersistentDiskSource, out *api.PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	return autoConvert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in, out, s)
+}
+
 func autoConvert_v1_PodSpec_To_api_PodSpec(in *v1.PodSpec, out *api.PodSpec, s conversion.Scope) error {
 	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
 		defaulting.(func(*v1.PodSpec))(in)
@@ -2667,6 +2706,15 @@ func autoConvert_v1_VolumeSource_To_api_VolumeSource(in *v1.VolumeSource, out *a
 		}
 	} else {
 		out.ConfigMap = nil
+	}
+	// unable to generate simple pointer conversion for v1.PhotonControllerPersistentDiskSource -> api.PhotonControllerPersistentDiskSource
+	if in.PhotonControllerDisk != nil {
+		out.PhotonControllerDisk = new(api.PhotonControllerPersistentDiskSource)
+		if err := Convert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in.PhotonControllerDisk, out.PhotonControllerDisk, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
 	}
 	return nil
 }
@@ -5139,6 +5187,7 @@ func init() {
 		autoConvert_api_ObjectFieldSelector_To_v1_ObjectFieldSelector,
 		autoConvert_api_ObjectMeta_To_v1_ObjectMeta,
 		autoConvert_api_PersistentVolumeClaimVolumeSource_To_v1_PersistentVolumeClaimVolumeSource,
+		autoConvert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource,
 		autoConvert_api_PodSpec_To_v1_PodSpec,
 		autoConvert_api_PodTemplateSpec_To_v1_PodTemplateSpec,
 		autoConvert_api_Probe_To_v1_Probe,
@@ -5242,6 +5291,7 @@ func init() {
 		autoConvert_v1_ObjectFieldSelector_To_api_ObjectFieldSelector,
 		autoConvert_v1_ObjectMeta_To_api_ObjectMeta,
 		autoConvert_v1_PersistentVolumeClaimVolumeSource_To_api_PersistentVolumeClaimVolumeSource,
+		autoConvert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource,
 		autoConvert_v1_PodSpec_To_api_PodSpec,
 		autoConvert_v1_PodTemplateSpec_To_api_PodTemplateSpec,
 		autoConvert_v1_Probe_To_api_Probe,

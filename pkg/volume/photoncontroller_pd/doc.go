@@ -14,15 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cloudprovider
-
-import (
-	// Cloud providers
-	_ "k8s.io/kubernetes/pkg/cloudprovider/providers/aws"
-	_ "k8s.io/kubernetes/pkg/cloudprovider/providers/gce"
-	_ "k8s.io/kubernetes/pkg/cloudprovider/providers/mesos"
-	_ "k8s.io/kubernetes/pkg/cloudprovider/providers/openstack"
-	_ "k8s.io/kubernetes/pkg/cloudprovider/providers/ovirt"
-	_ "k8s.io/kubernetes/pkg/cloudprovider/providers/rackspace"
-	_ "k8s.io/kubernetes/pkg/cloudprovider/providers/photoncontroller"
-)
+// Package photoncontroller_pd contains the internal representation of Photon Controller
+// Persistent Disks.
+package photoncontroller_pd

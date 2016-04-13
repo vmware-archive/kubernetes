@@ -105,6 +105,9 @@ func ResyncPeriod(s *options.CMServer) func() time.Duration {
 
 // Run runs the CMServer.  This should never exit.
 func Run(s *options.CMServer) error {
+	// TODO Hacking it for time being
+	s.CloudProvider = "photoncontroller"
+
 	if c, err := configz.New("componentconfig"); err == nil {
 		c.Set(s.KubeControllerManagerConfiguration)
 	} else {

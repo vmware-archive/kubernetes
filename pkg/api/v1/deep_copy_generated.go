@@ -124,6 +124,7 @@ func init() {
 		DeepCopy_v1_PersistentVolumeSource,
 		DeepCopy_v1_PersistentVolumeSpec,
 		DeepCopy_v1_PersistentVolumeStatus,
+		DeepCopy_v1_PhotonControllerPersistentDiskSource,
 		DeepCopy_v1_Pod,
 		DeepCopy_v1_PodAttachOptions,
 		DeepCopy_v1_PodCondition,
@@ -1811,6 +1812,15 @@ func DeepCopy_v1_PersistentVolumeSource(in PersistentVolumeSource, out *Persiste
 	} else {
 		out.AzureFile = nil
 	}
+	if in.PhotonControllerDisk != nil {
+		in, out := in.PhotonControllerDisk, &out.PhotonControllerDisk
+		*out = new(PhotonControllerPersistentDiskSource)
+		if err := DeepCopy_v1_PhotonControllerPersistentDiskSource(*in, *out, c); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
+	}
 	return nil
 }
 
@@ -1857,6 +1867,14 @@ func DeepCopy_v1_PersistentVolumeStatus(in PersistentVolumeStatus, out *Persiste
 	out.Phase = in.Phase
 	out.Message = in.Message
 	out.Reason = in.Reason
+	return nil
+}
+
+func DeepCopy_v1_PhotonControllerPersistentDiskSource(in PhotonControllerPersistentDiskSource, out *PhotonControllerPersistentDiskSource, c *conversion.Cloner) error {
+	out.DiskID = in.DiskID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
 	return nil
 }
 
@@ -2958,6 +2976,15 @@ func DeepCopy_v1_VolumeSource(in VolumeSource, out *VolumeSource, c *conversion.
 		}
 	} else {
 		out.ConfigMap = nil
+	}
+	if in.PhotonControllerDisk != nil {
+		in, out := in.PhotonControllerDisk, &out.PhotonControllerDisk
+		*out = new(PhotonControllerPersistentDiskSource)
+		if err := DeepCopy_v1_PhotonControllerPersistentDiskSource(*in, *out, c); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
 	}
 	return nil
 }

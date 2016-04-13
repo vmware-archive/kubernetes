@@ -216,6 +216,8 @@ func init() {
 		Convert_api_PersistentVolumeSpec_To_v1_PersistentVolumeSpec,
 		Convert_v1_PersistentVolumeStatus_To_api_PersistentVolumeStatus,
 		Convert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus,
+		Convert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource,
+		Convert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource,
 		Convert_v1_Pod_To_api_Pod,
 		Convert_api_Pod_To_v1_Pod,
 		Convert_v1_PodAttachOptions_To_api_PodAttachOptions,
@@ -4643,6 +4645,15 @@ func autoConvert_v1_PersistentVolumeSource_To_api_PersistentVolumeSource(in *Per
 	} else {
 		out.AzureFile = nil
 	}
+	if in.PhotonControllerDisk != nil {
+		in, out := &in.PhotonControllerDisk, &out.PhotonControllerDisk
+		*out = new(api.PhotonControllerPersistentDiskSource)
+		if err := Convert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
+	}
 	return nil
 }
 
@@ -4771,6 +4782,15 @@ func autoConvert_api_PersistentVolumeSource_To_v1_PersistentVolumeSource(in *api
 	} else {
 		out.AzureFile = nil
 	}
+	if in.PhotonControllerDisk != nil {
+		in, out := &in.PhotonControllerDisk, &out.PhotonControllerDisk
+		*out = new(PhotonControllerPersistentDiskSource)
+		if err := Convert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
+	}
 	return nil
 }
 
@@ -4886,6 +4906,36 @@ func autoConvert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus(in *api
 
 func Convert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus(in *api.PersistentVolumeStatus, out *PersistentVolumeStatus, s conversion.Scope) error {
 	return autoConvert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus(in, out, s)
+}
+
+func autoConvert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in *PhotonControllerPersistentDiskSource, out *api.PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*PhotonControllerPersistentDiskSource))(in)
+	}
+	out.DiskID = in.DiskID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
+func Convert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in *PhotonControllerPersistentDiskSource, out *api.PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	return autoConvert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(in, out, s)
+}
+
+func autoConvert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in *api.PhotonControllerPersistentDiskSource, out *PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	if defaulting, found := s.DefaultingInterface(reflect.TypeOf(*in)); found {
+		defaulting.(func(*api.PhotonControllerPersistentDiskSource))(in)
+	}
+	out.DiskID = in.DiskID
+	out.FSType = in.FSType
+	out.Partition = in.Partition
+	out.ReadOnly = in.ReadOnly
+	return nil
+}
+
+func Convert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in *api.PhotonControllerPersistentDiskSource, out *PhotonControllerPersistentDiskSource, s conversion.Scope) error {
+	return autoConvert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(in, out, s)
 }
 
 func autoConvert_v1_Pod_To_api_Pod(in *Pod, out *api.Pod, s conversion.Scope) error {
@@ -7249,6 +7299,15 @@ func autoConvert_v1_VolumeSource_To_api_VolumeSource(in *VolumeSource, out *api.
 	} else {
 		out.ConfigMap = nil
 	}
+	if in.PhotonControllerDisk != nil {
+		in, out := &in.PhotonControllerDisk, &out.PhotonControllerDisk
+		*out = new(api.PhotonControllerPersistentDiskSource)
+		if err := Convert_v1_PhotonControllerPersistentDiskSource_To_api_PhotonControllerPersistentDiskSource(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
+	}
 	return nil
 }
 
@@ -7430,6 +7489,15 @@ func autoConvert_api_VolumeSource_To_v1_VolumeSource(in *api.VolumeSource, out *
 		}
 	} else {
 		out.ConfigMap = nil
+	}
+	if in.PhotonControllerDisk != nil {
+		in, out := &in.PhotonControllerDisk, &out.PhotonControllerDisk
+		*out = new(PhotonControllerPersistentDiskSource)
+		if err := Convert_api_PhotonControllerPersistentDiskSource_To_v1_PhotonControllerPersistentDiskSource(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonControllerDisk = nil
 	}
 	return nil
 }

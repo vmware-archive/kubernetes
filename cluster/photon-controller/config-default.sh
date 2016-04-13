@@ -21,7 +21,7 @@
 ##########################################################
 
 # Default number of nodes to make. You can change this as needed
-NUM_NODES=3
+NUM_NODES=1
 
 # Range of IPs assigned to pods
 NODE_IP_RANGES="10.244.0.0/16"

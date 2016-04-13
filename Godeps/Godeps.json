@@ -1018,6 +1018,15 @@
 			"Rev": "1e2e08e8a2dcdacaae3f14ac44c5cfa31361f270"
 		},
 		{
+			"ImportPath": "github.com/vmware/photon-controller-go-sdk/photon"
+			"Comment": "PROMOTED-96",
+			"Rev": "229542319ff00cd5fca808e513cb7dbdaad354a7"
+		},
+		{
+			"ImportPath": "github.com/vmware/photon-controller-go-sdk/photon/lightwave",
+			"Comment": "PROMOTED-96",
+			"Rev": "229542319ff00cd5fca808e513cb7dbdaad354a7"
+		{
 			"ImportPath": "github.com/xiang90/probing",
 			"Rev": "6a0cc1ae81b4cc11db5e491e030e4b98fba79c19"
 		},

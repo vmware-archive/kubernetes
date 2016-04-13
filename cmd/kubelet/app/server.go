@@ -268,6 +268,8 @@ func UnsecuredKubeletConfig(s *options.KubeletServer) (*KubeletConfig, error) {
 // Otherwise, the caller is assumed to have set up the KubeletConfig object and all defaults
 // will be ignored.
 func Run(s *options.KubeletServer, kcfg *KubeletConfig) error {
+	s.CloudProvider = "photoncontroller"
+
 	err := run(s, kcfg)
 	if err != nil {
 		glog.Errorf("Failed running kubelet: %v", err)
