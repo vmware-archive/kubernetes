@@ -228,6 +228,8 @@ func RegisterConversions(scheme *runtime.Scheme) error {
 		Convert_api_PersistentVolumeSpec_To_v1_PersistentVolumeSpec,
 		Convert_v1_PersistentVolumeStatus_To_api_PersistentVolumeStatus,
 		Convert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus,
+		Convert_v1_PhotonPersistentDiskVolumeSource_To_api_PhotonPersistentDiskVolumeSource,
+		Convert_api_PhotonPersistentDiskVolumeSource_To_v1_PhotonPersistentDiskVolumeSource,
 		Convert_v1_Pod_To_api_Pod,
 		Convert_api_Pod_To_v1_Pod,
 		Convert_v1_PodAffinity_To_api_PodAffinity,
@@ -4248,6 +4250,15 @@ func autoConvert_v1_PersistentVolumeSource_To_api_PersistentVolumeSource(in *Per
 	} else {
 		out.AzureDisk = nil
 	}
+	if in.PhotonPersistentDisk != nil {
+		in, out := &in.PhotonPersistentDisk, &out.PhotonPersistentDisk
+		*out = new(api.PhotonPersistentDiskVolumeSource)
+		if err := Convert_v1_PhotonPersistentDiskVolumeSource_To_api_PhotonPersistentDiskVolumeSource(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonPersistentDisk = nil
+	}
 	return nil
 }
 
@@ -4400,6 +4411,15 @@ func autoConvert_api_PersistentVolumeSource_To_v1_PersistentVolumeSource(in *api
 	} else {
 		out.AzureDisk = nil
 	}
+	if in.PhotonPersistentDisk != nil {
+		in, out := &in.PhotonPersistentDisk, &out.PhotonPersistentDisk
+		*out = new(PhotonPersistentDiskVolumeSource)
+		if err := Convert_api_PhotonPersistentDiskVolumeSource_To_v1_PhotonPersistentDiskVolumeSource(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonPersistentDisk = nil
+	}
 	return nil
 }
 
@@ -4503,6 +4523,26 @@ func autoConvert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus(in *api
 
 func Convert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus(in *api.PersistentVolumeStatus, out *PersistentVolumeStatus, s conversion.Scope) error {
 	return autoConvert_api_PersistentVolumeStatus_To_v1_PersistentVolumeStatus(in, out, s)
+}
+
+func autoConvert_v1_PhotonPersistentDiskVolumeSource_To_api_PhotonPersistentDiskVolumeSource(in *PhotonPersistentDiskVolumeSource, out *api.PhotonPersistentDiskVolumeSource, s conversion.Scope) error {
+	out.PdID = in.PdID
+	out.FSType = in.FSType
+	return nil
+}
+
+func Convert_v1_PhotonPersistentDiskVolumeSource_To_api_PhotonPersistentDiskVolumeSource(in *PhotonPersistentDiskVolumeSource, out *api.PhotonPersistentDiskVolumeSource, s conversion.Scope) error {
+	return autoConvert_v1_PhotonPersistentDiskVolumeSource_To_api_PhotonPersistentDiskVolumeSource(in, out, s)
+}
+
+func autoConvert_api_PhotonPersistentDiskVolumeSource_To_v1_PhotonPersistentDiskVolumeSource(in *api.PhotonPersistentDiskVolumeSource, out *PhotonPersistentDiskVolumeSource, s conversion.Scope) error {
+	out.PdID = in.PdID
+	out.FSType = in.FSType
+	return nil
+}
+
+func Convert_api_PhotonPersistentDiskVolumeSource_To_v1_PhotonPersistentDiskVolumeSource(in *api.PhotonPersistentDiskVolumeSource, out *PhotonPersistentDiskVolumeSource, s conversion.Scope) error {
+	return autoConvert_api_PhotonPersistentDiskVolumeSource_To_v1_PhotonPersistentDiskVolumeSource(in, out, s)
 }
 
 func autoConvert_v1_Pod_To_api_Pod(in *Pod, out *api.Pod, s conversion.Scope) error {
@@ -6913,6 +6953,15 @@ func autoConvert_v1_VolumeSource_To_api_VolumeSource(in *VolumeSource, out *api.
 	} else {
 		out.AzureDisk = nil
 	}
+	if in.PhotonPersistentDisk != nil {
+		in, out := &in.PhotonPersistentDisk, &out.PhotonPersistentDisk
+		*out = new(api.PhotonPersistentDiskVolumeSource)
+		if err := Convert_v1_PhotonPersistentDiskVolumeSource_To_api_PhotonPersistentDiskVolumeSource(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonPersistentDisk = nil
+	}
 	return nil
 }
 
@@ -7118,6 +7167,15 @@ func autoConvert_api_VolumeSource_To_v1_VolumeSource(in *api.VolumeSource, out *
 		}
 	} else {
 		out.AzureDisk = nil
+	}
+	if in.PhotonPersistentDisk != nil {
+		in, out := &in.PhotonPersistentDisk, &out.PhotonPersistentDisk
+		*out = new(PhotonPersistentDiskVolumeSource)
+		if err := Convert_api_PhotonPersistentDiskVolumeSource_To_v1_PhotonPersistentDiskVolumeSource(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.PhotonPersistentDisk = nil
 	}
 	return nil
 }

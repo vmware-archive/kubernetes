@@ -59,6 +59,7 @@ func GetAllFSTypesAsSet() sets.String {
 		string(extensions.FC),
 		string(extensions.ConfigMap),
 		string(extensions.VsphereVolume),
+		string(extensions.PhotonPersistentDisk),
 		string(extensions.Quobyte),
 		string(extensions.AzureDisk))
 	return fstypes
@@ -107,6 +108,8 @@ func GetVolumeFSType(v api.Volume) (extensions.FSType, error) {
 		return extensions.ConfigMap, nil
 	case v.VsphereVolume != nil:
 		return extensions.VsphereVolume, nil
+	case v.PhotonPersistentDisk != nil:
+		return extensions.PhotonPersistentDisk, nil
 	case v.Quobyte != nil:
 		return extensions.Quobyte, nil
 	case v.AzureDisk != nil:
