@@ -569,6 +569,8 @@ func describeVolumes(volumes []api.Volume, out io.Writer, space string) {
 			printAzureDiskVolumeSource(volume.VolumeSource.AzureDisk, out)
 		case volume.VolumeSource.VsphereVolume != nil:
 			printVsphereVolumeSource(volume.VolumeSource.VsphereVolume, out)
+		case volume.VolumeSource.PhotonPersistentDisk != nil:
+			printPhotonPersistentDiskVolumeSource(volume.VolumeSource.PhotonPersistentDisk, out)
 		case volume.VolumeSource.Cinder != nil:
 			printCinderVolumeSource(volume.VolumeSource.Cinder, out)
 		default:
@@ -705,6 +707,14 @@ func printVsphereVolumeSource(vsphere *api.VsphereVirtualDiskVolumeSource, out i
 		"    FSType:\t%v\n",
 		vsphere.VolumePath, vsphere.FSType)
 }
+
+func printPhotonPersistentDiskVolumeSource(photon *api.PhotonPersistentDiskVolumeSource, out io.Writer) {
+	fmt.Fprintf(out, "    Type:\tPhotonPersistentDisk (a Persistent Disk resource in photon platform)\n"+
+		"    PdID:\t%v\n"+
+		"    FSType:\t%v\n",
+		photon.PdID, photon.FSType)
+}
+
 func printCinderVolumeSource(cinder *api.CinderVolumeSource, out io.Writer) {
 	fmt.Fprintf(out, "    Type:\tCinder (a Persistent Disk resource in OpenStack)\n"+
 		"    VolumeID:\t%v\n"+
@@ -767,6 +777,8 @@ func (d *PersistentVolumeDescriber) Describe(namespace, name string, describerSe
 			printQuobyteVolumeSource(pv.Spec.Quobyte, out)
 		case pv.Spec.VsphereVolume != nil:
 			printVsphereVolumeSource(pv.Spec.VsphereVolume, out)
+		case pv.Spec.PhotonPersistentDisk != nil:
+			printPhotonPersistentDiskVolumeSource(pv.Spec.PhotonPersistentDisk, out)
 		case pv.Spec.Cinder != nil:
 			printCinderVolumeSource(pv.Spec.Cinder, out)
 		}
