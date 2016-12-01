@@ -407,6 +407,8 @@ function kube-up {
     echo "readonly GOVC_INSECURE='${GOVC_INSECURE}'"
     echo "readonly GOVC_DATACENTER='${GOVC_DATACENTER}'"
     echo "readonly GOVC_DATASTORE='${GOVC_DATASTORE}'"
+    echo "readonly GOVC_REGION='${GOVC_REGION}'"
+    echo "readonly GOVC_FAILUREDOMAIN='${GOVC_FAILUREDOMAIN}'"
     grep -v "^#" "${KUBE_ROOT}/cluster/vsphere/templates/create-dynamic-salt-files.sh"
     grep -v "^#" "${KUBE_ROOT}/cluster/vsphere/templates/install-release.sh"
     grep -v "^#" "${KUBE_ROOT}/cluster/vsphere/templates/salt-master.sh"
@@ -435,6 +437,8 @@ function kube-up {
       echo "readonly GOVC_INSECURE='${GOVC_INSECURE}'"
       echo "readonly GOVC_DATACENTER='${GOVC_DATACENTER}'"
       echo "readonly GOVC_DATASTORE='${GOVC_DATASTORE}'"
+      echo "readonly GOVC_REGION='${GOVC_REGION}'"
+      echo "readonly GOVC_FAILUREDOMAIN='${GOVC_FAILUREDOMAIN}'"
       grep -v "^#" "${KUBE_ROOT}/cluster/vsphere/templates/salt-minion.sh"
     ) > "${KUBE_TEMP}/node-start-${i}.sh"
 

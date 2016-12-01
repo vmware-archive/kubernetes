@@ -33,3 +33,5 @@ SSH_OPTS="-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -oLogLevel=E
 # Set GOVC_INSECURE if the host in GOVC_URL is using a certificate that cannot
 # be verified (i.e. a self-signed certificate), but IS trusted.
 # export GOVC_INSECURE=1
+# export GOVC_REGION='region' # The region where the VM is deployed
+# export GOVC_FAILUREDOMAIN='failure-domain' # The fault domain to which VM is assigned to
