@@ -42,6 +42,8 @@ cat <<EOF > $CLOUD_CONFIG
         insecure-flag = $GOVC_INSECURE
         datacenter = $GOVC_DATACENTER
         datastore = $GOVC_DATASTORE
+        region = $GOVC_REGION
+        failure-domain = $GOVC_FAILUREDOMAIN
 
 [Disk]
 	scsicontrollertype = pvscsi
