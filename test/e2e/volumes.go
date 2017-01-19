@@ -48,6 +48,7 @@ import (
 
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -828,6 +829,64 @@ var _ = framework.KubeDescribe("Volumes [Feature:Volumes]", func() {
 					// Randomize index.html to make sure we don't see the
 					// content from previous test runs.
 					expectedContent: "Hello from GCE from namespace " + volumeName,
+				},
+			}
+
+			injectHtml(cs, config, tests[0].volume, tests[0].expectedContent)
+
+			fsGroup := int64(1234)
+			testVolumeClient(cs, config, &fsGroup, tests)
+		})
+	})
+
+	////////////////////////////////////////////////////////////////////////
+	// vSphere
+	////////////////////////////////////////////////////////////////////////
+
+	framework.KubeDescribe("vsphere", func() {
+		It("should be mountable", func() {
+			framework.SkipUnlessProviderIs("vsphere")
+			var (
+				volumePath string
+				volumeoptions vsphere.VolumeOptions
+			)
+			config := VolumeTestConfig{
+				namespace: namespace.Name,
+				prefix:    "vsphere",
+			}
+			By("creating a test vsphere volume")
+			vsp, err := vsphere.GetVSphere()
+			Expect(err).NotTo(HaveOccurred())
+
+			volumeoptions.CapacityKB=1 * 1024 * 1024
+			volumeoptions.Name="e2e-disk" + time.Now().Format("20060102150405")
+			volumeoptions.DiskFormat="thin"
+			volumePath, err = vsp.CreateVolume(&volumeoptions)
+			Expect(err).NotTo(HaveOccurred())
+
+			defer func() {
+				vsp.DeleteVolume(volumePath)
+			}()
+
+			defer func() {
+				if clean {
+					framework.Logf("Running volumeTestCleanup")
+					volumeTestCleanup(f, config)
+				}
+			}()
+
+			tests := []VolumeTest{
+				{
+					volume: v1.VolumeSource{
+						VsphereVolume: &v1.VsphereVirtualDiskVolumeSource{
+							VolumePath:   volumePath,
+							FSType:   "ext4",
+						},
+					},
+					file: "index.html",
+					// Randomize index.html to make sure we don't see the
+					// content from previous test runs.
+					expectedContent: "Hello from vSphere from namespace " + namespace.Name,
 				},
 			}
 

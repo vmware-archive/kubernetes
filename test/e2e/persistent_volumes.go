@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/resource"
@@ -738,6 +739,109 @@ var _ = framework.KubeDescribe("PersistentVolumes", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
+
+	///////////////////////////////////////////////////////////////////////
+	//				Vsphere Disk
+	///////////////////////////////////////////////////////////////////////
+	// Testing configurations of single a PV/PVC pair attached to a Vsphere Disk
+
+	framework.KubeDescribe("PersistentVolumes:vsphere", func() {
+
+		var (
+			volumePath string
+			pv        *v1.PersistentVolume
+			pvc       *v1.PersistentVolumeClaim
+			clientPod *v1.Pod
+			pvConfig  persistentVolumeConfig
+		)
+		BeforeEach(func() {
+			framework.SkipUnlessProviderIs("vsphere")
+			if volumePath == "" {
+				vsp, err := vsphere.GetVSphere()
+				Expect(err).NotTo(HaveOccurred())
+				var volumeoptions vsphere.VolumeOptions
+				volumeoptions.CapacityKB=1 * 1024 * 1024
+				volumeoptions.Name="e2e-disk" + time.Now().Format("20060102150405")
+				volumeoptions.DiskFormat="thin"
+
+				volumePath, err = vsp.CreateVolume(&volumeoptions)
+				Expect(err).NotTo(HaveOccurred())
+				pvConfig = persistentVolumeConfig{
+					namePrefix: "vspherepv-",
+					pvSource: v1.PersistentVolumeSource{
+						VsphereVolume: &v1.VsphereVirtualDiskVolumeSource{
+							VolumePath:	volumePath,
+							FSType:		"ext4",
+						},
+					},
+					prebind: nil,
+				}
+			}
+		})
+
+		AfterEach(func() {
+			framework.Logf("AfterEach: Cleaning up test resources")
+			if c != nil {
+				deletePod(f, c, ns, clientPod)
+				pvPvcCleanup(c, ns, pv, pvc)
+				clientPod = nil
+				pvc = nil
+				pv = nil
+			}
+		})
+
+		AddCleanupAction(func() {
+			if len(volumePath) > 0 {
+				vsp, err := vsphere.GetVSphere()
+				Expect(err).NotTo(HaveOccurred())
+				vsp.DeleteVolume(volumePath)
+			}
+		})
+
+		// Attach a persistent disk to a pod using a PVC.
+		// Delete the PVC and then the pod.  Expect the pod to succeed in unmounting and detaching PD on delete.
+		It("should test that deleting a PVC before the pod does not cause pod deletion to fail on PD detach", func() {
+			By("Creating the PV and PVC")
+			pv, pvc = createPVPVC(c, pvConfig, ns, false)
+			waitOnPVandPVC(c, ns, pv, pvc)
+
+			By("Creating the Client Pod")
+			clientPod = createClientPod(c, ns, pvc)
+			node := types.NodeName(clientPod.Spec.NodeName)
+
+			By("Deleting the Claim")
+			deletePersistentVolumeClaim(c, pvc.Name, ns)
+			verifyVsphereDiskAttached(volumePath, node)
+
+			By("Deleting the Pod")
+			deletePod(f, c, ns, clientPod)
+
+			By("Verifying Persistent Disk detach")
+			waitForVSphereDiskToDetach(volumePath, node)
+		})
+
+		// Attach a persistent disk to a pod using a PVC.
+		// Delete the PV and then the pod.  Expect the pod to succeed in unmounting and detaching PD on delete.
+		It("should test that deleting the PV before the pod does not cause pod deletion to fail on PD detach", func() {
+			By("Creating the PV and PVC")
+			pv, pvc = createPVPVC(c, pvConfig, ns, false)
+			waitOnPVandPVC(c, ns, pv, pvc)
+
+			By("Creating the Client Pod")
+			clientPod = createClientPod(c, ns, pvc)
+			node := types.NodeName(clientPod.Spec.NodeName)
+
+			By("Deleting the Persistent Volume")
+			deletePersistentVolume(c, pv.Name)
+			verifyVsphereDiskAttached(volumePath, node)
+
+			By("Deleting the client pod")
+			deletePod(f, c, ns, clientPod)
+
+			By("Verifying Persistent Disk detaches")
+			waitForVSphereDiskToDetach(volumePath, node)
+		})
+	})
 })
 
 // Sanity check for GCE testing.  Verify the persistent disk attached to the node.
@@ -747,6 +851,33 @@ func verifyGCEDiskAttached(diskName string, nodeName types.NodeName) bool {
 	isAttached, err := gceCloud.DiskIsAttached(diskName, nodeName)
 	Expect(err).NotTo(HaveOccurred())
 	return isAttached
+}
+
+// Sanity check for vSphere testing.  Verify the persistent disk attached to the node.
+func verifyVsphereDiskAttached(volumePath string, nodeName types.NodeName) bool {
+	vsp, err := vsphere.GetVSphere()
+	Expect(err).NotTo(HaveOccurred())
+	isAttached, err := vsp.DiskIsAttached(volumePath, nodeName)
+	Expect(err).NotTo(HaveOccurred())
+	return isAttached
+}
+
+func waitForVSphereDiskToDetach(volumePath string, nodeName types.NodeName) {
+	var diskAttached 	= true;
+	var detachTimeout 	= 10 * time.Minute
+	var detachPollTime 	= 10 * time.Second
+	for start := time.Now(); time.Since(start) < detachTimeout; time.Sleep(detachPollTime) {
+		diskAttached :=verifyVsphereDiskAttached(volumePath, nodeName)
+		if !diskAttached {
+			// Specified disk does not appear to be attached to specified node
+			framework.Logf("Volume %q appears to have successfully detached from %q.", volumePath, nodeName)
+			break
+		}
+		framework.Logf("Waiting for Volume %q to detach from %q.", volumePath, nodeName)
+	}
+	if(diskAttached) {
+		fmt.Errorf("Gave up waiting for Volume %q to detach from %q after %v", volumePath, nodeName, detachTimeout)
+	}
 }
 
 // Return a pvckey struct.
