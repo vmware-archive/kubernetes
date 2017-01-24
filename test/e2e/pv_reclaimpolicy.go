@@ -61,12 +61,12 @@ var _ = framework.KubeDescribe("persistentvolumereclaim", func() {
 			volumePath, err = vsp.CreateVolume(&volumeoptions)
 
 			Expect(err).NotTo(HaveOccurred())
-			pv = getPersistentVolumeSpec(volumePath, v1.PersistentVolumeReclaimDelete)
+			pv = getVspherePersistentVolumeSpec(volumePath, v1.PersistentVolumeReclaimDelete, nil)
 			pv, err := c.CoreV1().PersistentVolumes().Create(pv)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("creating the pv")
-			pvc = getPersistentVolumeClaimSpec(ns)
+			pvc = getvSpherePersistentVolumeClaimSpec(ns, nil)
 
 			pvc, err := c.CoreV1().PersistentVolumeClaims(ns).Create(pvc)
 			Expect(err).NotTo(HaveOccurred())
@@ -101,14 +101,15 @@ var _ = framework.KubeDescribe("persistentvolumereclaim", func() {
 			volumeoptions.Name = "e2e-disk" + time.Now().Format("20060102150405")
 			volumeoptions.DiskFormat = "thin"
 			volumePath, err = vsp.CreateVolume(&volumeoptions)
-
-			Expect(err).NotTo(HaveOccurred())
-			pv = getPersistentVolumeSpec(volumePath, v1.PersistentVolumeReclaimRetain)
-			pv, err := c.CoreV1().PersistentVolumes().Create(pv)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("creating the pv")
-			pvc = getPersistentVolumeClaimSpec(ns)
+			pv = getVspherePersistentVolumeSpec(volumePath, v1.PersistentVolumeReclaimRetain, nil)
+			pv, err := c.CoreV1().PersistentVolumes().Create(pv)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("creating the pvc")
+			pvc = getvSpherePersistentVolumeClaimSpec(ns, nil)
 
 			pvc, err := c.CoreV1().PersistentVolumeClaims(ns).Create(pvc)
 			Expect(err).NotTo(HaveOccurred())
@@ -132,7 +133,7 @@ var _ = framework.KubeDescribe("persistentvolumereclaim", func() {
 	})
 })
 
-func getPersistentVolumeSpec(volumePath string, persistentVolumeReclaimPolicy v1.PersistentVolumeReclaimPolicy) (*v1.PersistentVolume) {
+func getVspherePersistentVolumeSpec(volumePath string, persistentVolumeReclaimPolicy v1.PersistentVolumeReclaimPolicy, labels map[string]string) (*v1.PersistentVolume) {
 	var (
 		pvConfig persistentVolumeConfig
 		pv       *v1.PersistentVolume
@@ -168,10 +169,13 @@ func getPersistentVolumeSpec(volumePath string, persistentVolumeReclaimPolicy v1
 			ClaimRef: claimRef,
 		},
 	}
+	if(labels!=nil) {
+		pv.Labels = labels;
+	}
 	return pv
 }
 
-func getPersistentVolumeClaimSpec(namespace string) (*v1.PersistentVolumeClaim) {
+func getvSpherePersistentVolumeClaimSpec(namespace string, labels map[string]string) (*v1.PersistentVolumeClaim) {
 	var (
 		pvc *v1.PersistentVolumeClaim
 	)
@@ -191,5 +195,9 @@ func getPersistentVolumeClaimSpec(namespace string) (*v1.PersistentVolumeClaim) 
 			},
 		},
 	}
+	if(labels!=nil) {
+		pvc.Spec.Selector= &metav1.LabelSelector{MatchLabels: labels}
+	}
+
 	return pvc
 }
