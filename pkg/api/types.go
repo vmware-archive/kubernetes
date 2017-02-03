@@ -933,6 +933,9 @@ type AzureFileVolumeSource struct {
 type VsphereVirtualDiskVolumeSource struct {
 	// Path that identifies vSphere volume vmdk
 	VolumePath string `json:"volumePath"`
+	// Storage policy that needs to be attached to the vSphere volume vmdk
+	// The storage policy must be already created on the vSphere
+	StoragePolicy string `json:"storagePolicy,omitempty"`
 	// Filesystem type to mount.
 	// Must be a filesystem type supported by the host operating system.
 	// Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.

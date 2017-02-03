@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api"
@@ -120,11 +121,19 @@ func (plugin *vsphereVolumePlugin) newUnmounterInternal(volName string, podUID t
 }
 
 func (plugin *vsphereVolumePlugin) ConstructVolumeSpec(volumeName, mountPath string) (*volume.Spec, error) {
+	mounter := plugin.host.GetMounter()
+	pluginDir := plugin.host.GetPluginDir(plugin.GetPluginName())
+	volumePath, err := mounter.GetDeviceNameFromMount(mountPath, pluginDir)
+	if err != nil {
+		return nil, err
+	}
+	volumePath = strings.Replace(volumePath, "\\040", " ", -1)
+	glog.V(5).Infof("vSphere volume path is %q", volumePath)
 	vsphereVolume := &api.Volume{
 		Name: volumeName,
 		VolumeSource: api.VolumeSource{
 			VsphereVolume: &api.VsphereVirtualDiskVolumeSource{
-				VolumePath: volumeName,
+				VolumePath: volumePath,
 			},
 		},
 	}
@@ -134,7 +143,7 @@ func (plugin *vsphereVolumePlugin) ConstructVolumeSpec(volumeName, mountPath str
 // Abstract interface to disk operations.
 type vdManager interface {
 	// Creates a volume
-	CreateVolume(provisioner *vsphereVolumeProvisioner) (vmDiskPath string, volumeSizeGB int, err error)
+	CreateVolume(provisioner *vsphereVolumeProvisioner) (vmDiskPath string, storagePolicyName string, volumeSizeGB int, err error)
 	// Deletes a volume
 	DeleteVolume(deleter *vsphereVolumeDeleter) error
 }
@@ -234,6 +243,7 @@ func (b *vsphereVolumeMounter) SetUpAt(dir string, fsGroup *int64) error {
 		os.Remove(dir)
 		return err
 	}
+	volume.SetVolumeOwnership(b, fsGroup)
 	glog.V(3).Infof("vSphere volume %s mounted to %s", b.volPath, dir)
 
 	return nil
@@ -324,7 +334,8 @@ func (plugin *vsphereVolumePlugin) newProvisionerInternal(options volume.VolumeO
 }
 
 func (v *vsphereVolumeProvisioner) Provision() (*api.PersistentVolume, error) {
-	vmDiskPath, sizeKB, err := v.manager.CreateVolume(v)
+	vmDiskPath, storagePolicyName, sizeKB, err := v.manager.CreateVolume(v)
+	glog.V(1).Infof("BALU - vsphere_volume Provision storage policy name is - %q", storagePolicyName)
 	if err != nil {
 		return nil, err
 	}
@@ -345,8 +356,9 @@ func (v *vsphereVolumeProvisioner) Provision() (*api.PersistentVolume, error) {
 			},
 			PersistentVolumeSource: api.PersistentVolumeSource{
 				VsphereVolume: &api.VsphereVirtualDiskVolumeSource{
-					VolumePath: vmDiskPath,
-					FSType:     "ext4",
+					VolumePath:    vmDiskPath,
+					StoragePolicy: storagePolicyName,
+					FSType:        "ext4",
 				},
 			},
 		},

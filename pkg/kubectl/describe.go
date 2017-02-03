@@ -707,8 +707,9 @@ func printAzureDiskVolumeSource(d *api.AzureDiskVolumeSource, out io.Writer) {
 func printVsphereVolumeSource(vsphere *api.VsphereVirtualDiskVolumeSource, out io.Writer) {
 	fmt.Fprintf(out, "    Type:\tvSphereVolume (a Persistent Disk resource in vSphere)\n"+
 		"    VolumePath:\t%v\n"+
+		"    StoragePolicy:\t%v\n"+
 		"    FSType:\t%v\n",
-		vsphere.VolumePath, vsphere.FSType)
+		vsphere.VolumePath, vsphere.StoragePolicy, vsphere.FSType)
 }
 
 func printPhotonPersistentDiskVolumeSource(photon *api.PhotonPersistentDiskVolumeSource, out io.Writer) {

@@ -67,6 +67,8 @@ func (attacher *vsphereVMDKAttacher) Attach(spec *volume.Spec, nodeName types.No
 		return "", err
 	}
 
+	glog.V(1).Infof("BALU - attacher Attach volumeSource is - %+v", volumeSource)
+	glog.V(1).Infof("BALU - attacher Attach storagePolicy is - %+v", volumeSource.StoragePolicy)
 	glog.V(4).Infof("vSphere: Attach disk called for node %s", nodeName)
 
 	// Keeps concurrent attach operations to same host atomic
@@ -75,9 +77,9 @@ func (attacher *vsphereVMDKAttacher) Attach(spec *volume.Spec, nodeName types.No
 
 	// vsphereCloud.AttachDisk checks if disk is already attached to host and
 	// succeeds in that case, so no need to do that separately.
-	_, diskUUID, err := attacher.vsphereVolumes.AttachDisk(volumeSource.VolumePath, nodeName)
+	_, diskUUID, err := attacher.vsphereVolumes.AttachDisk(volumeSource.VolumePath, volumeSource.StoragePolicy, nodeName)
 	if err != nil {
-		glog.Errorf("Error attaching volume %q: %+v", volumeSource.VolumePath, err)
+		glog.Errorf("Error attaching volume %q with storagePolicy %q: %+v", volumeSource.VolumePath, volumeSource.StoragePolicy, err)
 		return "", err
 	}
 

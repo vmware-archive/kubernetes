@@ -1021,11 +1021,14 @@ type AzureFileVolumeSource struct {
 type VsphereVirtualDiskVolumeSource struct {
 	// Path that identifies vSphere volume vmdk
 	VolumePath string `json:"volumePath" protobuf:"bytes,1,opt,name=volumePath"`
+	// Storage policy that needs to be attached to the vSphere volume vmdk
+	// The storage policy must be already created on the vSphere
+	StoragePolicy string `json:"storagePolicy,omitempty" protobuf:"bytes,2,opt,name=storagePolicy"`
 	// Filesystem type to mount.
 	// Must be a filesystem type supported by the host operating system.
 	// Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
 	// +optional
-	FSType string `json:"fsType,omitempty" protobuf:"bytes,2,opt,name=fsType"`
+	FSType string `json:"fsType,omitempty" protobuf:"bytes,3,opt,name=fsType"`
 }
 
 // Represents a Photon Controller persistent disk resource.

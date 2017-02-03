@@ -52,10 +52,10 @@ func verifyDevicePath(path string) (string, error) {
 }
 
 // CreateVolume creates a vSphere volume.
-func (util *VsphereDiskUtil) CreateVolume(v *vsphereVolumeProvisioner) (vmDiskPath string, volumeSizeKB int, err error) {
+func (util *VsphereDiskUtil) CreateVolume(v *vsphereVolumeProvisioner) (vmDiskPath string, storagePolicyName string, volumeSizeKB int, err error) {
 	cloud, err := getCloudProvider(v.plugin.host.GetCloudProvider())
 	if err != nil {
-		return "", 0, err
+		return "", "", 0, err
 	}
 
 	capacity := v.options.PVC.Spec.Resources.Requests[api.ResourceName(api.ResourceStorage)]
@@ -74,24 +74,32 @@ func (util *VsphereDiskUtil) CreateVolume(v *vsphereVolumeProvisioner) (vmDiskPa
 	for parameter, value := range v.options.Parameters {
 		switch strings.ToLower(parameter) {
 		case "diskformat":
+			glog.V(1).Infof("BALU - vsphere_volume_util CreateVolume diskformat is - %q", value)
 			volumeOptions.DiskFormat = value
+		case "datastore":
+			glog.V(1).Infof("BALU - vsphere_volume_util CreateVolume datastore is - %q", value)
+			volumeOptions.Datastore = value
+		case "storagepolicy":
+			glog.V(1).Infof("BALU - vsphere_volume_util CreateVolume storage policy name is - %q", value)
+			volumeOptions.StoragePolicyName = value
 		default:
-			return "", 0, fmt.Errorf("invalid option %q for volume plugin %s", parameter, v.plugin.GetPluginName())
+			return "", "", 0, fmt.Errorf("invalid option %q for volume plugin %s", parameter, v.plugin.GetPluginName())
 		}
 	}
 
 	// TODO: implement PVC.Selector parsing
 	if v.options.PVC.Spec.Selector != nil {
-		return "", 0, fmt.Errorf("claim.Spec.Selector is not supported for dynamic provisioning on vSphere")
+		return "", "", 0, fmt.Errorf("claim.Spec.Selector is not supported for dynamic provisioning on vSphere")
 	}
 
 	vmDiskPath, err = cloud.CreateVolume(volumeOptions)
 	if err != nil {
 		glog.V(2).Infof("Error creating vsphere volume: %v", err)
-		return "", 0, err
+		return "", "", 0, err
 	}
+
 	glog.V(2).Infof("Successfully created vsphere volume %s", name)
-	return vmDiskPath, volSizeKB, nil
+	return vmDiskPath, volumeOptions.StoragePolicyName, volSizeKB, nil
 }
 
 // DeleteVolume deletes a vSphere volume.
