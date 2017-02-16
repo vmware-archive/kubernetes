@@ -339,7 +339,11 @@ func (v *vsphereVolumeProvisioner) Provision() (*v1.PersistentVolume, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
+	if fstype == "" {
+		fstype = "ext4"
+	}
+
 	pv := &v1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   v.options.PVName,
