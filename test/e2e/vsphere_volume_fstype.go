@@ -44,7 +44,7 @@ import (
 	9. Delete PVC, PV and Storage Class.
 */
 
-var _ = framework.KubeDescribe("Volume fstype [Volumes]", func() {
+var _ = framework.KubeDescribe("Volume fstype [Volume]", func() {
 	f := framework.NewDefaultFramework("volume-fstype")
 	var (
 		client    clientset.Interface
