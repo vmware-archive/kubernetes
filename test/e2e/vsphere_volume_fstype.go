@@ -114,12 +114,16 @@ func invokeTestForFstype(client clientset.Interface, namespace string, fstype st
 	pod, err := client.CoreV1().Pods(namespace).Create(podSpec)
 	Expect(err).NotTo(HaveOccurred())
 
+	By("Waiting for pod to be running")
+	Expect(framework.WaitForPodNameRunningInNamespace(client, pod.Name, namespace)).To(Succeed())
+
+	pod, err = client.CoreV1().Pods(namespace).Get(pod.Name, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
 	vsp, err := vsphere.GetVSphere()
 	Expect(err).NotTo(HaveOccurred())
 	verifyVSphereDiskAttached(vsp, pv.Spec.VsphereVolume.VolumePath, k8stype.NodeName(pod.Spec.NodeName))
 
-	By("Waiting for pod to be running")
-	Expect(framework.WaitForPodNameRunningInNamespace(client, pod.Name, namespace)).To(Succeed())
 	_, err = framework.LookForStringInPodExec(namespace, pod.Name, []string{"/bin/cat", "/mnt/test/fstype"}, expectedContent, time.Minute)
 	By("Delete pod and wait for volume to be detached from node")
 	deletePodAndWaitForVolumeToDetach(client, namespace, vsp, pod.Spec.NodeName, pod, pv.Spec.VsphereVolume.VolumePath)
