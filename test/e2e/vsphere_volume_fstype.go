@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+if node {
+
 package e2e
 
 import (
@@ -132,7 +134,7 @@ func invokeTestForFstype(client clientset.Interface, namespace string, nodeName 
 	*/
 	By("Creating pod to attach PV to the node")
 	// Create pod to attach Volume to Node
-	podSpec := getVSpherePodSpecWithClaim(pvclaim.Name, nodeKeyValueLabel, "while true ; do sleep 2 ; done")
+	podSpec := getVSpherePodSpecWithClaim(pvclaim.Name, nodeKeyValueLabel, "/bin/df -T /mnt/test | /bin/awk 'FNR == 2 {print $2}' > /mnt/test/fstype && while true ; do sleep 2 ; done")
 	pod, err := client.CoreV1().Pods(namespace).Create(podSpec)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -142,7 +144,7 @@ func invokeTestForFstype(client clientset.Interface, namespace string, nodeName 
 
 	By("Waiting for pod to be running")
 	Expect(framework.WaitForPodNameRunningInNamespace(client, pod.Name, namespace)).To(Succeed())
-	_, err = framework.LookForStringInPodExec(namespace, pod.Name, []string{"df -T", pod.Spec.Containers[0].VolumeMounts[0].MountPath, "| awk 'FNR == 2 {print $2}'"}, expectedContent, time.Minute)
+	_, err = framework.LookForStringInPodExec(namespace, pod.Name, []string{"/bin/cat", "/mnt/test/fstype"}, expectedContent, time.Minute)
 	By("Delete pod and wait for volume to be detached from node")
 	deletePodAndWaitForVolumeToDetach(client, namespace, vsp, nodeName, pod, pv.Spec.VsphereVolume.VolumePath)
 
