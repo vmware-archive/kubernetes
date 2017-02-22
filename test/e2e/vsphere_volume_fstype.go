@@ -33,7 +33,7 @@ import (
 	Test to verify fstype specified in storage-class is being honored after volume creation.
 
 	Steps
-	1. Create StorageClass with fstype set to valid type.
+	1. Create StorageClass with fstype set to valid type (default case included).
 	2. Create PVC which uses the StorageClass created in step 1.
 	3. Wait for PV to be provisioned.
 	4. Wait for PVC's status to become Bound.
@@ -120,6 +120,7 @@ func invokeTestForFstype(client clientset.Interface, namespace string, fstype st
 	pod, err = client.CoreV1().Pods(namespace).Get(pod.Name, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
+	// Asserts: Right disk is attached to the pod
 	vsp, err := vsphere.GetVSphere()
 	Expect(err).NotTo(HaveOccurred())
 	verifyVSphereDiskAttached(vsp, pv.Spec.VsphereVolume.VolumePath, k8stype.NodeName(pod.Spec.NodeName))
