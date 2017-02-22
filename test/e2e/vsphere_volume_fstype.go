@@ -31,21 +31,18 @@ import (
 )
 
 /*
-	Test to verify diskformat specified in storage-class is being honored while volume creation.
-	Valid and supported options are eagerzeroedthick, zeroedthick and thin
+	Test to verify fstype specified in storage-class is being honored after volume creation.
 
 	Steps
-	1. Create StorageClass with diskformat set to valid type
+	1. Create StorageClass with fstype set to valid type.
 	2. Create PVC which uses the StorageClass created in step 1.
 	3. Wait for PV to be provisioned.
-	4. Wait for PVC's status to become Bound
+	4. Wait for PVC's status to become Bound.
 	5. Create pod using PVC on specific node.
 	6. Wait for Disk to be attached to the node.
-	7. Get node VM's devices and find PV's Volume Disk.
-	8. Get Backing Info of the Volume Disk and obtain EagerlyScrub and ThinProvisioned
-	9. Based on the value of EagerlyScrub and ThinProvisioned, verify diskformat is correct.
-	10. Delete pod and Wait for Volume Disk to be detached from the Node.
-	11. Delete PVC, PV and Storage Class
+	7. Execute command in the pod to get fstype.
+	8. Delete pod and Wait for Volume Disk to be detached from the Node.
+	9. Delete PVC, PV and Storage Class.
 */
 
 var _ = framework.KubeDescribe("Volume fstype [Volumes]", func() {
@@ -82,24 +79,24 @@ var _ = framework.KubeDescribe("Volume fstype [Volumes]", func() {
 		}
 	})
 
-	It("verify disk format type - eagerzeroedthick is honored for dynamically provisioned pv using storageclass", func() {
-		By("Invoking Test for diskformat: eagerzeroedthick")
+	It("verify fstype - ext3 formatted volume", func() {
+		By("Invoking Test for fstype: ext3")
 		invokeTestForFstype(client, namespace, nodeName, nodeKeyValueLabel, "ext3", "ext3")
 	})
-	It("verify disk format type - zeroedthick is honored for dynamically provisioned pv using storageclass", func() {
-		By("Invoking Test for diskformat: zeroedthick")
+	It("verify disk format type - default value should be ext4", func() {
+		By("Invoking Test for fstype: Default Value")
 		invokeTestForFstype(client, namespace, nodeName, nodeKeyValueLabel, "", "ext4")
 	})
 })
 
-func invokeTestForFstype(client clientset.Interface, namespace string, nodeName string, nodeKeyValueLabel map[string]string, diskFormat string, expectedContent string) {
+func invokeTestForFstype(client clientset.Interface, namespace string, nodeName string, nodeKeyValueLabel map[string]string, fstype string, expectedContent string) {
 
-	framework.Logf("Invoking Test for DiskFomat: %s", diskFormat)
+	framework.Logf("Invoking Test for fstype: %s", fstype)
 	scParameters := make(map[string]string)
-	scParameters["fstype"] = diskFormat
+	scParameters["fstype"] = fstype
 
-	By("Creating Storage Class With DiskFormat")
-	storageClassSpec := getVSphereStorageClassSpec("thinsc", scParameters)
+	By("Creating Storage Class With Fstype")
+	storageClassSpec := getVSphereStorageClassSpec("fstype", scParameters)
 	storageclass, err := client.StorageV1beta1().StorageClasses().Create(storageClassSpec)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -126,10 +123,6 @@ func invokeTestForFstype(client clientset.Interface, namespace string, nodeName 
 	pv, err := client.CoreV1().PersistentVolumes().Get(pvclaim.Spec.VolumeName, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
-	/*
-		PV is required to be attached to the Node. so that using govmomi API we can grab Disk's Backing Info
-		to check EagerlyScrub and ThinProvisioned property
-	*/
 	By("Creating pod to attach PV to the node")
 	// Create pod to attach Volume to Node
 	podSpec := getVSpherePodSpecWithClaim(pvclaim.Name, nodeKeyValueLabel, "/bin/df -T /mnt/test | /bin/awk 'FNR == 2 {print $2}' > /mnt/test/fstype && while true ; do sleep 2 ; done")
