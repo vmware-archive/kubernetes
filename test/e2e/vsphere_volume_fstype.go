@@ -23,10 +23,9 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stype "k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
-	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -48,12 +47,9 @@ import (
 var _ = framework.KubeDescribe("Volume fstype [Volumes]", func() {
 	f := framework.NewDefaultFramework("volume-fstype")
 	var (
-		client            clientset.Interface
-		namespace         string
-		nodeName          string
-		isNodeLabeled     bool
-		nodeKeyValueLabel map[string]string
-		nodeLabelValue    string
+		client    clientset.Interface
+		namespace string
+		nodeName  string
 	)
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
@@ -65,31 +61,20 @@ var _ = framework.KubeDescribe("Volume fstype [Volumes]", func() {
 		} else {
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
-		if !isNodeLabeled {
-			nodeLabelValue := "vsphere_e2e_" + string(uuid.NewUUID())
-			nodeKeyValueLabel = make(map[string]string)
-			nodeKeyValueLabel["vsphere_e2e_label"] = nodeLabelValue
-			framework.AddOrUpdateLabelOnNode(client, nodeName, "vsphere_e2e_label", nodeLabelValue)
-			isNodeLabeled = true
-		}
-	})
-	AddCleanupAction(func() {
-		if len(nodeLabelValue) > 0 {
-			framework.RemoveLabelOffNode(client, nodeName, "vsphere_e2e_label")
-		}
 	})
 
 	It("verify fstype - ext3 formatted volume", func() {
 		By("Invoking Test for fstype: ext3")
-		invokeTestForFstype(client, namespace, nodeName, nodeKeyValueLabel, "ext3", "ext3")
+		invokeTestForFstype(client, namespace, "ext3", "ext3")
 	})
+
 	It("verify disk format type - default value should be ext4", func() {
 		By("Invoking Test for fstype: Default Value")
-		invokeTestForFstype(client, namespace, nodeName, nodeKeyValueLabel, "", "ext4")
+		invokeTestForFstype(client, namespace, "", "ext4")
 	})
 })
 
-func invokeTestForFstype(client clientset.Interface, namespace string, nodeName string, nodeKeyValueLabel map[string]string, fstype string, expectedContent string) {
+func invokeTestForFstype(client clientset.Interface, namespace string, fstype string, expectedContent string) {
 
 	framework.Logf("Invoking Test for fstype: %s", fstype)
 	scParameters := make(map[string]string)
@@ -125,18 +110,18 @@ func invokeTestForFstype(client clientset.Interface, namespace string, nodeName 
 
 	By("Creating pod to attach PV to the node")
 	// Create pod to attach Volume to Node
-	podSpec := getVSpherePodSpecWithClaim(pvclaim.Name, nodeKeyValueLabel, "/bin/df -T /mnt/test | /bin/awk 'FNR == 2 {print $2}' > /mnt/test/fstype && while true ; do sleep 2 ; done")
+	podSpec := getVSpherePodSpecWithClaim(pvclaim.Name, nil, "/bin/df -T /mnt/test | /bin/awk 'FNR == 2 {print $2}' > /mnt/test/fstype && while true ; do sleep 2 ; done")
 	pod, err := client.CoreV1().Pods(namespace).Create(podSpec)
 	Expect(err).NotTo(HaveOccurred())
 
 	vsp, err := vsphere.GetVSphere()
 	Expect(err).NotTo(HaveOccurred())
-	verifyVSphereDiskAttached(vsp, pv.Spec.VsphereVolume.VolumePath, k8stype.NodeName(nodeName))
+	verifyVSphereDiskAttached(vsp, pv.Spec.VsphereVolume.VolumePath, k8stype.NodeName(pod.Spec.NodeName))
 
 	By("Waiting for pod to be running")
 	Expect(framework.WaitForPodNameRunningInNamespace(client, pod.Name, namespace)).To(Succeed())
 	_, err = framework.LookForStringInPodExec(namespace, pod.Name, []string{"/bin/cat", "/mnt/test/fstype"}, expectedContent, time.Minute)
 	By("Delete pod and wait for volume to be detached from node")
-	deletePodAndWaitForVolumeToDetach(client, namespace, vsp, nodeName, pod, pv.Spec.VsphereVolume.VolumePath)
+	deletePodAndWaitForVolumeToDetach(client, namespace, vsp, pod.Spec.NodeName, pod, pv.Spec.VsphereVolume.VolumePath)
 
 }
