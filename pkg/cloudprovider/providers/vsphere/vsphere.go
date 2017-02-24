@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -66,6 +67,8 @@ const (
 	ZeroedThickDiskType       = "zeroedThick"
 	VolDir                    = "kubevols"
 	RoundTripperDefaultCount  = 3
+	MAC_OUI_VC                = "00:50:56"
+	MAC_OUI_ESX               = "00:0c:29"
 )
 
 // Controller types that are currently supported for hot attach of disks
@@ -126,6 +129,10 @@ type VSphereConfig struct {
 		// property in VmConfigInfo, or also set as vc.uuid in VMX file.
 		// If not set, will be fetched from the machine via sysfs (requires root)
 		VMUUID string `gcfg:"vm-uuid"`
+		// VMName is the VM name of virtual machine
+		// Combining the WorkingDir and VMName can form a unique InstanceID.
+		// When vm-name is set, no username/password is required on worker nodes.
+		VMName string `gcfg:"vm-name"`
 	}
 
 	Network struct {
@@ -273,14 +280,20 @@ func newVSphere(cfg VSphereConfig) (*VSphere, error) {
 		cfg.Global.RoundTripperCount = RoundTripperDefaultCount
 	}
 
-	c, err := newClient(context.TODO(), &cfg)
-	if err != nil {
-		return nil, err
-	}
+	var c *govmomi.Client
+	var id string
+	if cfg.Global.VMName == "" {
+		c, err := newClient(context.TODO(), &cfg)
+		if err != nil {
+			return nil, err
+		}
 
-	id, err := getVMName(c, &cfg)
-	if err != nil {
-		return nil, err
+		id, err = getVMName(c, &cfg)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		id = cfg.Global.VMName
 	}
 
 	vs := VSphere{
@@ -304,7 +317,9 @@ func checkControllerSupported(ctrlType string) bool {
 }
 
 func logout(vs *VSphere) {
-	vs.client.Logout(context.TODO())
+	if vs.client != nil {
+		vs.client.Logout(context.TODO())
+	}
 }
 
 func newClient(ctx context.Context, cfg *VSphereConfig) (*govmomi.Client, error) {
@@ -400,100 +415,71 @@ func getVirtualMachineManagedObjectReference(ctx context.Context, c *govmomi.Cli
 	return nil
 }
 
-// Returns names of running VMs inside VM folder.
-func getInstances(ctx context.Context, cfg *VSphereConfig, c *govmomi.Client, filter string) ([]string, error) {
-	f := find.NewFinder(c.Client, true)
-	dc, err := f.Datacenter(ctx, cfg.Global.Datacenter)
-	if err != nil {
-		return nil, err
-	}
-
-	f.SetDatacenter(dc)
-
-	vmRegex := cfg.Global.WorkingDir + filter
-
-	//TODO: get all vms inside subfolders
-	vms, err := f.VirtualMachineList(ctx, vmRegex)
-	if err != nil {
-		return nil, err
-	}
-
-	var vmRef []types.ManagedObjectReference
-	for _, vm := range vms {
-		vmRef = append(vmRef, vm.Reference())
-	}
-
-	pc := property.DefaultCollector(c.Client)
-
-	var vmt []mo.VirtualMachine
-	err = pc.Retrieve(ctx, vmRef, []string{"name", "summary"}, &vmt)
-	if err != nil {
-		return nil, err
-	}
-
-	var vmList []string
-	for _, vm := range vmt {
-		if vm.Summary.Runtime.PowerState == ActivePowerState {
-			vmList = append(vmList, vm.Name)
-		} else if vm.Summary.Config.Template == false {
-			glog.Warningf("VM %s, is not in %s state", vm.Name, ActivePowerState)
-		}
-	}
-	return vmList, nil
-}
-
-type Instances struct {
-	client          *govmomi.Client
-	cfg             *VSphereConfig
-	localInstanceID string
-}
-
 // Instances returns an implementation of Instances for vSphere.
 func (vs *VSphere) Instances() (cloudprovider.Instances, bool) {
-	// Ensure client is logged in and session is valid
-	err := vSphereLogin(context.TODO(), vs)
-	if err != nil {
-		glog.Errorf("Failed to login into vCenter - %v", err)
-		return nil, false
-	}
-	return &Instances{vs.client, vs.cfg, vs.localInstanceID}, true
-}
-
-// List returns names of VMs (inside vm folder) by applying filter and which are currently running.
-func (vs *VSphere) list(filter string) ([]k8stypes.NodeName, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	vmList, err := getInstances(ctx, vs.cfg, vs.client, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	glog.V(3).Infof("Found %d instances matching %s: %s",
-		len(vmList), filter, vmList)
-
-	var nodeNames []k8stypes.NodeName
-	for _, n := range vmList {
-		nodeNames = append(nodeNames, k8stypes.NodeName(n))
-	}
-	return nodeNames, nil
+	return vs, true
 }
 
 // NodeAddresses is an implementation of Instances.NodeAddresses.
-func (i *Instances) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress, error) {
+func (vs *VSphere) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress, error) {
 	addrs := []v1.NodeAddress{}
+
+	if vs.localInstanceID == nodeNameToVMName(nodeName) {
+		/* Get local IP addresses if node is local node */
+		ifaces, err := net.Interfaces()
+		if err != nil {
+			glog.Errorf("net.Interfaces() failed for NodeAddresses - %v", err)
+			return nil, err
+		}
+
+		for _, i := range ifaces {
+			localAddrs, err := i.Addrs()
+			if err != nil {
+				glog.Warningf("Failed to extract addresses for NodeAddresses - %v", err)
+			} else {
+				for _, addr := range localAddrs {
+					if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+						if ipnet.IP.To4() != nil {
+							// Filter external IP by MAC address OUIs from vCenter and from ESX
+							var addressType v1.NodeAddressType
+							if strings.HasPrefix(i.HardwareAddr.String(), MAC_OUI_VC) ||
+								strings.HasPrefix(i.HardwareAddr.String(), MAC_OUI_ESX) {
+								addressType = v1.NodeExternalIP
+							} else {
+								addressType = v1.NodeInternalIP
+							}
+							v1.AddToNodeAddresses(&addrs,
+								v1.NodeAddress{
+									Type:    addressType,
+									Address: ipnet.IP.String(),
+								},
+							)
+						}
+					}
+				}
+			}
+		}
+		return addrs, nil
+	}
 
 	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vm, err := getVirtualMachineByName(ctx, i.cfg, i.client, nodeName)
+	// Ensure client is logged in and session is valid
+	err := vSphereLogin(ctx, vs)
+	if err != nil {
+		glog.Errorf("Failed to login into vCenter - %v", err)
+		return nil, err
+	}
+
+	vm, err := getVirtualMachineByName(ctx, vs.cfg, vs.client, nodeName)
 	if err != nil {
 		return nil, err
 	}
 
 	var mvm mo.VirtualMachine
-	err = getVirtualMachineManagedObjectReference(ctx, i.client, vm, "guest.net", &mvm)
+	err = getVirtualMachineManagedObjectReference(ctx, vs.client, vm, "guest.net", &mvm)
 	if err != nil {
 		return nil, err
 	}
@@ -501,7 +487,7 @@ func (i *Instances) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress,
 	// retrieve VM's ip(s)
 	for _, v := range mvm.Guest.Net {
 		var addressType v1.NodeAddressType
-		if i.cfg.Network.PublicNetwork == v.Network {
+		if vs.cfg.Network.PublicNetwork == v.Network {
 			addressType = v1.NodeExternalIP
 		} else {
 			addressType = v1.NodeInternalIP
@@ -518,12 +504,12 @@ func (i *Instances) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress,
 	return addrs, nil
 }
 
-func (i *Instances) AddSSHKeyToAllInstances(user string, keyData []byte) error {
+func (vs *VSphere) AddSSHKeyToAllInstances(user string, keyData []byte) error {
 	return errors.New("unimplemented")
 }
 
-func (i *Instances) CurrentNodeName(hostname string) (k8stypes.NodeName, error) {
-	return k8stypes.NodeName(i.localInstanceID), nil
+func (vs *VSphere) CurrentNodeName(hostname string) (k8stypes.NodeName, error) {
+	return vmNameToNodeName(vs.localInstanceID), nil
 }
 
 // nodeNameToVMName maps a NodeName to the vmware infrastructure name
@@ -537,12 +523,23 @@ func vmNameToNodeName(vmName string) k8stypes.NodeName {
 }
 
 // ExternalID returns the cloud provider ID of the node with the specified Name (deprecated).
-func (i *Instances) ExternalID(nodeName k8stypes.NodeName) (string, error) {
+func (vs *VSphere) ExternalID(nodeName k8stypes.NodeName) (string, error) {
+	if vs.localInstanceID == nodeNameToVMName(nodeName) {
+		return vs.cfg.Global.WorkingDir + vs.localInstanceID, nil
+	}
+
 	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vm, err := getVirtualMachineByName(ctx, i.cfg, i.client, nodeName)
+	// Ensure client is logged in and session is valid
+	err := vSphereLogin(ctx, vs)
+	if err != nil {
+		glog.Errorf("Failed to login into vCenter - %v", err)
+		return "", err
+	}
+
+	vm, err := getVirtualMachineByName(ctx, vs.cfg, vs.client, nodeName)
 	if err != nil {
 		if _, ok := err.(*find.NotFoundError); ok {
 			return "", cloudprovider.InstanceNotFound
@@ -551,7 +548,7 @@ func (i *Instances) ExternalID(nodeName k8stypes.NodeName) (string, error) {
 	}
 
 	var mvm mo.VirtualMachine
-	err = getVirtualMachineManagedObjectReference(ctx, i.client, vm, "summary", &mvm)
+	err = getVirtualMachineManagedObjectReference(ctx, vs.client, vm, "summary", &mvm)
 	if err != nil {
 		return "", err
 	}
@@ -570,12 +567,23 @@ func (i *Instances) ExternalID(nodeName k8stypes.NodeName) (string, error) {
 }
 
 // InstanceID returns the cloud provider ID of the node with the specified Name.
-func (i *Instances) InstanceID(nodeName k8stypes.NodeName) (string, error) {
+func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
+	if vs.localInstanceID == nodeNameToVMName(nodeName) {
+		return vs.cfg.Global.WorkingDir + vs.localInstanceID, nil
+	}
+
 	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vm, err := getVirtualMachineByName(ctx, i.cfg, i.client, nodeName)
+	// Ensure client is logged in and session is valid
+	err := vSphereLogin(ctx, vs)
+	if err != nil {
+		glog.Errorf("Failed to login into vCenter - %v", err)
+		return "", err
+	}
+
+	vm, err := getVirtualMachineByName(ctx, vs.cfg, vs.client, nodeName)
 	if err != nil {
 		if _, ok := err.(*find.NotFoundError); ok {
 			return "", cloudprovider.InstanceNotFound
@@ -584,7 +592,7 @@ func (i *Instances) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 	}
 
 	var mvm mo.VirtualMachine
-	err = getVirtualMachineManagedObjectReference(ctx, i.client, vm, "summary", &mvm)
+	err = getVirtualMachineManagedObjectReference(ctx, vs.client, vm, "summary", &mvm)
 	if err != nil {
 		return "", err
 	}
@@ -602,7 +610,7 @@ func (i *Instances) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 	return "", cloudprovider.InstanceNotFound
 }
 
-func (i *Instances) InstanceType(name k8stypes.NodeName) (string, error) {
+func (vs *VSphere) InstanceType(name k8stypes.NodeName) (string, error) {
 	return "", nil
 }
 
@@ -924,7 +932,7 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 		vSphereInstance = nodeNameToVMName(nodeName)
 	}
 
-	nodeExist, err := vs.NodeExists(vs.client, nodeName)
+	nodeExist, err := vs.NodeExists(nodeName)
 	if err != nil {
 		glog.Errorf("Failed to check whether node exist. err: %s.", err)
 		return false, err
@@ -975,7 +983,7 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 		vSphereInstance = nodeNameToVMName(nodeName)
 	}
 
-	nodeExist, err := vs.NodeExists(vs.client, nodeName)
+	nodeExist, err := vs.NodeExists(nodeName)
 
 	if err != nil {
 		glog.Errorf("Failed to check whether node exist. err: %s.", err)
@@ -1294,7 +1302,7 @@ func (vs *VSphere) DeleteVolume(vmDiskPath string) error {
 
 // NodeExists checks if the node with given nodeName exist.
 // Returns false if VM doesn't exist or VM is in powerOff state.
-func (vs *VSphere) NodeExists(c *govmomi.Client, nodeName k8stypes.NodeName) (bool, error) {
+func (vs *VSphere) NodeExists(nodeName k8stypes.NodeName) (bool, error) {
 	if nodeName == "" {
 		return false, nil
 	}
@@ -1302,7 +1310,7 @@ func (vs *VSphere) NodeExists(c *govmomi.Client, nodeName k8stypes.NodeName) (bo
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vm, err := getVirtualMachineByName(ctx, vs.cfg, c, nodeName)
+	vm, err := getVirtualMachineByName(ctx, vs.cfg, vs.client, nodeName)
 	if err != nil {
 		if _, ok := err.(*find.NotFoundError); ok {
 			return false, nil
@@ -1312,7 +1320,7 @@ func (vs *VSphere) NodeExists(c *govmomi.Client, nodeName k8stypes.NodeName) (bo
 	}
 
 	var mvm mo.VirtualMachine
-	err = getVirtualMachineManagedObjectReference(ctx, c, vm, "summary", &mvm)
+	err = getVirtualMachineManagedObjectReference(ctx, vs.client, vm, "summary", &mvm)
 	if err != nil {
 		glog.Errorf("Failed to get virtual machine object reference for node %+q. err %s", nodeName, err)
 		return false, err
