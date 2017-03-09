@@ -432,7 +432,7 @@
       Creating the storageclass:
 
       ``` bash
-      $ kubectl create -f examples/volumes/vsphere/vsphere-volume-sc-fast.yaml
+      $ kubectl create -f examples/volumes/vsphere/vsphere-volume-sc-vsancapabilities.yaml
       ```
 
       Verifying storage class is created:
@@ -442,7 +442,7 @@
       Name:		fast
       Annotations:	<none>
       Provisioner:	kubernetes.io/vsphere-volume
-      Parameters:	diskformat=zeroedthick
+      Parameters:	diskformat=zeroedthick, hostFailuresToTolerate="2", cachereservation="20"
       No events.        
       ```
 

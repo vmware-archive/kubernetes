@@ -1239,7 +1239,6 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 	// 2. Detach the disk from the dummy VM.
 	// 3. Delete the dummy VM. This removes all the vmx files.
 	// 4. Move the Virtual Disk to Kubevols directory.
-	// 5. Delete the dummy VM folder as now its contents are empty.
 	if volumeOptions.StorageProfileData != "" {
 		// Check if the datastore is VSAN if any capability requirements are specified.
 		// VSphere cloud provider now only supports VSAN capabilities requirements
@@ -1309,14 +1308,6 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 			return "", fmt.Errorf("Failed to create the volume: %q with err: %+v", volumeOptions.Name, err)
 		}
 		glog.V(4).Infof("The virtual disk is moved from source: %+q to destination: %+q", vmDiskPath, destVolPath)
-
-		folderPath := getFolderFromVMDiskPath(vmDiskPath)
-		// 5. Delete the dummy VM folder as now its contents are empty.
-		err = deleteDatastoreDirectory(ctx, vs.client, dc, folderPath)
-		if err != nil {
-			glog.Errorf("Failed to delete dummy VM directory with path: %q with err: %+v", folderPath, err)
-			return "", fmt.Errorf("Failed to create the volume: %q with err: %+v", volumeOptions.Name, err)
-		}
 	} else {
 		// Create a virtual disk directly if no VSAN storage capabilities are specified by the user.
 		destVolPath, err = createVirtualDisk(ctx, vs.client, dc, ds, volumeOptions)
@@ -1655,18 +1646,6 @@ func makeDirectoryInDatastore(c *govmomi.Client, dc *object.Datacenter, path str
 	}
 
 	return err
-}
-
-// Delete the folder identify by path in the datacenter.
-func deleteDatastoreDirectory(ctx context.Context, c *govmomi.Client, dc *object.Datacenter, path string) error {
-	fileManager := object.NewFileManager(c.Client)
-
-	task, err := fileManager.DeleteDatastoreFile(ctx, path, dc)
-	if err != nil {
-		return err
-	}
-
-	return task.Wait(ctx)
 }
 
 // Gets the folder path from the VM Disk path.
