@@ -138,7 +138,7 @@ func (util *VsphereDiskUtil) CreateVolume(v *vsphereVolumeProvisioner) (vmDiskPa
 	}
 
 	vmDiskPath, err = cloud.CreateVolume(volumeOptions)
-	if err != nil || vmDiskPath == "" {
+	if err != nil {
 		glog.V(2).Infof("Error creating vsphere volume: %v", err)
 		return "", 0, err
 	}

@@ -67,7 +67,7 @@ const (
 	VolDir                    = "kubevols"
 	RoundTripperDefaultCount  = 3
 	DummyVMName               = "kubernetes-helper-vm"
-        VSANDatastoreType         = "vsan"
+	VSANDatastoreType         = "vsan"
 )
 
 // Controller types that are currently supported for hot attach of disks
@@ -727,7 +727,7 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, nodeName k8stypes.NodeName) (di
 	var newSCSIController types.BaseVirtualDevice
 	var newSCSICreated = false
 	if scsiController == nil {
-		newSCSIController, err = createandAttachSCSIControllerToVM(ctx, vm, diskControllerType)
+		newSCSIController, err = createAndAttachSCSIControllerToVM(ctx, vm, diskControllerType)
 		if err != nil {
 			glog.Errorf("Failed to create SCSI controller for VM :%q with err: %+v", vm.Name(), err)
 			return "", "", err
@@ -1211,7 +1211,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 	// This is achieved by following steps:
 	// 1. Create dummy VM if not already present.
 	// 2. Reconfigure the VM with the disk.
-        // 3. Detach the disk from the dummy VM.
+	// 3. Detach the disk from the dummy VM.
 	if volumeOptions.StorageProfileData != "" {
 		// Check if the datastore is VSAN if any capability requirements are specified.
 		// VSphere cloud provider now only supports VSAN capabilities requirements
@@ -1224,10 +1224,11 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 		if !ok {
 			return "", fmt.Errorf("The specified datastore: %q is not a VSAN datastore."+
 				" The policy parameters will work only with VSAN Datastore."+
-				" So, please specify a valid VSAN datastore", datastore)
+				" So, please specify a valid VSAN datastore in Storage class definition.", datastore)
 		}
 
-		// Check if the VM exists.
+		// Check if the DummyVM exists in kubernetes cluster folder.
+		// The kubernetes cluster folder - vs.cfg.Global.WorkingDir is where all the nodes in the kubernetes cluster are created.
 		vmRegex := vs.cfg.Global.WorkingDir + DummyVMName
 		dummyVM, err := f.VirtualMachine(ctx, vmRegex)
 		if err != nil {
@@ -1240,7 +1241,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 		}
 
 		// 2. Reconfigure the VM to attach the disk with the VSAN policy configured.
-		err = vs.reconfigureVMWithDisk(ctx, dc, ds, dummyVM, volumeOptions)
+		err = vs.createVirtualDiskWithPolicy(ctx, dc, ds, dummyVM, volumeOptions)
 		if err != nil {
 			glog.Errorf("Failed to attach the disk to VM: %q with err: %+v", DummyVMName, err)
 			return "", err
@@ -1389,7 +1390,9 @@ func (vs *VSphere) createDummyVM(ctx context.Context, datacenter *object.Datacen
 	return task.Wait(ctx)
 }
 
-func (vs *VSphere) reconfigureVMWithDisk(ctx context.Context, datacenter *object.Datacenter, datastore *object.Datastore, virtualMachine *object.VirtualMachine, volumeOptions *VolumeOptions) error {
+// Creates a virtual disk with the policy configured to the disk.
+// A call to this function is made only when a user specifies VSAN storage capabilties in the storage class definition.
+func (vs *VSphere) createVirtualDiskWithPolicy(ctx context.Context, datacenter *object.Datacenter, datastore *object.Datastore, virtualMachine *object.VirtualMachine, volumeOptions *VolumeOptions) error {
 	var diskFormat string
 	// Default diskformat is 'thin'
 	if volumeOptions.DiskFormat == "" {
@@ -1414,7 +1417,7 @@ func (vs *VSphere) reconfigureVMWithDisk(ctx context.Context, datacenter *object
 	var newSCSIController types.BaseVirtualDevice
 	var newSCSICreated = false
 	if scsiController == nil {
-		newSCSIController, err = createandAttachSCSIControllerToVM(ctx, virtualMachine, diskControllerType)
+		newSCSIController, err = createAndAttachSCSIControllerToVM(ctx, virtualMachine, diskControllerType)
 		if err != nil {
 			glog.Errorf("Failed to create SCSI controller for VM :%q with err: %+v", virtualMachine.Name(), err)
 			return err
@@ -1487,18 +1490,12 @@ func (vs *VSphere) reconfigureVMWithDisk(ctx context.Context, datacenter *object
 	task, err := virtualMachine.Reconfigure(ctx, virtualMachineConfigSpec)
 	if err != nil {
 		glog.Errorf("Failed to reconfigure the VM with the disk with err - %v.", err)
-		if newSCSICreated {
-			cleanUpController(ctx, newSCSIController, vmDevices, virtualMachine)
-		}
 		return err
 	}
 
 	err = task.Wait(ctx)
 	if err != nil {
 		glog.Errorf("Failed to reconfigure the VM with the disk with err - %v.", err)
-		if newSCSICreated {
-			cleanUpController(ctx, newSCSIController, vmDevices, virtualMachine)
-		}
 		return err
 	}
 
@@ -1506,7 +1503,7 @@ func (vs *VSphere) reconfigureVMWithDisk(ctx context.Context, datacenter *object
 }
 
 // creating a scsi controller as there is none found.
-func createandAttachSCSIControllerToVM(ctx context.Context, vm *object.VirtualMachine, diskControllerType string) (types.BaseVirtualDevice, error) {
+func createAndAttachSCSIControllerToVM(ctx context.Context, vm *object.VirtualMachine, diskControllerType string) (types.BaseVirtualDevice, error) {
 	// Get VM device list
 	vmDevices, err := vm.Device(ctx)
 	if err != nil {

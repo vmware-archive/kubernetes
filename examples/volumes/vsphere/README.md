@@ -355,7 +355,21 @@
       ```
 
 ### Virtual SAN policy support inside Kubernetes
-  __Note: Here you don't need to create vmdk it is created for you.__
+
+  Vsphere Infrastructure(VI) Admins will have the ability to specify custom Virtual SAN Storage Capabilities during dynamic volume provisioning. You can now define storage requirements, such as performance and availability, in the form of storage capabilities during dynamic volume provisioning. The storage capability requirements are converted into a Virtual SAN policy which are then pushed down to the Virtual SAN layer when a persistent volume (virtual disk) is being created. The virtual disk is distributed across the Virtual SAN datastore to meet the requirements.
+  
+  The official [VSAN policy documentation] (https://pubs.vmware.com/vsphere-65/index.jsp?topic=%2Fcom.vmware.vsphere.virtualsan.doc%2FGUID-08911FD3-2462-4C1C-AE81-0D4DBC8F7990.html) describes in detail about each of the individual storage capabilities that are supported by VSAN. The user can specify these storage capabilities as part of storage class defintion based on his application needs.
+
+  The policy settings can be one or more of the following:
+
+  * hostFailuresToTolerate: represents NumberOfFailuresToTolerate
+  * diskStripes: represents NumberofDiskStripesPerObject
+  * objectSpaceReservation: represents ObjectSpaceReservation
+  * cacheReservation: represents FlashReadCacheReservation
+  * iopsLimit: represents IOPSLimitForObject
+  * forceProvisioning: represents if volume must be Force Provisioned
+  
+  __Note: Here you don't need to create persistent volume it is created for you.__
   1. Create Storage Class.
 
       Example 1:
@@ -371,7 +385,8 @@
           hostFailuresToTolerate: "2"
           cachereservation: "20"
       ```
-      Here a vmdk will be created with the Virtual SAN capabilities - hostFailuresToTolerate to 2 and cachereservation is 20% read cache reserved for storage object. Also the vmdk will be zeroedthick disk.
+      Here a persistent volume will be created with the Virtual SAN capabilities - hostFailuresToTolerate to 2 and cachereservation is 20% read cache reserved for storage object. Also the persistent volume will be zeroedthick disk.
+      The official [VSAN policy documentation] (https://pubs.vmware.com/vsphere-65/index.jsp?topic=%2Fcom.vmware.vsphere.virtualsan.doc%2FGUID-08911FD3-2462-4C1C-AE81-0D4DBC8F7990.html) describes in detail about each of the individual storage capabilities that are supported by VSAN and can be configured on the virtual disk.
 
       [Download example](vsphere-volume-sc-vsancapabilities.yaml?raw=true)
 
@@ -422,7 +437,7 @@
       kind: PersistentVolumeClaim
       apiVersion: v1
       metadata:
-        name: pvcsc001
+        name: pvcsc-vsan
         annotations:
           volume.beta.kubernetes.io/storage-class: fast
       spec:
@@ -444,8 +459,8 @@
       Verifying persistent volume claim is created:
 
       ``` bash
-      $ kubectl describe pvc pvcsc001
-      Name:		pvcsc001
+      $ kubectl describe pvc pvcsc-vsan
+      Name:		pvcsc-vsan
       Namespace:	default
       Status:		Bound
       Volume:		pvc-80f7b5c1-94b6-11e6-a24f-005056a79d2d
@@ -464,14 +479,14 @@
       Name:		pvc-80f7b5c1-94b6-11e6-a24f-005056a79d2d
       Labels:		<none>
       Status:		Bound
-      Claim:		default/pvcsc001
+      Claim:		default/pvcsc-vsan
       Reclaim Policy:	Delete
       Access Modes:	RWO
       Capacity:	2Gi
       Message:
       Source:
           Type:	vSphereVolume (a Persistent Disk resource in vSphere)
-          VolumePath:	[datastore1] kubevols/kubernetes-dynamic-pvc-80f7b5c1-94b6-11e6-a24f-005056a79d2d.vmdk
+          VolumePath:	[VSANDatastore] kubevols/kubernetes-dynamic-pvc-80f7b5c1-94b6-11e6-a24f-005056a79d2d.vmdk
           FSType:	ext4
       No events.
       ```
@@ -494,11 +509,11 @@
           image: gcr.io/google_containers/test-webserver
           volumeMounts:
           - name: test-volume
-            mountPath: /test-vmdk
+            mountPath: /test
         volumes:
         - name: test-volume
           persistentVolumeClaim:
-            claimName: pvcsc001
+            claimName: pvcsc-vsan
       ```
 
       [Download example](vsphere-volume-pvcscpod.yaml?raw=true)
