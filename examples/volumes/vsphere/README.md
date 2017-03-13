@@ -355,41 +355,6 @@
       ```
 
 ### Virtual SAN policy support inside Kubernetes
-####About Virtual SAN Storage Policies####
-  Virtual SAN Storage Polices define storage requirements, such as performance and availability for your virtual machines. These policies determine how the virtual machine storage objects are provisioned and allocated within the datastore to guarantee the required level of service. When you enable Virtual SAN on a host cluster, a single Virtual SAN datastore is created and a default storage policy is assigned to the datastore.
-
-  A storage capability is typically represented by a key-value pair, where the key is a specific property that the datastore can offer and the value is a metric that the datastore guarantees for a provisioned object, such as a virtual machine metadata object or a virtual disk. When you know the storage requirements of your virtual machines, you can create a storage policy referencing capabilities that the datastore advertises. You can create several policies to capture different types or classes of requirements.
-
-####Using Virtual SAN Storage Capabilities for storage volume provisioning for containers inside Kubernetes###
-  Since Virtual SAN is one of the supported vSphere Storage backends with the vSphere cloud provider, VI Admins will also have the ability to specify custom Virtual SAN Storage Capabilities during dynamic volume provisioning. Inturn these Virtual SAN Policies are assigned to underlying virtual disk. Thus, vSphere Cloud Provider enables policy driven dynamic provisioning of kubernetes persistent volumes. It exposes data services offered by the underlying storage platform such as Virtual SAN at granularity of container volumes and provides applications a complete abstraction of storage infrastructure.
-
-  Below is list of all Virtual SAN storage capabilties supported for storage volume provisioning:
-  * `hostFailuresToTolerate`
-    * Defines the number of host, disk, or network failures a storage object can tolerate. When the fault tolerance method is mirroring: to tolerate "n" failures, "n+1" copies of the object are created and "2n+1" hosts contributing storage are required (if fault domains are configured, "2n+1" fault domains with hosts contributing storage are required). When the fault tolerance method is erasure coding: to tolerate 1 failure, 4 hosts (or fault domains) are required; and to tolerate 2 failures, 6 hosts (or fault domains) are required. Note: A host which is not part of a fault domain is counted as its own single-host fault domain.
-    * Default value: 1, Maximum value: 3.
-
-  * `cacheReservation`
-    * Flash capacity reserved as read cache for the storage object. Specified as a percentage of the logical size of the object. To be used only for addressing read performance issues. Reserved flash capacity cannot be used by other objects. Unreserved flash is shared fairly among all objects. It is specified in parts per million.
-    * This value is expressed in percentage. Default value: 0, Maximum value: 100.
-
-  * `diskStripes`
-    * The number of HDDs across which each replica of storage object is striped. A value higher than 1 may result in better performance (for e.g when flash read cache misses need to get serviced from HDD), but also results in higher used of system resources. 
-    * Default value: 1, Maximum value: 12.
-
-  * `objectSpaceReservation`
-    * Percentage of the logical size of the storage object that will be reserved (thick provisioning) upon VM provisioning. The rest of the storage object is thin provisioned. 
-    * This value is expressed in percentage. Default value: 0, Maximum value: 100.
-
-  * `iopsLimit`
-    * Defines upper IOPS limit for a disk. IO rate that has been serviced on a disk will be measured and if the rate exceeds the IOPS limit, IO will be delayed to keep it under the limit. Zero value means no limit.
-    * Default value: 0.
-
-  * `forceProvisioning`
-    * If this option is "1" the object will be provisioned even if the policy specified in the storage policy is not satisfiable with the resources currently available in the cluster. Virtual SAN will try to bring the object into compliance if and when resources become available.
-    * Value can be either O or 1.
-
-  __Note: If you do not apply a storage policy during dynamic provisioning on a VSAN datastore, it will use a default Virtual SAN policy with one number of failures to tolerate, a single disk stripe per object, and a thin-provisioned virtual disk.__
-
   __Note: Here you don't need to create vmdk it is created for you.__
   1. Create Storage Class.
 
@@ -429,6 +394,9 @@
       ```
 
       [Download example](vsphere-volume-sc-vsancapabilities-with-datastore.yaml?raw=true)
+
+      __Note: If you do not apply a storage policy during dynamic provisioning on a VSAN datastore, it will use a default Virtual SAN policy with one number of failures to tolerate, a single disk stripe per object, and a thin-provisioned virtual disk.__
+
       Creating the storageclass:
 
       ``` bash
