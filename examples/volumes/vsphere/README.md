@@ -410,7 +410,7 @@
 
       [Download example](vsphere-volume-sc-vsancapabilities-with-datastore.yaml?raw=true)
 
-      __Note: If you do not apply a storage policy during dynamic provisioning on a VSAN datastore, it will use a default Virtual SAN policy with one number of failures to tolerate, a single disk stripe per object, and a thin-provisioned virtual disk.__
+      __Note: If you do not apply a storage policy during dynamic provisioning on a VSAN datastore, it will use a default Virtual SAN policy.__
 
       Creating the storageclass:
 

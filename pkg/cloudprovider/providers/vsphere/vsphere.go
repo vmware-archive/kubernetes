@@ -1210,8 +1210,8 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 	// Create a disk with the VSAN storage capabilities specified in the volumeOptions.StorageProfileData.
 	// This is achieved by following steps:
 	// 1. Create dummy VM if not already present.
-	// 2. Reconfigure the VM with the disk.
-	// 3. Detach the disk from the dummy VM.
+	// 2. Add a new disk to the VM by performing VM reconfigure.
+	// 3. Detach the new disk from the dummy VM.
 	if volumeOptions.StorageProfileData != "" {
 		// Check if the datastore is VSAN if any capability requirements are specified.
 		// VSphere cloud provider now only supports VSAN capabilities requirements
@@ -1415,7 +1415,6 @@ func (vs *VSphere) createVirtualDiskWithPolicy(ctx context.Context, datacenter *
 	scsiControllersOfRequiredType := getSCSIControllersOfType(vmDevices, diskControllerType)
 	scsiController := getAvailableSCSIController(scsiControllersOfRequiredType)
 	var newSCSIController types.BaseVirtualDevice
-	var newSCSICreated = false
 	if scsiController == nil {
 		newSCSIController, err = createAndAttachSCSIControllerToVM(ctx, virtualMachine, diskControllerType)
 		if err != nil {
@@ -1435,7 +1434,6 @@ func (vs *VSphere) createVirtualDiskWithPolicy(ctx context.Context, datacenter *
 			cleanUpController(ctx, newSCSIController, vmDevices, virtualMachine)
 			return fmt.Errorf("cannot find SCSI controller in VM")
 		}
-		newSCSICreated = true
 	}
 
 	kubeVolsPath := filepath.Clean(datastore.Path(VolDir)) + "/"
