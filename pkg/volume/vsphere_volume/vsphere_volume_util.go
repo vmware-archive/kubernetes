@@ -43,7 +43,7 @@ const (
 	Policy_CacheReservation       = "cachereservation"
 	Policy_DiskStripes            = "diskstripes"
 	Policy_ObjectSpaceReservation = "objectspacereservation"
-	Policy_IopsLimit              = "iopsLimit"
+	Policy_IopsLimit              = "iopslimit"
 )
 
 var ErrProbeVolume = errors.New("Error scanning attached volumes")

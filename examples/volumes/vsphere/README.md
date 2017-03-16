@@ -5,7 +5,7 @@
     - [Volumes](#volumes)
     - [Persistent Volumes](#persistent-volumes)
     - [Storage Class](#storage-class)
-    - [Virtual SAN policy support inside Kubernetes] (#virtual-san-policy-support-inside-kubernetes)
+    - [Virtual SAN policy support inside Kubernetes](#virtual-san-policy-support-inside-kubernetes)
 
 ## Prerequisites
 
@@ -358,7 +358,7 @@
 
   Vsphere Infrastructure(VI) Admins will have the ability to specify custom Virtual SAN Storage Capabilities during dynamic volume provisioning. You can now define storage requirements, such as performance and availability, in the form of storage capabilities during dynamic volume provisioning. The storage capability requirements are converted into a Virtual SAN policy which are then pushed down to the Virtual SAN layer when a persistent volume (virtual disk) is being created. The virtual disk is distributed across the Virtual SAN datastore to meet the requirements.
   
-  The official [VSAN policy documentation] (https://pubs.vmware.com/vsphere-65/index.jsp?topic=%2Fcom.vmware.vsphere.virtualsan.doc%2FGUID-08911FD3-2462-4C1C-AE81-0D4DBC8F7990.html) describes in detail about each of the individual storage capabilities that are supported by VSAN. The user can specify these storage capabilities as part of storage class defintion based on his application needs.
+  The official [VSAN policy documentation](https://pubs.vmware.com/vsphere-65/index.jsp?topic=%2Fcom.vmware.vsphere.virtualsan.doc%2FGUID-08911FD3-2462-4C1C-AE81-0D4DBC8F7990.html) describes in detail about each of the individual storage capabilities that are supported by VSAN. The user can specify these storage capabilities as part of storage class defintion based on his application needs.
 
   The policy settings can be one or more of the following:
 
@@ -385,10 +385,10 @@
           hostFailuresToTolerate: "2"
           cachereservation: "20"
       ```
-      Here a persistent volume will be created with the Virtual SAN capabilities - hostFailuresToTolerate to 2 and cachereservation is 20% read cache reserved for storage object. Also the persistent volume will be zeroedthick disk.
-      The official [VSAN policy documentation] (https://pubs.vmware.com/vsphere-65/index.jsp?topic=%2Fcom.vmware.vsphere.virtualsan.doc%2FGUID-08911FD3-2462-4C1C-AE81-0D4DBC8F7990.html) describes in detail about each of the individual storage capabilities that are supported by VSAN and can be configured on the virtual disk.
-
       [Download example](vsphere-volume-sc-vsancapabilities.yaml?raw=true)
+
+      Here a persistent volume will be created with the Virtual SAN capabilities - hostFailuresToTolerate to 2 and cachereservation is 20% read cache reserved for storage object. Also the persistent volume will be zeroedthick disk.
+      The official [VSAN policy documentation](https://pubs.vmware.com/vsphere-65/index.jsp?topic=%2Fcom.vmware.vsphere.virtualsan.doc%2FGUID-08911FD3-2462-4C1C-AE81-0D4DBC8F7990.html) describes in detail about each of the individual storage capabilities that are supported by VSAN and can be configured on the virtual disk.
 
       You can also specify the datastore in the Storageclass as shown in example 2. The volume will be created on the datastore specified in the storage class.
       This field is optional. If not specified as shown in example 1, the volume will be created on the datastore specified in the vsphere config file used to initialize the vSphere Cloud Provider.
