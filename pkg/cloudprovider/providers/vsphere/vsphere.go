@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -514,15 +515,23 @@ func (i *Instances) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress,
 			addressType = v1.NodeInternalIP
 		}
 		for _, ip := range v.IpAddress {
-			v1.AddToNodeAddresses(&addrs,
-				v1.NodeAddress{
-					Type:    addressType,
-					Address: ip,
-				},
-			)
+			if isIPv4(ip) {
+				v1.AddToNodeAddresses(&addrs,
+					v1.NodeAddress{
+						Type:    addressType,
+						Address: ip,
+					},
+				)
+			}
 		}
 	}
+	glog.V(1).Info("balu - The node addresses in vSphere is %+v", addrs)
 	return addrs, nil
+}
+
+func isIPv4(str string) bool {
+	ip := net.ParseIP(str)
+	return ip != nil && strings.Contains(str, ".")
 }
 
 func (i *Instances) AddSSHKeyToAllInstances(user string, keyData []byte) error {
