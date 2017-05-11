@@ -5018,6 +5018,8 @@ func Convert_api_VolumeSource_To_v1_VolumeSource(in *api.VolumeSource, out *Volu
 func autoConvert_v1_VsphereVirtualDiskVolumeSource_To_api_VsphereVirtualDiskVolumeSource(in *VsphereVirtualDiskVolumeSource, out *api.VsphereVirtualDiskVolumeSource, s conversion.Scope) error {
 	out.VolumePath = in.VolumePath
 	out.FSType = in.FSType
+	out.StoragePolicyName = in.StoragePolicyName
+	out.StoragePolicyID = in.StoragePolicyID
 	return nil
 }
 
@@ -5029,6 +5031,8 @@ func Convert_v1_VsphereVirtualDiskVolumeSource_To_api_VsphereVirtualDiskVolumeSo
 func autoConvert_api_VsphereVirtualDiskVolumeSource_To_v1_VsphereVirtualDiskVolumeSource(in *api.VsphereVirtualDiskVolumeSource, out *VsphereVirtualDiskVolumeSource, s conversion.Scope) error {
 	out.VolumePath = in.VolumePath
 	out.FSType = in.FSType
+	out.StoragePolicyName = in.StoragePolicyName
+	out.StoragePolicyID = in.StoragePolicyID
 	return nil
 }
 
