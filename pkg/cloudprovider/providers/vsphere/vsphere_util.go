@@ -29,16 +29,12 @@ import (
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 
-	"fmt"
-
 	pbmtypes "github.com/vmware/govmomi/pbm/types"
 )
 
 const (
-	ClusterComputeResource = "ClusterComputeResource"
-	ParentProperty         = "parent"
-	DatastoreProperty      = "datastore"
-	DatastoreInfoProperty  = "info"
+	DatastoreProperty     = "datastore"
+	DatastoreInfoProperty = "info"
 )
 
 // Reads vSphere configuration from system environment and construct vSphere object
@@ -81,9 +77,9 @@ func GetgovmomiClient(cfg *VSphereConfig) (*govmomi.Client, error) {
 	return client, err
 }
 
-// Get list of compatible datastores that satisfies the storage policy requirements.
-func (vs *VSphere) GetCompatibleDatastores(ctx context.Context, pbmClient *pbm.Client, resourcePool *object.ResourcePool, storagePolicyID string) ([]mo.Datastore, error) {
-	datastores, err := vs.getAllAccessibleDatastoresForK8sCluster(ctx, resourcePool)
+// Get placement compatibility result based on storage policy requirements.
+func (vs *VSphere) GetPlacementCompatibilityResult(ctx context.Context, pbmClient *pbm.Client, vmObj *object.VirtualMachine, storagePolicyID string) (pbm.PlacementCompatibilityResult, error) {
+	datastores, err := vs.getAllAccessibleDatastores(ctx, vmObj)
 	if err != nil {
 		return nil, err
 	}
@@ -105,87 +101,106 @@ func (vs *VSphere) GetCompatibleDatastores(ctx context.Context, pbmClient *pbm.C
 	if err != nil {
 		return nil, err
 	}
-	compatibleHubs := res.CompatibleDatastores()
-	// Return an error if there are no compatible datastores.
-	if len(compatibleHubs) < 1 {
-		return nil, fmt.Errorf("There are no compatible datastores: %+v that satisfy the storage policy: %+q requirements", datastores, storagePolicyID)
-	}
-	var compatibleDatastoreRefs []types.ManagedObjectReference
-	for _, hub := range compatibleHubs {
-		compatibleDatastoreRefs = append(compatibleDatastoreRefs, types.ManagedObjectReference{
-			Type:  hub.HubType,
-			Value: hub.HubId,
-		})
-	}
-	dsMorefs, err := vs.getDatastoreMorefs(ctx, compatibleDatastoreRefs)
-	if err != nil {
-		return nil, err
-	}
-	return dsMorefs, nil
+	return res, nil
 }
 
-// Verify if the user specified datastore is in the list of compatible datastores.
-func IsUserSpecifiedDatastoreCompatible(dsRefs []mo.Datastore, dsName string) bool {
-	for _, ds := range dsRefs {
+// Verify if the user specified datastore is in the list of non-compatible datastores.
+// If yes, return the non compatible datastore reference.
+func (vs *VSphere) IsUserSpecifiedDatastoreNonCompatible(ctx context.Context, compatibilityResult pbm.PlacementCompatibilityResult, dsName string) (bool, *types.ManagedObjectReference) {
+	dsMoList := vs.GetNonCompatibleDatastoresMo(ctx, compatibilityResult)
+	for _, ds := range dsMoList {
 		if ds.Info.GetDatastoreInfo().Name == dsName {
-			return true
+			dsMoRef := ds.Reference()
+			return true, &dsMoRef
 		}
 	}
-	return false
+	return false, nil
+}
+
+func GetNonCompatibleDatastoreFaultMsg(compatibilityResult pbm.PlacementCompatibilityResult, dsMoref types.ManagedObjectReference) string {
+	var faultMsg string
+	for _, res := range compatibilityResult {
+		if res.Hub.HubId == dsMoref.Value {
+			for _, err := range res.Error {
+				faultMsg = faultMsg + err.LocalizedMessage
+			}
+		}
+	}
+	return faultMsg
 }
 
 // Get the best fit compatible datastore by free space.
-func GetBestFitCompatibleDatastore(dsRefs []mo.Datastore) string {
+func GetMostFreeDatastore(dsMo []mo.Datastore) mo.Datastore {
 	var curMax int64
 	curMax = -1
 	var index int
-	for i, ds := range dsRefs {
+	for i, ds := range dsMo {
 		dsFreeSpace := ds.Info.GetDatastoreInfo().FreeSpace
 		if dsFreeSpace > curMax {
 			curMax = dsFreeSpace
 			index = i
 		}
 	}
-	return dsRefs[index].Info.GetDatastoreInfo().Name
+	return dsMo[index]
 }
 
-// Get the datastore morefs.
-func (vs *VSphere) getDatastoreMorefs(ctx context.Context, dsRefs []types.ManagedObjectReference) ([]mo.Datastore, error) {
+func (vs *VSphere) GetCompatibleDatastoresMo(ctx context.Context, compatibilityResult pbm.PlacementCompatibilityResult) []mo.Datastore {
+	compatibleHubs := compatibilityResult.CompatibleDatastores()
+	// Return an error if there are no compatible datastores.
+	if len(compatibleHubs) < 1 {
+		return nil
+	}
+	dsMoList, err := vs.getDatastoreMo(ctx, compatibleHubs)
+	if err != nil {
+		return nil
+	}
+	return dsMoList
+}
+
+func (vs *VSphere) GetNonCompatibleDatastoresMo(ctx context.Context, compatibilityResult pbm.PlacementCompatibilityResult) []mo.Datastore {
+	nonCompatibleHubs := compatibilityResult.NonCompatibleDatastores()
+	// Return an error if there are no compatible datastores.
+	if len(nonCompatibleHubs) < 1 {
+		return nil
+	}
+	dsMoList, err := vs.getDatastoreMo(ctx, nonCompatibleHubs)
+	if err != nil {
+		return nil
+	}
+	return dsMoList
+}
+
+// Get the datastore managed objects for the place hubs using property collector.
+func (vs *VSphere) getDatastoreMo(ctx context.Context, hubs []pbmtypes.PbmPlacementHub) ([]mo.Datastore, error) {
+	var dsMoRefs []types.ManagedObjectReference
+	for _, hub := range hubs {
+		dsMoRefs = append(dsMoRefs, types.ManagedObjectReference{
+			Type:  hub.HubType,
+			Value: hub.HubId,
+		})
+	}
+
 	pc := property.DefaultCollector(vs.client.Client)
-	var datastoreMorefs []mo.Datastore
-	err := pc.Retrieve(ctx, dsRefs, []string{DatastoreInfoProperty}, &datastoreMorefs)
+	var dsMoList []mo.Datastore
+	err := pc.Retrieve(ctx, dsMoRefs, []string{DatastoreInfoProperty}, &dsMoList)
 	if err != nil {
 		return nil, err
 	}
-	return datastoreMorefs, nil
+	return dsMoList, nil
 }
 
-// Get all datastores accessible inside the current Kubernetes cluster.
-func (vs *VSphere) getAllAccessibleDatastoresForK8sCluster(ctx context.Context, resourcePool *object.ResourcePool) ([]types.ManagedObjectReference, error) {
-	var resourcePoolMoref mo.ResourcePool
-	s := object.NewSearchIndex(vs.client.Client)
-	err := s.Properties(ctx, resourcePool.Reference(), []string{ParentProperty}, &resourcePoolMoref)
+// Get all datastores accessible for the virtual machine object.
+func (vs *VSphere) getAllAccessibleDatastores(ctx context.Context, vmObj *object.VirtualMachine) ([]types.ManagedObjectReference, error) {
+	host, err := vmObj.HostSystem(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// The K8s cluster might be deployed inside a cluster or a host.
-	// For a cluster it is ClusterComputeResource object, for others it is a ComputeResource object.
-	var datastores []types.ManagedObjectReference
-	if resourcePoolMoref.Parent.Type == ClusterComputeResource {
-		var cluster mo.ClusterComputeResource
-		err = s.Properties(ctx, resourcePoolMoref.Parent.Reference(), []string{DatastoreProperty}, &cluster)
-		if err != nil {
-			return nil, err
-		}
-		datastores = cluster.Datastore
-	} else {
-		var host mo.ComputeResource
-		err = s.Properties(ctx, resourcePoolMoref.Parent.Reference(), []string{DatastoreProperty}, &host)
-		if err != nil {
-			return nil, err
-		}
-		datastores = host.Datastore
+	var hostSystemMo mo.HostSystem
+	s := object.NewSearchIndex(vs.client.Client)
+	err = s.Properties(ctx, host.Reference(), []string{DatastoreProperty}, &hostSystemMo)
+	if err != nil {
+		return nil, err
 	}
-	return datastores, nil
+	return hostSystemMo.Datastore, nil
 }

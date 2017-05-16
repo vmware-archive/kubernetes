@@ -557,12 +557,14 @@ func (vs *VSphere) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress, 
 			addressType = v1.NodeInternalIP
 		}
 		for _, ip := range v.IpAddress {
-			v1helper.AddToNodeAddresses(&addrs,
-				v1.NodeAddress{
-					Type:    addressType,
-					Address: ip,
-				},
-			)
+			if net.ParseIP(ip).To4() != nil {
+				v1helper.AddToNodeAddresses(&addrs,
+					v1.NodeAddress{
+						Type:    addressType,
+						Address: ip,
+					},
+				)
+			}
 		}
 	}
 	return addrs, nil
@@ -1292,23 +1294,31 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 		if err != nil {
 			return "", err
 		}
-		// Get the resource pool for current node.
-		resourcePool, err := vs.getCurrentNodeResourcePool(ctx, dc)
+
+		vmRegex := vs.cfg.Global.WorkingDir + vs.localInstanceID
+		currentVM, err := f.VirtualMachine(ctx, vmRegex)
 		if err != nil {
 			return "", err
 		}
 
-		dsRefs, err := vs.GetCompatibleDatastores(ctx, pbmClient, resourcePool, volumeOptions.StoragePolicyID)
+		compatibilityResult, err := vs.GetPlacementCompatibilityResult(ctx, pbmClient, currentVM, volumeOptions.StoragePolicyID)
 		if err != nil {
 			return "", err
+		}
+		if len(compatibilityResult) < 1 {
+			return "", fmt.Errorf("There are no compatible datastores that satisfy the storage policy: %+q requirements", volumeOptions.StoragePolicyID)
 		}
 
 		if volumeOptions.Datastore != "" {
-			if !IsUserSpecifiedDatastoreCompatible(dsRefs, volumeOptions.Datastore) {
-				return "", fmt.Errorf("User specified datastore: %q is not compatible with the StoragePolicy: %q requirements", volumeOptions.Datastore, volumeOptions.StoragePolicyName)
+			ok, nonCompatibleDsref := vs.IsUserSpecifiedDatastoreNonCompatible(ctx, compatibilityResult, volumeOptions.Datastore)
+			if ok {
+				faultMsg := GetNonCompatibleDatastoreFaultMsg(compatibilityResult, *nonCompatibleDsref)
+				return "", fmt.Errorf("User specified datastore: %q is not compatible with the storagePolicy: %q. Failed with faults: %+q", volumeOptions.Datastore, volumeOptions.StoragePolicyName, faultMsg)
 			}
 		} else {
-			datastore = GetBestFitCompatibleDatastore(dsRefs)
+			dsMoList := vs.GetCompatibleDatastoresMo(ctx, compatibilityResult)
+			dsMo := GetMostFreeDatastore(dsMoList)
+			datastore = dsMo.Info.GetDatastoreInfo().Name
 		}
 	}
 
