@@ -83,6 +83,7 @@ const (
 	CleanUpDummyVMRoutine_Interval   = 5
 	UUIDPath                         = "/sys/class/dmi/id/product_serial"
 	UUIDPrefix                       = "VMware-"
+	NameProperty                     = "name"
 )
 
 // Controller types that are currently supported for hot attach of disks
@@ -1295,13 +1296,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 			return "", err
 		}
 
-		vmRegex := vs.cfg.Global.WorkingDir + vs.localInstanceID
-		currentVM, err := f.VirtualMachine(ctx, vmRegex)
-		if err != nil {
-			return "", err
-		}
-
-		compatibilityResult, err := vs.GetPlacementCompatibilityResult(ctx, pbmClient, currentVM, volumeOptions.StoragePolicyID)
+		compatibilityResult, err := vs.GetPlacementCompatibilityResult(ctx, pbmClient, volumeOptions.StoragePolicyID)
 		if err != nil {
 			return "", err
 		}
@@ -1316,7 +1311,10 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 				return "", fmt.Errorf("User specified datastore: %q is not compatible with the storagePolicy: %q. Failed with faults: %+q", volumeOptions.Datastore, volumeOptions.StoragePolicyName, faultMsg)
 			}
 		} else {
-			dsMoList := vs.GetCompatibleDatastoresMo(ctx, compatibilityResult)
+			dsMoList, err := vs.GetCompatibleDatastoresMo(ctx, compatibilityResult)
+			if err != nil {
+				return "", err
+			}
 			dsMo := GetMostFreeDatastore(dsMoList)
 			datastore = dsMo.Info.GetDatastoreInfo().Name
 		}
@@ -1535,7 +1533,7 @@ func (vs *VSphere) cleanUpDummyVMs(dummyVMPrefix string) {
 		f.SetDatacenter(dc)
 
 		// Get the folder reference for global working directory where the dummy VM needs to be created.
-		vmFolder, err := getFolder(ctx, vs.client, vs.cfg.Global.Datacenter, vs.cfg.Global.WorkingDir)
+		vmFolder, err := f.Folder(ctx, strings.TrimSuffix(vs.cfg.Global.WorkingDir, "/"))
 		if err != nil {
 			glog.V(4).Infof("[cleanUpDummyVMs] Unable to get the kubernetes folder: %q reference with err: %+v", vs.cfg.Global.WorkingDir, err)
 			continue
@@ -1543,12 +1541,19 @@ func (vs *VSphere) cleanUpDummyVMs(dummyVMPrefix string) {
 
 		// A write lock is acquired to make sure the cleanUp routine doesn't delete any VM's created by ongoing PVC requests.
 		cleanUpDummyVMLock.Lock()
-		dummyVMRefList, err := getDummyVMList(ctx, vs.client, vmFolder, dummyVMPrefix)
+		vmMoList, err := vs.GetVMsInsideFolder(ctx, vmFolder, []string{NameProperty})
 		if err != nil {
-			glog.V(4).Infof("[cleanUpDummyVMs] Unable to get dummy VM list in the kubernetes cluster: %q reference with err: %+v", vs.cfg.Global.WorkingDir, err)
+			glog.V(4).Infof("[cleanUpDummyVMs] Unable to get VM list in the kubernetes cluster: %q reference with err: %+v", vs.cfg.Global.WorkingDir, err)
 			cleanUpDummyVMLock.Unlock()
 			continue
 		}
+		var dummyVMRefList []*object.VirtualMachine
+		for _, vmMo := range vmMoList {
+			if strings.HasPrefix(vmMo.Name, dummyVMPrefix) {
+				dummyVMRefList = append(dummyVMRefList, object.NewVirtualMachine(vs.client.Client, vmMo.Reference()))
+			}
+		}
+
 		for _, dummyVMRef := range dummyVMRefList {
 			err = deleteVM(ctx, dummyVMRef)
 			if err != nil {
@@ -1558,33 +1563,6 @@ func (vs *VSphere) cleanUpDummyVMs(dummyVMPrefix string) {
 		}
 		cleanUpDummyVMLock.Unlock()
 	}
-}
-
-// Get the dummy VM list from the kubernetes working directory.
-func getDummyVMList(ctx context.Context, c *govmomi.Client, vmFolder *object.Folder, dummyVMPrefix string) ([]*object.VirtualMachine, error) {
-	vmFolders, err := vmFolder.Children(ctx)
-	if err != nil {
-		glog.V(4).Infof("Unable to retrieve the virtual machines from the kubernetes cluster: %+v", vmFolder)
-		return nil, err
-	}
-
-	var dummyVMRefList []*object.VirtualMachine
-	pc := property.DefaultCollector(c.Client)
-	for _, vmFolder := range vmFolders {
-		if vmFolder.Reference().Type == "VirtualMachine" {
-			var vmRefs []types.ManagedObjectReference
-			var vmMorefs []mo.VirtualMachine
-			vmRefs = append(vmRefs, vmFolder.Reference())
-			err = pc.Retrieve(ctx, vmRefs, []string{"name"}, &vmMorefs)
-			if err != nil {
-				return nil, err
-			}
-			if strings.HasPrefix(vmMorefs[0].Name, dummyVMPrefix) {
-				dummyVMRefList = append(dummyVMRefList, object.NewVirtualMachine(c.Client, vmRefs[0]))
-			}
-		}
-	}
-	return dummyVMRefList, nil
 }
 
 func (vs *VSphere) createDummyVM(ctx context.Context, datacenter *object.Datacenter, datastore *object.Datastore, vmName string) (*object.VirtualMachine, error) {
@@ -1620,7 +1598,10 @@ func (vs *VSphere) createDummyVM(ctx context.Context, datacenter *object.Datacen
 		return nil, err
 	}
 	// Get the folder reference for global working directory where the dummy VM needs to be created.
-	vmFolder, err := getFolder(ctx, vs.client, vs.cfg.Global.Datacenter, vs.cfg.Global.WorkingDir)
+	f := find.NewFinder(vs.client.Client, true)
+	dc, err := f.Datacenter(ctx, vs.cfg.Global.Datacenter)
+	f.SetDatacenter(dc)
+	vmFolder, err := f.Folder(ctx, strings.TrimSuffix(vs.cfg.Global.WorkingDir, "/"))
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get the folder reference for %q with err: %+v", vs.cfg.Global.WorkingDir, err)
 	}
@@ -1867,52 +1848,6 @@ func makeDirectoryInDatastore(c *govmomi.Client, dc *object.Datacenter, path str
 	}
 
 	return err
-}
-
-// Get the folder for a given VM
-func getFolder(ctx context.Context, c *govmomi.Client, datacenterName string, folderName string) (*object.Folder, error) {
-	f := find.NewFinder(c.Client, true)
-
-	// Fetch and set data center
-	dc, err := f.Datacenter(ctx, datacenterName)
-	if err != nil {
-		return nil, err
-	}
-	f.SetDatacenter(dc)
-
-	folderName = strings.TrimSuffix(folderName, "/")
-	dcFolders, err := dc.Folders(ctx)
-	vmFolders, _ := dcFolders.VmFolder.Children(ctx)
-
-	var vmFolderRefs []types.ManagedObjectReference
-	for _, vmFolder := range vmFolders {
-		vmFolderRefs = append(vmFolderRefs, vmFolder.Reference())
-	}
-
-	// Get only references of type folder.
-	var folderRefs []types.ManagedObjectReference
-	for _, vmFolder := range vmFolderRefs {
-		if vmFolder.Type == "Folder" {
-			folderRefs = append(folderRefs, vmFolder)
-		}
-	}
-
-	// Find the specific folder reference matching the folder name.
-	var resultFolder *object.Folder
-	pc := property.DefaultCollector(c.Client)
-	for _, folderRef := range folderRefs {
-		var refs []types.ManagedObjectReference
-		var folderMorefs []mo.Folder
-		refs = append(refs, folderRef)
-		err = pc.Retrieve(ctx, refs, []string{"name"}, &folderMorefs)
-		for _, fref := range folderMorefs {
-			if fref.Name == folderName {
-				resultFolder = object.NewFolder(c.Client, folderRef)
-			}
-		}
-	}
-
-	return resultFolder, nil
 }
 
 // Delete the VM.

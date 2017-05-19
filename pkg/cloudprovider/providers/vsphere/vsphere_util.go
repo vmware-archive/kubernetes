@@ -22,7 +22,10 @@ import (
 	"runtime"
 	"strings"
 
+	"fmt"
+
 	"github.com/vmware/govmomi"
+	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/pbm"
 	"github.com/vmware/govmomi/property"
@@ -35,6 +38,8 @@ import (
 const (
 	DatastoreProperty     = "datastore"
 	DatastoreInfoProperty = "info"
+	Folder                = "Folder"
+	VirtualMachine        = "VirtualMachine"
 )
 
 // Reads vSphere configuration from system environment and construct vSphere object
@@ -78,8 +83,8 @@ func GetgovmomiClient(cfg *VSphereConfig) (*govmomi.Client, error) {
 }
 
 // Get placement compatibility result based on storage policy requirements.
-func (vs *VSphere) GetPlacementCompatibilityResult(ctx context.Context, pbmClient *pbm.Client, vmObj *object.VirtualMachine, storagePolicyID string) (pbm.PlacementCompatibilityResult, error) {
-	datastores, err := vs.getAllAccessibleDatastores(ctx, vmObj)
+func (vs *VSphere) GetPlacementCompatibilityResult(ctx context.Context, pbmClient *pbm.Client, storagePolicyID string) (pbm.PlacementCompatibilityResult, error) {
+	datastores, err := vs.getSharedDatastoresInK8SCluster(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -144,17 +149,17 @@ func GetMostFreeDatastore(dsMo []mo.Datastore) mo.Datastore {
 	return dsMo[index]
 }
 
-func (vs *VSphere) GetCompatibleDatastoresMo(ctx context.Context, compatibilityResult pbm.PlacementCompatibilityResult) []mo.Datastore {
+func (vs *VSphere) GetCompatibleDatastoresMo(ctx context.Context, compatibilityResult pbm.PlacementCompatibilityResult) ([]mo.Datastore, error) {
 	compatibleHubs := compatibilityResult.CompatibleDatastores()
 	// Return an error if there are no compatible datastores.
 	if len(compatibleHubs) < 1 {
-		return nil
+		return nil, fmt.Errorf("There are no compatible datastores that satisfy the storage policy requirements")
 	}
 	dsMoList, err := vs.getDatastoreMo(ctx, compatibleHubs)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return dsMoList
+	return dsMoList, nil
 }
 
 func (vs *VSphere) GetNonCompatibleDatastoresMo(ctx context.Context, compatibilityResult pbm.PlacementCompatibilityResult) []mo.Datastore {
@@ -190,7 +195,90 @@ func (vs *VSphere) getDatastoreMo(ctx context.Context, hubs []pbmtypes.PbmPlacem
 }
 
 // Get all datastores accessible for the virtual machine object.
-func (vs *VSphere) getAllAccessibleDatastores(ctx context.Context, vmObj *object.VirtualMachine) ([]types.ManagedObjectReference, error) {
+func (vs *VSphere) getSharedDatastoresInK8SCluster(ctx context.Context) ([]types.ManagedObjectReference, error) {
+	f := find.NewFinder(vs.client.Client, true)
+	dc, err := f.Datacenter(ctx, vs.cfg.Global.Datacenter)
+	f.SetDatacenter(dc)
+	vmFolder, err := f.Folder(ctx, strings.TrimSuffix(vs.cfg.Global.WorkingDir, "/"))
+	if err != nil {
+		return nil, err
+	}
+	vmMoList, err := vs.GetVMsInsideFolder(ctx, vmFolder, []string{NameProperty})
+	if err != nil {
+		return nil, err
+	}
+	dsMorefs := make(map[int][]types.ManagedObjectReference)
+	for i, vmMo := range vmMoList {
+		if !strings.HasPrefix(vmMo.Name, DummyVMPrefixName) {
+			dsMorefs[i], err = vs.getAllAccessibleDatastores(ctx, vmMo)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	sharedDSMorefs := intersectMorefs(dsMorefs)
+	if len(sharedDSMorefs) == 0 {
+		return nil, fmt.Errorf("No shared datastores found in the Kubernetes cluster")
+	}
+	return sharedDSMorefs, nil
+}
+
+func intersectMorefs(args map[int][]types.ManagedObjectReference) []types.ManagedObjectReference {
+	arrLength := len(args)
+	tempMap := make(map[string]int)
+	tempArrayNew := make([]types.ManagedObjectReference, 0)
+	for _, arg := range args {
+		tempArr := arg
+		for idx := range tempArr {
+			if _, ok := tempMap[tempArr[idx].Value]; ok {
+				tempMap[tempArr[idx].Value]++
+				if tempMap[tempArr[idx].Value] == arrLength {
+					tempArrayNew = append(tempArrayNew, arg[idx])
+				}
+			} else {
+				tempMap[tempArr[idx].Value] = 1
+			}
+		}
+	}
+	return tempArrayNew
+}
+
+// Get the VM list inside a folder.
+func (vs *VSphere) GetVMsInsideFolder(ctx context.Context, vmFolder *object.Folder, properties []string) ([]mo.VirtualMachine, error) {
+	vmFolders, err := vmFolder.Children(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	pc := property.DefaultCollector(vs.client.Client)
+	var vmRefs []types.ManagedObjectReference
+	var vmMoList []mo.VirtualMachine
+	for _, vmFolder := range vmFolders {
+		if vmFolder.Reference().Type == VirtualMachine {
+			vmRefs = append(vmRefs, vmFolder.Reference())
+		}
+	}
+	err = pc.Retrieve(ctx, vmRefs, properties, &vmMoList)
+	if err != nil {
+		return nil, err
+	}
+	return vmMoList, nil
+}
+
+// Get the datastores accessible for the virtual machine object.
+func (vs *VSphere) getAllAccessibleDatastores(ctx context.Context, vmMo mo.VirtualMachine) ([]types.ManagedObjectReference, error) {
+	f := find.NewFinder(vs.client.Client, true)
+	dc, err := f.Datacenter(ctx, vs.cfg.Global.Datacenter)
+	if err != nil {
+		return nil, err
+	}
+	f.SetDatacenter(dc)
+	vmRegex := vs.cfg.Global.WorkingDir + vmMo.Name
+	vmObj, err := f.VirtualMachine(ctx, vmRegex)
+	if err != nil {
+		return nil, err
+	}
+
 	host, err := vmObj.HostSystem(ctx)
 	if err != nil {
 		return nil, err
