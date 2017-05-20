@@ -1319,7 +1319,6 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 			datastore = dsMo.Info.GetDatastoreInfo().Name
 		}
 	}
-
 	ds, err := f.Datastore(ctx, datastore)
 	if err != nil {
 		glog.Errorf("Failed while searching for datastore %+q. err %s", datastore, err)

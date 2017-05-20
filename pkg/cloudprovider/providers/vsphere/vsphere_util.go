@@ -207,40 +207,47 @@ func (vs *VSphere) getSharedDatastoresInK8SCluster(ctx context.Context) ([]types
 	if err != nil {
 		return nil, err
 	}
-	dsMorefs := make(map[int][]types.ManagedObjectReference)
-	for i, vmMo := range vmMoList {
+	index := 0
+	var sharedDs []string
+	for _, vmMo := range vmMoList {
 		if !strings.HasPrefix(vmMo.Name, DummyVMPrefixName) {
-			dsMorefs[i], err = vs.getAllAccessibleDatastores(ctx, vmMo)
+			accessibleDatastores, err := vs.getAllAccessibleDatastores(ctx, vmMo)
 			if err != nil {
 				return nil, err
 			}
+			if index == 0 {
+				sharedDs = accessibleDatastores
+			} else {
+				sharedDs = intersect(sharedDs, accessibleDatastores)
+				if len(sharedDs) == 0 {
+					return nil, fmt.Errorf("No shared datastores found in the Kubernetes cluster")
+				}
+			}
+			index++
 		}
 	}
-	sharedDSMorefs := intersectMorefs(dsMorefs)
-	if len(sharedDSMorefs) == 0 {
-		return nil, fmt.Errorf("No shared datastores found in the Kubernetes cluster")
+	var sharedDSMorefs []types.ManagedObjectReference
+	for _, ds := range sharedDs {
+		sharedDSMorefs = append(sharedDSMorefs, types.ManagedObjectReference{
+			Value: ds,
+			Type:  "Datastore",
+		})
 	}
 	return sharedDSMorefs, nil
 }
 
-func intersectMorefs(args map[int][]types.ManagedObjectReference) []types.ManagedObjectReference {
-	arrLength := len(args)
-	tempMap := make(map[string]int)
-	tempArrayNew := make([]types.ManagedObjectReference, 0)
-	for _, arg := range args {
-		tempArr := arg
-		for idx := range tempArr {
-			if _, ok := tempMap[tempArr[idx].Value]; ok {
-				tempMap[tempArr[idx].Value]++
-				if tempMap[tempArr[idx].Value] == arrLength {
-					tempArrayNew = append(tempArrayNew, arg[idx])
-				}
-			} else {
-				tempMap[tempArr[idx].Value] = 1
+func intersect(list1 []string, list2 []string) []string {
+	var sharedList []string
+	for _, val1 := range list1 {
+		// Check if val1 is found in list2
+		for _, val2 := range list2 {
+			if val1 == val2 {
+				sharedList = append(sharedList, val1)
+				break
 			}
 		}
 	}
-	return tempArrayNew
+	return sharedList
 }
 
 // Get the VM list inside a folder.
@@ -266,7 +273,7 @@ func (vs *VSphere) GetVMsInsideFolder(ctx context.Context, vmFolder *object.Fold
 }
 
 // Get the datastores accessible for the virtual machine object.
-func (vs *VSphere) getAllAccessibleDatastores(ctx context.Context, vmMo mo.VirtualMachine) ([]types.ManagedObjectReference, error) {
+func (vs *VSphere) getAllAccessibleDatastores(ctx context.Context, vmMo mo.VirtualMachine) ([]string, error) {
 	f := find.NewFinder(vs.client.Client, true)
 	dc, err := f.Datacenter(ctx, vs.cfg.Global.Datacenter)
 	if err != nil {
@@ -290,5 +297,10 @@ func (vs *VSphere) getAllAccessibleDatastores(ctx context.Context, vmMo mo.Virtu
 	if err != nil {
 		return nil, err
 	}
-	return hostSystemMo.Datastore, nil
+
+	var dsRefValues []string
+	for _, dsRef := range hostSystemMo.Datastore {
+		dsRefValues = append(dsRefValues, dsRef.Value)
+	}
+	return dsRefValues, nil
 }
