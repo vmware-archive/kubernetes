@@ -886,12 +886,8 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeNam
 	}
 	requestTime := time.Now()
 	diskID, diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyID, nodeName)
-	if err != nil {
-		recordvSphereMetric(request_attachvolume, time.Time{}, err)
-		return diskID, diskUUID, err
-	}
-	recordvSphereMetric(request_attachvolume, requestTime, nil)
-	return diskID, diskUUID, nil
+	recordvSphereMetric(request_attachvolume, requestTime, err)
+	return diskID, diskUUID, err
 }
 
 func getVMDiskInfo(ctx context.Context, vm *object.VirtualMachine, disk *types.VirtualDisk) (string, string, error) {
@@ -1039,10 +1035,6 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 	}
 	requestTime := time.Now()
 	isAttached, err := diskIsAttachedInternal(volPath, nodeName)
-	if err != nil {
-		recordvSphereMetric(request_diskIsAttached, time.Time{}, err)
-		return isAttached, err
-	}
 	recordvSphereMetric(request_diskIsAttached, requestTime, err)
 	return isAttached, err
 }
@@ -1109,10 +1101,6 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 	}
 	requestTime := time.Now()
 	attached, err := disksAreAttachedInternal(volPaths, nodeName)
-	if err != nil {
-		recordvSphereMetric(request_disksAreAttached, time.Time{}, err)
-		return attached, err
-	}
 	recordvSphereMetric(request_disksAreAttached, requestTime, err)
 	return attached, err
 }
@@ -1286,12 +1274,8 @@ func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error 
 	}
 	requestTime := time.Now()
 	err := detachDiskInternal(volPath, nodeName)
-	if err != nil {
-		recordvSphereMetric(request_detachvolume, time.Time{}, err)
-		return err
-	}
 	recordvSphereMetric(request_detachvolume, requestTime, nil)
-	return nil
+	return err
 
 }
 
@@ -1539,12 +1523,8 @@ func (vs *VSphere) DeleteVolume(vmDiskPath string) error {
 	}
 	requestTime := time.Now()
 	err := deleteVolumeInternal(vmDiskPath)
-	if err != nil {
-		recordvSphereMetric(request_deletevolume, time.Time{}, err)
-		return err
-	}
 	recordvSphereMetric(request_deletevolume, requestTime, err)
-	return nil
+	return err
 }
 
 // NodeExists checks if the node with given nodeName exist.

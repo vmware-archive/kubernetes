@@ -54,16 +54,10 @@ func registerMetrics() {
 }
 
 func recordvSphereMetric(actionName string, requestTime time.Time, err error) {
-	var timeTaken float64
-	if !requestTime.IsZero() {
-		timeTaken = time.Since(requestTime).Seconds()
-	} else {
-		timeTaken = 0
-	}
 	if err != nil {
 		vsphereApiErrorMetric.With(prometheus.Labels{"request": actionName}).Inc()
 	} else {
-		vsphereApiMetric.With(prometheus.Labels{"request": actionName}).Observe(timeTaken)
+		vsphereApiMetric.With(prometheus.Labels{"request": actionName}).Observe(calculateTimeTaken(requestTime))
 	}
 }
 
@@ -76,15 +70,19 @@ func recordCreateVolumeMetric(volumeOptions *VolumeOptions, requestTime time.Tim
 	} else {
 		actionName = request_createvolume
 	}
-	var timeTaken float64
-	if !requestTime.IsZero() {
-		timeTaken = time.Since(requestTime).Seconds()
-	} else {
-		timeTaken = 0
-	}
 	if err != nil {
 		vsphereApiErrorMetric.With(prometheus.Labels{"request": actionName}).Inc()
 	} else {
-		vsphereApiMetric.With(prometheus.Labels{"request": actionName}).Observe(timeTaken)
+
+		vsphereApiMetric.With(prometheus.Labels{"request": actionName}).Observe(calculateTimeTaken(requestTime))
 	}
+}
+
+func calculateTimeTaken(requestBeginTime time.Time) (timeTaken float64) {
+	if !requestBeginTime.IsZero() {
+		timeTaken = time.Since(requestBeginTime).Seconds()
+	} else {
+		timeTaken = 0
+	}
+	return timeTaken
 }
