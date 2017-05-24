@@ -225,6 +225,7 @@ func readConfig(config io.Reader) (VSphereConfig, error) {
 }
 
 func init() {
+	registerMetrics()
 	cloudprovider.RegisterCloudProvider(ProviderName, func(config io.Reader) (cloudprovider.Interface, error) {
 		cfg, err := readConfig(config)
 		if err != nil {
@@ -746,6 +747,7 @@ func cleanUpController(ctx context.Context, newSCSIController types.BaseVirtualD
 
 // Attaches given virtual disk volume to the compute running kubelet.
 func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskID string, diskUUID string, err error) {
+	attachDiskInternal := func(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskID string, diskUUID string, err error) {
 	var newSCSIController types.BaseVirtualDevice
 
 	// Create context
@@ -881,6 +883,15 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeNam
 		return "", "", err
 	}
 	return deviceName, diskUUID, nil
+	}
+	requestTime := time.Now()
+	diskID, diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyID, nodeName)
+	if err != nil {
+		recordvSphereMetric(request_attachvolume, time.Time{}, err)
+		return diskID, diskUUID, err
+	}
+	recordvSphereMetric(request_attachvolume, requestTime, nil)
+	return diskID, diskUUID, nil
 }
 
 func getVMDiskInfo(ctx context.Context, vm *object.VirtualMachine, disk *types.VirtualDisk) (string, string, error) {
@@ -981,6 +992,7 @@ func getAvailableSCSIController(scsiControllers []*types.VirtualController) *typ
 
 // DiskIsAttached returns if disk is attached to the VM using controllers supported by the plugin.
 func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (bool, error) {
+	diskIsAttachedInternal := func(volPath string, nodeName k8stypes.NodeName) (bool, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1024,10 +1036,20 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 
 	attached, err := checkDiskAttached(volPath, vmDevices, dc, vs.client)
 	return attached, err
+	}
+	requestTime := time.Now()
+	isAttached, err := diskIsAttachedInternal(volPath, nodeName)
+	if err != nil {
+		recordvSphereMetric(request_diskIsAttached, time.Time{}, err)
+		return isAttached, err
+	}
+	recordvSphereMetric(request_diskIsAttached, requestTime, err)
+	return isAttached, err
 }
 
 // DisksAreAttached returns if disks are attached to the VM using controllers supported by the plugin.
 func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeName) (map[string]bool, error) {
+	disksAreAttachedInternal := func(volPaths []string, nodeName k8stypes.NodeName) (map[string]bool, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1084,6 +1106,15 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 		}
 	}
 	return attached, nil
+	}
+	requestTime := time.Now()
+	attached, err := disksAreAttachedInternal(volPaths, nodeName)
+	if err != nil {
+		recordvSphereMetric(request_disksAreAttached, time.Time{}, err)
+		return attached, err
+	}
+	recordvSphereMetric(request_disksAreAttached, requestTime, err)
+	return attached, err
 }
 
 func checkDiskAttached(volPath string, vmdevices object.VirtualDeviceList, dc *object.Datacenter, client *govmomi.Client) (bool, error) {
@@ -1206,6 +1237,7 @@ func getVirtualDiskID(volPath string, vmDevices object.VirtualDeviceList, dc *ob
 
 // DetachDisk detaches given virtual disk volume from the compute running kubelet.
 func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error {
+	detachDiskInternal := func(volPath string, nodeName k8stypes.NodeName) error {
 	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1251,11 +1283,21 @@ func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error 
 	}
 
 	return nil
+	}
+	requestTime := time.Now()
+	err := detachDiskInternal(volPath, nodeName)
+	if err != nil {
+		recordvSphereMetric(request_detachvolume, time.Time{}, err)
+		return err
+	}
+	recordvSphereMetric(request_detachvolume, requestTime, nil)
+	return nil
+
 }
 
 // CreateVolume creates a volume of given size (in KiB).
 func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string, err error) {
-
+	createVolumeInternal := func(volumeOptions *VolumeOptions) (volumePath string, err error) {
 	var datastore string
 	var destVolPath string
 
@@ -1302,6 +1344,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 		}
 		volumeOptions.StoragePolicyID, err = pbmClient.ProfileIDByName(ctx, volumeOptions.StoragePolicyName)
 		if err != nil {
+			recordvSphereMetric(request_createvolume_with_policy, time.Time{}, err)
 			return "", err
 		}
 
@@ -1322,6 +1365,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 		} else {
 			dsMoList, err := vs.GetCompatibleDatastoresMo(ctx, compatibilityResult)
 			if err != nil {
+				recordvSphereMetric(request_createvolume_with_policy, time.Time{}, err)
 				return "", err
 			}
 			dsMo := GetMostFreeDatastore(dsMoList)
@@ -1430,11 +1474,21 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions) (volumePath string
 	}
 	glog.V(1).Infof("VM Disk path is %+q", destVolPath)
 	return destVolPath, nil
+	}
+	requestTime := time.Now()
+	volumePath, err = createVolumeInternal(volumeOptions)
+	if err != nil {
+		recordCreateVolumeMetric(volumeOptions, time.Time{}, err)
+		return "", err
+	}
+	recordCreateVolumeMetric(volumeOptions, requestTime, nil)
+	return volumePath, nil
 }
 
 // DeleteVolume deletes a volume given volume name.
 // Also, deletes the folder where the volume resides.
 func (vs *VSphere) DeleteVolume(vmDiskPath string) error {
+	deleteVolumeInternal := func(vmDiskPath string) error {
 	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1481,8 +1535,16 @@ func (vs *VSphere) DeleteVolume(vmDiskPath string) error {
 	if err != nil {
 		return err
 	}
-
 	return task.Wait(ctx)
+	}
+	requestTime := time.Now()
+	err := deleteVolumeInternal(vmDiskPath)
+	if err != nil {
+		recordvSphereMetric(request_deletevolume, time.Time{}, err)
+		return err
+	}
+	recordvSphereMetric(request_deletevolume, requestTime, err)
+	return nil
 }
 
 // NodeExists checks if the node with given nodeName exist.
