@@ -11,6 +11,15 @@ load(
 go_library(
     name = "go_default_library",
     srcs = [
+        "vclib/connection.go",
+        "vclib/constants.go",
+        "vclib/custom_errors.go",
+        "vclib/datacenter.go",
+        "vclib/datastore.go",
+        "vclib/pbm.go",
+        "vclib/utils.go",
+        "vclib/virtualmachine.go",
+        "vclib/volumeoptions.go",
         "vsphere.go",
         "vsphere_metrics.go",
         "vsphere_util.go",
