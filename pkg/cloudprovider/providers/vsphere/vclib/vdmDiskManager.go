@@ -9,12 +9,13 @@ import (
 )
 
 type vdmDiskManager struct {
+	diskPath      string
 	volumeOptions VolumeOptions
 }
 
 // Create implements Disk's Create interface
 // Contains implementation of virtualDiskManager based Provisioning
-func (vdmDisk vdmDiskManager) Create(ctx context.Context, diskPath string, ds Datastore) (err error) {
+func (vdmDisk vdmDiskManager) Create(ctx context.Context, ds *Datastore) (err error) {
 	if vdmDisk.volumeOptions.SCSIControllerType == "" {
 		vdmDisk.volumeOptions.SCSIControllerType = LSILogicControllerType
 	}
@@ -37,14 +38,14 @@ func (vdmDisk vdmDiskManager) Create(ctx context.Context, diskPath string, ds Da
 		},
 		CapacityKb: int64(vdmDisk.volumeOptions.CapacityKB),
 	}
-	task, err := virtualDiskManager.CreateVirtualDisk(ctx, diskPath, ds.datacenter.Datacenter, vmDiskSpec)
+	task, err := virtualDiskManager.CreateVirtualDisk(ctx, vdmDisk.diskPath, ds.datacenter.Datacenter, vmDiskSpec)
 	if err != nil {
-		glog.Errorf("Failed to create virtual disk: %s. err: %+v", diskPath, err)
+		glog.Errorf("Failed to create virtual disk: %s. err: %+v", vdmDisk.diskPath, err)
 		return err
 	}
 	err = task.Wait(ctx)
 	if err != nil {
-		glog.Errorf("Failed to create virtual disk: %s. err: %+v", diskPath, err)
+		glog.Errorf("Failed to create virtual disk: %s. err: %+v", vdmDisk.diskPath, err)
 		return err
 	}
 	return nil

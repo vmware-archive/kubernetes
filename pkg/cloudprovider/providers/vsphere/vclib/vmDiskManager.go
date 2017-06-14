@@ -10,13 +10,14 @@ import (
 )
 
 type vmDiskManager struct {
+	diskPath      string
 	volumeOptions VolumeOptions
 	vmOptions     VMOptions
 }
 
 // Create implements Disk's Create interface
 // Contains implementation of VM based Provisioning to provision disk with SPBM Policy or VSANStorageProfileData
-func (vmdisk vmDiskManager) Create(ctx context.Context, diskPath string, datastore Datastore) (err error) {
+func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *Datastore) (err error) {
 	storageProfileSpec := &types.VirtualMachineDefinedProfileSpec{}
 	// Is PBM storage policy ID is present, set the storage spec profile ID,
 	// else, set raw the VSAN policy string.
@@ -24,11 +25,12 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, diskPath string, datasto
 		storageProfileSpec.ProfileId = vmdisk.volumeOptions.StoragePolicyID
 	} else if vmdisk.volumeOptions.VSANStorageProfileData != "" {
 		// Check Datastore type - VSANStorageProfileData is only applicable to vSAN Datastore
-		ok, err := datastore.IsVSANDatastore(ctx)
+		dsType, err := datastore.GetType(ctx)
 		if err != nil {
 			return err
 		}
-		if !ok {
+		if dsType != VSANDatastoreType {
+			glog.Errorf("The specified datastore: %q is not a VSAN datastore", datastore.Name())
 			return fmt.Errorf("The specified datastore: %q is not a VSAN datastore."+
 				" The policy parameters will work only with VSAN Datastore."+
 				" So, please specify a valid VSAN datastore in Storage class definition.", datastore.Name())
@@ -55,7 +57,7 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, diskPath string, datasto
 
 	// Reconfigure the VM to attach the disk with the VSAN policy configured
 	virtualMachineConfigSpec := types.VirtualMachineConfigSpec{}
-	disk, _, err := createDiskSpec(ctx, VirtualMachine{dummyVM.VirtualMachine, datastore.datacenter}, diskPath, datastore, vmdisk.volumeOptions)
+	disk, _, err := createDiskSpec(ctx, dummyVM, vmdisk.diskPath, datastore, vmdisk.volumeOptions)
 	if err != nil {
 		glog.Errorf("Failed to create Disk Spec. err: %v", err)
 		return err
@@ -72,24 +74,24 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, diskPath string, datasto
 	task, err := dummyVM.Reconfigure(ctx, virtualMachineConfigSpec)
 	err = task.Wait(ctx)
 	if err != nil {
-		errorMessage := fmt.Sprintf("Cannot complete the operation because the file or folder %s already exists", diskPath)
+		errorMessage := fmt.Sprintf("Cannot complete the operation because the file or folder %s already exists", vmdisk.diskPath)
 		if errorMessage == err.Error() {
 			//Skip error and continue to detach the disk as the disk was already created on the datastore.
 			fileAlreadyExist = true
-			glog.V(LogLevel).Info("File: %v already exists", diskPath)
+			glog.V(LogLevel).Info("File: %v already exists", vmdisk.diskPath)
 		} else {
 			glog.Errorf("Failed to attach the disk to VM: %q with err: %+v", dummyVMFullName, err)
 			return err
 		}
 	}
 	// Detach the disk from the dummy VM.
-	err = dummyVM.DetachDisk(ctx, diskPath)
+	err = dummyVM.DetachDisk(ctx, vmdisk.diskPath)
 	if err != nil {
 		if DiskNotFoundErrMsg == err.Error() && fileAlreadyExist {
 			// Skip error if disk was already detached from the dummy VM but still present on the datastore.
-			glog.V(LogLevel).Info("File: %v is already detached", diskPath)
+			glog.V(LogLevel).Info("File: %v is already detached", vmdisk.diskPath)
 		} else {
-			glog.Errorf("Failed to detach the disk: %q from VM: %q with err: %+v", diskPath, dummyVMFullName, err)
+			glog.Errorf("Failed to detach the disk: %q from VM: %q with err: %+v", vmdisk.diskPath, dummyVMFullName, err)
 			return err
 		}
 	}
