@@ -38,12 +38,12 @@ func (ds *Datastore) CreateDirectory(ctx context.Context, directoryPath string, 
 
 // GetType returns the type of datastore
 func (ds *Datastore) GetType(ctx context.Context) (string, error) {
-	var mds mo.Datastore
+	var dsMo mo.Datastore
 	pc := property.DefaultCollector(ds.Client())
-	err := pc.RetrieveOne(ctx, ds.Datastore.Reference(), []string{"summary"}, &mds)
+	err := pc.RetrieveOne(ctx, ds.Datastore.Reference(), []string{"summary"}, &dsMo)
 	if err != nil {
 		glog.Errorf("Failed to retrieve datastore summary property. err: %v", err)
 		return "", err
 	}
-	return mds.Summary.Type, nil
+	return dsMo.Summary.Type, nil
 }

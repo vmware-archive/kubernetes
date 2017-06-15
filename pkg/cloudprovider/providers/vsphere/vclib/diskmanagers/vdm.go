@@ -9,56 +9,56 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 )
 
-type vdmDiskManager struct {
+type virtualDiskManager struct {
 	diskPath      string
 	volumeOptions vclib.VolumeOptions
 }
 
 // Create implements Disk's Create interface
 // Contains implementation of virtualDiskManager based Provisioning
-func (vdmDisk vdmDiskManager) Create(ctx context.Context, datastore *vclib.Datastore) (err error) {
-	if vdmDisk.volumeOptions.SCSIControllerType == "" {
-		vdmDisk.volumeOptions.SCSIControllerType = vclib.LSILogicControllerType
+func (diskManager virtualDiskManager) Create(ctx context.Context, datastore *vclib.Datastore) (err error) {
+	if diskManager.volumeOptions.SCSIControllerType == "" {
+		diskManager.volumeOptions.SCSIControllerType = vclib.LSILogicControllerType
 	}
-	if vdmDisk.volumeOptions.DiskFormat == "" {
-		vdmDisk.volumeOptions.DiskFormat = vclib.ThinDiskType
+	if diskManager.volumeOptions.DiskFormat == "" {
+		diskManager.volumeOptions.DiskFormat = vclib.ThinDiskType
 	}
-	if !vdmDisk.volumeOptions.VerifyVolumeOptions() {
-		glog.Error("VolumeOptions verification failed. volumeOptions: ", vdmDisk.volumeOptions)
+	if !diskManager.volumeOptions.VerifyVolumeOptions() {
+		glog.Error("VolumeOptions verification failed. volumeOptions: ", diskManager.volumeOptions)
 		return vclib.ErrInvalidVolumeOptions
 	}
 	// Create virtual disk
-	diskFormat := vclib.DiskFormatValidType[vdmDisk.volumeOptions.DiskFormat]
+	diskFormat := vclib.DiskFormatValidType[diskManager.volumeOptions.DiskFormat]
 	// Create a virtual disk manager
 	virtualDiskManager := object.NewVirtualDiskManager(datastore.Client())
 	// Create specification for new virtual disk
 	vmDiskSpec := &types.FileBackedVirtualDiskSpec{
 		VirtualDiskSpec: types.VirtualDiskSpec{
-			AdapterType: vdmDisk.volumeOptions.SCSIControllerType,
+			AdapterType: diskManager.volumeOptions.SCSIControllerType,
 			DiskType:    diskFormat,
 		},
-		CapacityKb: int64(vdmDisk.volumeOptions.CapacityKB),
+		CapacityKb: int64(diskManager.volumeOptions.CapacityKB),
 	}
-	task, err := virtualDiskManager.CreateVirtualDisk(ctx, vdmDisk.diskPath, datastore.Datacenter.Datacenter, vmDiskSpec)
+	task, err := virtualDiskManager.CreateVirtualDisk(ctx, diskManager.diskPath, datastore.Datacenter.Datacenter, vmDiskSpec)
 	if err != nil {
-		glog.Errorf("Failed to create virtual disk: %s. err: %+v", vdmDisk.diskPath, err)
+		glog.Errorf("Failed to create virtual disk: %s. err: %+v", diskManager.diskPath, err)
 		return err
 	}
 	err = task.Wait(ctx)
 	if err != nil {
-		glog.Errorf("Failed to create virtual disk: %s. err: %+v", vdmDisk.diskPath, err)
+		glog.Errorf("Failed to create virtual disk: %s. err: %+v", diskManager.diskPath, err)
 		return err
 	}
 	return nil
 }
 
 // Delete implements Disk's Delete interface
-func (vdmDisk vdmDiskManager) Delete(ctx context.Context, datastore *vclib.Datastore) error {
+func (diskManager virtualDiskManager) Delete(ctx context.Context, datastore *vclib.Datastore) error {
 	// Create a virtual disk manager
 	virtualDiskManager := object.NewVirtualDiskManager(datastore.Client())
 
 	// Delete virtual disk
-	task, err := virtualDiskManager.DeleteVirtualDisk(ctx, vdmDisk.diskPath, nil)
+	task, err := virtualDiskManager.DeleteVirtualDisk(ctx, diskManager.diskPath, nil)
 	if err != nil {
 		glog.Errorf("Failed to delete virtual disk. err: %v", err)
 		return err

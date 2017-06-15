@@ -18,24 +18,24 @@ const (
 	VirtualDeleteOperation     = "Delete"
 )
 
-// Disk defines interfaces for creating disk
-type Disk interface {
+// VirtualDiskProvider defines interfaces for creating disk
+type VirtualDiskProvider interface {
 	Create(ctx context.Context, datastore *vclib.Datastore) error
 	Delete(ctx context.Context, datastore *vclib.Datastore) error
 }
 
 // GetDiskManager returns vmDiskManager or vdmDiskManager based on given volumeoptions
-func GetDiskManager(disk *VirtualDisk, diskOperation string) Disk {
-	var diskManager Disk
+func GetDiskManager(disk *VirtualDisk, diskOperation string) VirtualDiskProvider {
+	var diskProvider VirtualDiskProvider
 	switch diskOperation {
 	case VirtualDeleteOperation:
-		diskManager = vdmDiskManager{disk.DiskPath, disk.VolumeOptions}
+		diskProvider = virtualDiskManager{disk.DiskPath, disk.VolumeOptions}
 	case VirtualDiskCreateOperation:
 		if disk.VolumeOptions.StoragePolicyName != "" || disk.VolumeOptions.VSANStorageProfileData != "" || disk.VolumeOptions.StoragePolicyID != "" {
-			diskManager = vmDiskManager{disk.DiskPath, disk.VolumeOptions, disk.VMOptions}
+			diskProvider = vmDiskManager{disk.DiskPath, disk.VolumeOptions, disk.VMOptions}
 		} else {
-			diskManager = vdmDiskManager{disk.DiskPath, disk.VolumeOptions}
+			diskProvider = virtualDiskManager{disk.DiskPath, disk.VolumeOptions}
 		}
 	}
-	return diskManager
+	return diskProvider
 }
