@@ -1,4 +1,4 @@
-package vclib
+package diskmanagers
 
 import (
 	"fmt"
@@ -7,17 +7,18 @@ import (
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 )
 
 type vmDiskManager struct {
 	diskPath      string
-	volumeOptions VolumeOptions
-	vmOptions     VMOptions
+	volumeOptions vclib.VolumeOptions
+	vmOptions     vclib.VMOptions
 }
 
 // Create implements Disk's Create interface
 // Contains implementation of VM based Provisioning to provision disk with SPBM Policy or VSANStorageProfileData
-func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *Datastore) (err error) {
+func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datastore) (err error) {
 	storageProfileSpec := &types.VirtualMachineDefinedProfileSpec{}
 	// Is PBM storage policy ID is present, set the storage spec profile ID,
 	// else, set raw the VSAN policy string.
@@ -29,7 +30,7 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *Datastore) (e
 		if err != nil {
 			return err
 		}
-		if dsType != VSANDatastoreType {
+		if dsType != vclib.VSANDatastoreType {
 			glog.Errorf("The specified datastore: %q is not a VSAN datastore", datastore.Name())
 			return fmt.Errorf("The specified datastore: %q is not a VSAN datastore."+
 				" The policy parameters will work only with VSAN Datastore."+
@@ -40,15 +41,18 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *Datastore) (e
 			ExtensionKey: "com.vmware.vim.sps",
 			ObjectData:   vmdisk.volumeOptions.VSANStorageProfileData,
 		}
+	} else {
+		glog.Errorf("volumeOptions.StoragePolicyID or volumeOptions.VSANStorageProfileData is needed for VM based Volume Provisioning")
+		return fmt.Errorf("volumeOptions.StoragePolicyID or volumeOptions.VSANStorageProfileData is not set")
 	}
-	var dummyVM *VirtualMachine
+	var dummyVM *vclib.VirtualMachine
 	// Check if VM already exist in the folder.
 	// If VM is already present, use it, else create a new dummy VM.
-	dummyVMFullName := DummyVMPrefixName + "-" + vmdisk.volumeOptions.Name
-	dummyVM, err = datastore.datacenter.GetVMByPath(ctx, vmdisk.vmOptions.WorkingDirectoryPath+"//"+dummyVMFullName)
+	dummyVMFullName := vclib.DummyVMPrefixName + "-" + vmdisk.volumeOptions.Name
+	dummyVM, err = datastore.Datacenter.GetVMByPath(ctx, vmdisk.vmOptions.WorkingDirectoryPath+"//"+dummyVMFullName)
 	if err != nil {
 		// Create a dummy VM
-		dummyVM, err = vmdisk.createDummyVM(ctx, datastore.datacenter, vmdisk.volumeOptions, dummyVMFullName)
+		dummyVM, err = vmdisk.createDummyVM(ctx, datastore.Datacenter, vmdisk.volumeOptions, dummyVMFullName)
 		if err != nil {
 			glog.Errorf("Failed to create Dummy VM. err: %v", err)
 			return err
@@ -57,7 +61,7 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *Datastore) (e
 
 	// Reconfigure the VM to attach the disk with the VSAN policy configured
 	virtualMachineConfigSpec := types.VirtualMachineConfigSpec{}
-	disk, _, err := createDiskSpec(ctx, dummyVM, vmdisk.diskPath, datastore, vmdisk.volumeOptions)
+	disk, _, err := vclib.CreateDiskSpec(ctx, vmdisk.diskPath, dummyVM, datastore, vmdisk.volumeOptions)
 	if err != nil {
 		glog.Errorf("Failed to create Disk Spec. err: %v", err)
 		return err
@@ -78,7 +82,7 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *Datastore) (e
 		if errorMessage == err.Error() {
 			//Skip error and continue to detach the disk as the disk was already created on the datastore.
 			fileAlreadyExist = true
-			glog.V(LogLevel).Info("File: %v already exists", vmdisk.diskPath)
+			glog.V(vclib.LogLevel).Info("File: %v already exists", vmdisk.diskPath)
 		} else {
 			glog.Errorf("Failed to attach the disk to VM: %q with err: %+v", dummyVMFullName, err)
 			return err
@@ -87,9 +91,9 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *Datastore) (e
 	// Detach the disk from the dummy VM.
 	err = dummyVM.DetachDisk(ctx, vmdisk.diskPath)
 	if err != nil {
-		if DiskNotFoundErrMsg == err.Error() && fileAlreadyExist {
+		if vclib.DiskNotFoundErrMsg == err.Error() && fileAlreadyExist {
 			// Skip error if disk was already detached from the dummy VM but still present on the datastore.
-			glog.V(LogLevel).Info("File: %v is already detached", vmdisk.diskPath)
+			glog.V(vclib.LogLevel).Info("File: %v is already detached", vmdisk.diskPath)
 		} else {
 			glog.Errorf("Failed to detach the disk: %q from VM: %q with err: %+v", vmdisk.diskPath, dummyVMFullName, err)
 			return err
@@ -103,8 +107,12 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *Datastore) (e
 	return nil
 }
 
+func (vmdisk vmDiskManager) Delete(ctx context.Context, datastore *vclib.Datastore) error {
+	return fmt.Errorf("vmDiskManager.Delete is not supported")
+}
+
 // CreateDummyVM create a Dummy VM at specified location with given name.
-func (vmdisk vmDiskManager) createDummyVM(ctx context.Context, datacenter *Datacenter, volumeOptions VolumeOptions, vmName string) (*VirtualMachine, error) {
+func (vmdisk vmDiskManager) createDummyVM(ctx context.Context, datacenter *vclib.Datacenter, volumeOptions vclib.VolumeOptions, vmName string) (*vclib.VirtualMachine, error) {
 	// Create a virtual machine config spec with 1 SCSI adapter.
 	virtualMachineConfigSpec := types.VirtualMachineConfigSpec{
 		Name: vmName,
@@ -145,5 +153,5 @@ func (vmdisk vmDiskManager) createDummyVM(ctx context.Context, datacenter *Datac
 
 	vmRef := dummyVMTaskInfo.Result.(object.Reference)
 	dummyVM := object.NewVirtualMachine(datacenter.Client(), vmRef.Reference())
-	return &VirtualMachine{dummyVM, datacenter}, nil
+	return &vclib.VirtualMachine{VirtualMachine: dummyVM, Datacenter: datacenter}, nil
 }

@@ -13,7 +13,7 @@ import (
 // Datastore extends the govmomi Datastore object
 type Datastore struct {
 	*object.Datastore
-	datacenter *Datacenter
+	Datacenter *Datacenter
 }
 
 // CreateDirectory creates the directory at location specified by directoryPath.
@@ -21,7 +21,7 @@ type Datastore struct {
 // directoryPath must be in the format "[vsanDatastore] kubevols"
 func (ds *Datastore) CreateDirectory(ctx context.Context, directoryPath string, createParents bool) error {
 	fileManager := object.NewFileManager(ds.Client())
-	err := fileManager.MakeDirectory(ctx, directoryPath, ds.datacenter.Datacenter, createParents)
+	err := fileManager.MakeDirectory(ctx, directoryPath, ds.Datacenter.Datacenter, createParents)
 	if err != nil {
 		glog.Errorf("Cannot create dir: %s. err: %v", directoryPath, err)
 		if soap.IsSoapFault(err) {
