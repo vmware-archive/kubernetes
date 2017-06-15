@@ -1,11 +1,9 @@
 package vclib
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
-	"github.com/golang/glog"
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/types"
@@ -21,66 +19,6 @@ func formatVirtualDiskUUID(uuid string) string {
 	uuidwithNoSpace := strings.Replace(uuid, " ", "", -1)
 	uuidWithNoHypens := strings.Replace(uuidwithNoSpace, "-", "", -1)
 	return strings.ToLower(uuidWithNoHypens)
-}
-
-func createDiskSpec(ctx context.Context, diskPath string, vm *VirtualMachine, dsObj *Datastore, volumeOptions VolumeOptions) (*types.VirtualDisk, types.BaseVirtualDevice, error) {
-	var newSCSIController types.BaseVirtualDevice
-	vmDevices, err := vm.Device(ctx)
-	if err != nil {
-		glog.Errorf("Failed to retrieve VM devices. err: %+v", err)
-		return nil, nil, err
-	}
-	// find SCSI controller of particular type from VM devices
-	scsiControllersOfRequiredType := getSCSIControllersOfType(vmDevices, volumeOptions.SCSIControllerType)
-	scsiController := getAvailableSCSIController(scsiControllersOfRequiredType)
-	if scsiController == nil {
-		newSCSIController, err = vm.createAndAttachSCSIController(ctx, volumeOptions.SCSIControllerType)
-		if err != nil {
-			glog.Errorf("Failed to create SCSI controller for VM :%q with err: %+v", vm.Name(), err)
-			return nil, nil, err
-		}
-		// Get VM device list
-		vmDevices, err := vm.Device(ctx)
-		if err != nil {
-			glog.Errorf("Failed to retrieve VM devices. err: %v", err)
-			return nil, nil, err
-		}
-		// verify scsi controller in virtual machine
-		scsiControllersOfRequiredType := getSCSIControllersOfType(vmDevices, volumeOptions.SCSIControllerType)
-		scsiController = getAvailableSCSIController(scsiControllersOfRequiredType)
-		if scsiController == nil {
-			glog.Errorf("Cannot find SCSI controller of type: %q in VM", volumeOptions.SCSIControllerType)
-			// attempt clean up of scsi controller
-			vm.deleteController(ctx, newSCSIController, vmDevices)
-			return nil, nil, fmt.Errorf("Cannot find SCSI controller of type: %q in VM", volumeOptions.SCSIControllerType)
-		}
-	}
-	disk := vmDevices.CreateDisk(scsiController, dsObj.Reference(), diskPath)
-	unitNumber, err := getNextUnitNumber(vmDevices, scsiController)
-	if err != nil {
-		glog.Errorf("Cannot attach disk to VM, unitNumber limit reached - %+v.", err)
-		return nil, nil, err
-	}
-	*disk.UnitNumber = unitNumber
-	backing := disk.Backing.(*types.VirtualDiskFlatVer2BackingInfo)
-	backing.DiskMode = string(types.VirtualDiskModeIndependent_persistent)
-
-	if volumeOptions.CapacityKB != 0 {
-		disk.CapacityInKB = int64(volumeOptions.CapacityKB)
-	}
-	if volumeOptions.DiskFormat != "" {
-		var diskFormat string
-		diskFormat = diskFormatValidType[volumeOptions.DiskFormat]
-		switch diskFormat {
-		case ThinDiskType:
-			backing.ThinProvisioned = types.NewBool(true)
-		case EagerZeroedThickDiskType:
-			backing.EagerlyScrub = types.NewBool(true)
-		default:
-			backing.ThinProvisioned = types.NewBool(false)
-		}
-	}
-	return disk, newSCSIController, nil
 }
 
 // getSCSIControllersOfType filters specific type of Controller device from given list of Virtual Machine Devices
