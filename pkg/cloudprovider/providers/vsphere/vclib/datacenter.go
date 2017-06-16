@@ -33,7 +33,7 @@ func GetDatacenter(ctx context.Context, connection VSphereConnection, datacenter
 }
 
 // GetVMByUUID gets the VM object from the given vmUUID
-func (dc Datacenter) GetVMByUUID(ctx context.Context, vmUUID string) (*VirtualMachine, error) {
+func (dc *Datacenter) GetVMByUUID(ctx context.Context, vmUUID string) (*VirtualMachine, error) {
 	s := object.NewSearchIndex(dc.Client())
 	vmUUID = strings.ToLower(strings.TrimSpace(vmUUID))
 	svm, err := s.FindByUuid(ctx, dc.Datacenter, vmUUID, true, nil)
@@ -45,25 +45,25 @@ func (dc Datacenter) GetVMByUUID(ctx context.Context, vmUUID string) (*VirtualMa
 		glog.Errorf("Unable to find VM by UUID. VM UUID: %s", vmUUID)
 		return nil, err
 	}
-	virtualMachine := VirtualMachine{object.NewVirtualMachine(dc.Client(), svm.Reference())}
+	virtualMachine := VirtualMachine{object.NewVirtualMachine(dc.Client(), svm.Reference()), dc}
 	return &virtualMachine, nil
 }
 
 // GetVMByPath gets the VM object from the given vmPath
 // vmPath should be the full path to VM and not just the name
-func (dc Datacenter) GetVMByPath(ctx context.Context, vmPath string) (*VirtualMachine, error) {
+func (dc *Datacenter) GetVMByPath(ctx context.Context, vmPath string) (*VirtualMachine, error) {
 	finder := getFinder(dc)
 	vm, err := finder.VirtualMachine(ctx, vmPath)
 	if err != nil {
 		glog.Errorf("Failed to find VM by Path. VM Path: %s, err: %+v", vmPath, err)
 		return nil, err
 	}
-	virtualMachine := VirtualMachine{vm}
+	virtualMachine := VirtualMachine{vm, dc}
 	return &virtualMachine, nil
 }
 
 // GetDatastoreByPath gets the Datastore object from the given vmDiskPath
-func (dc Datacenter) GetDatastoreByPath(ctx context.Context, vmDiskPath string) (*Datastore, error) {
+func (dc *Datacenter) GetDatastoreByPath(ctx context.Context, vmDiskPath string) (*Datastore, error) {
 	datastorePathObj := new(object.DatastorePath)
 	isSuccess := datastorePathObj.FromString(vmDiskPath)
 	if !isSuccess {
@@ -76,25 +76,25 @@ func (dc Datacenter) GetDatastoreByPath(ctx context.Context, vmDiskPath string) 
 		glog.Errorf("Failed while searching for datastore: %s. err: %+v", datastorePathObj.Datastore, err)
 		return nil, err
 	}
-	datastore := Datastore{ds}
+	datastore := Datastore{ds, dc}
 	return &datastore, nil
 }
 
 // GetDatastoreByName gets the Datastore object for the given datastore name
-func (dc Datacenter) GetDatastoreByName(ctx context.Context, name string) (*Datastore, error) {
+func (dc *Datacenter) GetDatastoreByName(ctx context.Context, name string) (*Datastore, error) {
 	finder := getFinder(dc)
 	ds, err := finder.Datastore(ctx, name)
 	if err != nil {
 		glog.Errorf("Failed while searching for datastore: %s. err: %+v", name, err)
 		return nil, err
 	}
-	datastore := Datastore{ds}
+	datastore := Datastore{ds, dc}
 	return &datastore, nil
 }
 
 // GetFolderByPath gets the Folder Object from the given folder path
 // folderPath should be the full path to folder
-func (dc Datacenter) GetFolderByPath(ctx context.Context, folderPath string) (*Folder, error) {
+func (dc *Datacenter) GetFolderByPath(ctx context.Context, folderPath string) (*Folder, error) {
 	finder := getFinder(dc)
 	vmFolder, err := finder.Folder(ctx, folderPath)
 	if err != nil {
@@ -106,7 +106,7 @@ func (dc Datacenter) GetFolderByPath(ctx context.Context, folderPath string) (*F
 }
 
 // GetVMMoList gets the VM Managed Objects with the given properties from the VM object
-func (dc Datacenter) GetVMMoList(ctx context.Context, vmObjList []*VirtualMachine, properties []string) ([]mo.VirtualMachine, error) {
+func (dc *Datacenter) GetVMMoList(ctx context.Context, vmObjList []*VirtualMachine, properties []string) ([]mo.VirtualMachine, error) {
 	var vmMoList []mo.VirtualMachine
 	var vmRefs []types.ManagedObjectReference
 	if len(vmObjList) < 1 {
@@ -127,7 +127,7 @@ func (dc Datacenter) GetVMMoList(ctx context.Context, vmObjList []*VirtualMachin
 }
 
 // GetDatastoreMoList gets the Datastore Managed Objects with the given properties from the datastore objects
-func (dc Datacenter) GetDatastoreMoList(ctx context.Context, dsObjList []*Datastore, properties []string) ([]mo.Datastore, error) {
+func (dc *Datacenter) GetDatastoreMoList(ctx context.Context, dsObjList []*Datastore, properties []string) ([]mo.Datastore, error) {
 	var dsMoList []mo.Datastore
 	var dsRefs []types.ManagedObjectReference
 	if len(dsObjList) < 1 {
