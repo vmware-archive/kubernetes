@@ -7,7 +7,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/vmware/govmomi"
-	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/session"
 	"github.com/vmware/govmomi/vim25"
 	"golang.org/x/net/context"
