@@ -9,6 +9,7 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 )
 
+// virtualDiskManager implements VirtualDiskProvider Interface for creating and deleting volume using VirtualDiskManager
 type virtualDiskManager struct {
 	diskPath      string
 	volumeOptions vclib.VolumeOptions
@@ -30,7 +31,7 @@ func (diskManager virtualDiskManager) Create(ctx context.Context, datastore *vcl
 	// Create virtual disk
 	diskFormat := vclib.DiskFormatValidType[diskManager.volumeOptions.DiskFormat]
 	// Create a virtual disk manager
-	virtualDiskManager := object.NewVirtualDiskManager(datastore.Client())
+	vdm := object.NewVirtualDiskManager(datastore.Client())
 	// Create specification for new virtual disk
 	vmDiskSpec := &types.FileBackedVirtualDiskSpec{
 		VirtualDiskSpec: types.VirtualDiskSpec{
@@ -39,7 +40,7 @@ func (diskManager virtualDiskManager) Create(ctx context.Context, datastore *vcl
 		},
 		CapacityKb: int64(diskManager.volumeOptions.CapacityKB),
 	}
-	task, err := virtualDiskManager.CreateVirtualDisk(ctx, diskManager.diskPath, datastore.Datacenter.Datacenter, vmDiskSpec)
+	task, err := vdm.CreateVirtualDisk(ctx, diskManager.diskPath, datastore.Datacenter.Datacenter, vmDiskSpec)
 	if err != nil {
 		glog.Errorf("Failed to create virtual disk: %s. err: %+v", diskManager.diskPath, err)
 		return err

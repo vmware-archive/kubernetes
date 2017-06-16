@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 )
 
+// vmDiskManager implements VirtualDiskProvider interface for creating volume using Virtual Machine Reconfigure approach
 type vmDiskManager struct {
 	diskPath      string
 	volumeOptions vclib.VolumeOptions
@@ -61,7 +62,7 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datasto
 
 	// Reconfigure the VM to attach the disk with the VSAN policy configured
 	virtualMachineConfigSpec := types.VirtualMachineConfigSpec{}
-	disk, _, err := vclib.CreateDiskSpec(ctx, vmdisk.diskPath, dummyVM, datastore, vmdisk.volumeOptions)
+	disk, _, err := dummyVM.CreateDiskSpec(ctx, vmdisk.diskPath, datastore, vmdisk.volumeOptions)
 	if err != nil {
 		glog.Errorf("Failed to create Disk Spec. err: %v", err)
 		return err

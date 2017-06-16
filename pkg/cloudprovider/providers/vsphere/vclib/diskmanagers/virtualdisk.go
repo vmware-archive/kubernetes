@@ -15,20 +15,20 @@ type VirtualDisk struct {
 // VirtualDisk Operations Const
 const (
 	VirtualDiskCreateOperation = "Create"
-	VirtualDeleteOperation     = "Delete"
+	VirtualDiskDeleteOperation = "Delete"
 )
 
-// VirtualDiskProvider defines interfaces for creating disk
+// VirtualDiskPVirtualDiskProviderrovider defines interfaces for creating disk
 type VirtualDiskProvider interface {
 	Create(ctx context.Context, datastore *vclib.Datastore) error
 	Delete(ctx context.Context, datastore *vclib.Datastore) error
 }
 
-// GetDiskManager returns vmDiskManager or vdmDiskManager based on given volumeoptions
-func GetDiskManager(disk *VirtualDisk, diskOperation string) VirtualDiskProvider {
+// getDiskManager returns vmDiskManager or vdmDiskManager based on given volumeoptions
+func getDiskManager(disk *VirtualDisk, diskOperation string) VirtualDiskProvider {
 	var diskProvider VirtualDiskProvider
 	switch diskOperation {
-	case VirtualDeleteOperation:
+	case VirtualDiskDeleteOperation:
 		diskProvider = virtualDiskManager{disk.DiskPath, disk.VolumeOptions}
 	case VirtualDiskCreateOperation:
 		if disk.VolumeOptions.StoragePolicyName != "" || disk.VolumeOptions.VSANStorageProfileData != "" || disk.VolumeOptions.StoragePolicyID != "" {
@@ -38,4 +38,12 @@ func GetDiskManager(disk *VirtualDisk, diskOperation string) VirtualDiskProvider
 		}
 	}
 	return diskProvider
+}
+
+func (virtualDisk *VirtualDisk) Create(ctx context.Context, datastore *vclib.Datastore) error {
+	return getDiskManager(virtualDisk, VirtualDiskCreateOperation).Create(ctx, datastore)
+}
+
+func (virtualDisk *VirtualDisk) Delete(ctx context.Context, datastore *vclib.Datastore) error {
+	return getDiskManager(virtualDisk, VirtualDiskDeleteOperation).Delete(ctx, datastore)
 }
