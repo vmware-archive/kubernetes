@@ -20,7 +20,7 @@ type VolumeOptions struct {
 }
 
 var (
-	diskFormatValidType = map[string]string{
+	DiskFormatValidType = map[string]string{
 		ThinDiskType:                              ThinDiskType,
 		strings.ToLower(EagerZeroedThickDiskType): EagerZeroedThickDiskType,
 		strings.ToLower(ZeroedThickDiskType):      PreallocatedDiskType,
@@ -32,7 +32,7 @@ var (
 // DiskformatValidOptions generates Valid Options for Diskformat
 func DiskformatValidOptions() string {
 	validopts := ""
-	for diskformat := range diskFormatValidType {
+	for diskformat := range DiskFormatValidType {
 		validopts += diskformat + ", "
 	}
 	validopts = strings.TrimSuffix(validopts, ", ")
@@ -41,7 +41,7 @@ func DiskformatValidOptions() string {
 
 // CheckDiskFormatSupported checks if the diskFormat is valid
 func CheckDiskFormatSupported(diskFormat string) bool {
-	if diskFormatValidType[diskFormat] == "" {
+	if DiskFormatValidType[diskFormat] == "" {
 		glog.Errorf("Not a valid Disk Format. Valid options are %+q", DiskformatValidOptions())
 		return false
 	}
