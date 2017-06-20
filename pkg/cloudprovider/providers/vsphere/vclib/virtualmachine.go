@@ -14,7 +14,7 @@ import (
 // VirtualMachine extends the govmomi VirtualMachine object
 type VirtualMachine struct {
 	*object.VirtualMachine
-	datacenter *Datacenter
+	Datacenter *Datacenter
 }
 
 // IsDiskAttached checks if disk is attached to the VM.
@@ -36,7 +36,7 @@ func (vm *VirtualMachine) GetVirtualDiskPage83Data(ctx context.Context, diskPath
 	}
 	vdm := object.NewVirtualDiskManager(vm.Client())
 	// Returns uuid of vmdk virtual disk
-	diskUUID, err := vdm.QueryVirtualDiskUuid(ctx, diskPath, vm.datacenter.Datacenter)
+	diskUUID, err := vdm.QueryVirtualDiskUuid(ctx, diskPath, vm.Datacenter.Datacenter)
 
 	if err != nil {
 		glog.Errorf("QueryVirtualDiskUuid failed for diskPath: %q on VM: %q. err: %+v", diskPath, vm.Name(), err)
@@ -58,7 +58,7 @@ func (vm *VirtualMachine) DeleteVM(ctx context.Context) error {
 
 // AttachDisk attaches the disk at location - vmDiskPath from Datastore - dsObj to the Virtual Machine
 // Additionally the disk can be configured with SPBM policy if volumeOptions.StoragePolicyID is non-empty.
-func (vm *VirtualMachine) AttachDisk(ctx context.Context, vmDiskPath string, volumeOptions VolumeOptions) (string, error) {
+func (vm *VirtualMachine) AttachDisk(ctx context.Context, vmDiskPath string, volumeOptions *VolumeOptions) (string, error) {
 	// Check if the diskControllerType is valid
 	if !CheckControllerSupported(volumeOptions.SCSIControllerType) {
 		return "", fmt.Errorf("Not a valid SCSI Controller Type. Valid options are %q", SCSIControllerTypeValidOptions())
@@ -74,7 +74,7 @@ func (vm *VirtualMachine) AttachDisk(ctx context.Context, vmDiskPath string, vol
 		return diskUUID, nil
 	}
 
-	dsObj, err := vm.datacenter.GetDatastoreByPath(ctx, vmDiskPath)
+	dsObj, err := vm.Datacenter.GetDatastoreByPath(ctx, vmDiskPath)
 	if err != nil {
 		glog.Errorf("Failed to get datastore from vmDiskPath: %q. err: %+v", vmDiskPath, err)
 		return "", err
@@ -155,7 +155,7 @@ func (vm *VirtualMachine) DetachDisk(ctx context.Context, vmDiskPath string) err
 
 // GetResourcePool gets the resource pool for VM.
 func (vm *VirtualMachine) GetResourcePool(ctx context.Context) (*object.ResourcePool, error) {
-	vmMoList, err := vm.datacenter.GetVMMoList(ctx, []*VirtualMachine{vm}, []string{"resourcePool"})
+	vmMoList, err := vm.Datacenter.GetVMMoList(ctx, []*VirtualMachine{vm}, []string{"resourcePool"})
 	if err != nil {
 		glog.Errorf("Failed to get resource pool from VM: %q. err: %+v", vm.Name(), err)
 		return nil, err
@@ -179,13 +179,13 @@ func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]Dat
 	}
 	var dsObjList []Datastore
 	for _, dsRef := range hostSystemMo.Datastore {
-		dsObjList = append(dsObjList, Datastore{object.NewDatastore(vm.Client(), dsRef), vm.datacenter})
+		dsObjList = append(dsObjList, Datastore{object.NewDatastore(vm.Client(), dsRef), vm.Datacenter})
 	}
 	return dsObjList, nil
 }
 
 // CreateDiskSpec creates a disk spec for disk
-func (vm *VirtualMachine) CreateDiskSpec(ctx context.Context, diskPath string, dsObj *Datastore, volumeOptions VolumeOptions) (*types.VirtualDisk, types.BaseVirtualDevice, error) {
+func (vm *VirtualMachine) CreateDiskSpec(ctx context.Context, diskPath string, dsObj *Datastore, volumeOptions *VolumeOptions) (*types.VirtualDisk, types.BaseVirtualDevice, error) {
 	var newSCSIController types.BaseVirtualDevice
 	vmDevices, err := vm.Device(ctx)
 	if err != nil {

@@ -13,13 +13,37 @@ import (
 // vmDiskManager implements VirtualDiskProvider interface for creating volume using Virtual Machine Reconfigure approach
 type vmDiskManager struct {
 	diskPath      string
-	volumeOptions vclib.VolumeOptions
-	vmOptions     vclib.VMOptions
+	volumeOptions *vclib.VolumeOptions
+	vmOptions     *vclib.VMOptions
 }
 
 // Create implements Disk's Create interface
 // Contains implementation of VM based Provisioning to provision disk with SPBM Policy or VSANStorageProfileData
 func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datastore) (err error) {
+	if vmdisk.volumeOptions.StoragePolicyName != "" {
+		pbmClient, err := vclib.NewPbmClient(ctx, datastore.Client())
+		if err != nil {
+			glog.Errorf("Error Occurred while creating new pbmClient, err: %+v", err)
+			return err
+		}
+		vmdisk.volumeOptions.StoragePolicyID, err = pbmClient.ProfileIDByName(ctx, vmdisk.volumeOptions.StoragePolicyName)
+		if err != nil {
+			glog.Errorf("Error Occurred while getting Profile Id from Profile Name: %s, err: %+v", vmdisk.volumeOptions.StoragePolicyName, err)
+			return err
+		}
+
+		compatible, err := datastore.IsCompatibleWithStoragePolicy(ctx, vmdisk.volumeOptions.StoragePolicyID)
+		if err != nil {
+			glog.Errorf("Error Occurred while checking datastore compatibility with storage policy id: %s, err: %+v", vmdisk.volumeOptions.StoragePolicyID, err)
+			return err
+		}
+
+		if !compatible {
+			glog.Errorf("Datastore: %s is not compatible with Policy: %s", datastore.Name(), vmdisk.volumeOptions.StoragePolicyName)
+			return fmt.Errorf("Datastore: %s is not compatible with Policy: %s", datastore.Name(), vmdisk.volumeOptions.StoragePolicyName)
+		}
+	}
+
 	storageProfileSpec := &types.VirtualMachineDefinedProfileSpec{}
 	// Is PBM storage policy ID is present, set the storage spec profile ID,
 	// else, set raw the VSAN policy string.
@@ -44,16 +68,16 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datasto
 		}
 	} else {
 		glog.Errorf("volumeOptions.StoragePolicyID or volumeOptions.VSANStorageProfileData is needed for VM based Volume Provisioning")
-		return fmt.Errorf("volumeOptions.StoragePolicyID or volumeOptions.VSANStorageProfileData is not set")
+		return fmt.Errorf("volumeOptions.StoragePolicyID and volumeOptions.VSANStorageProfileData is not set")
 	}
 	var dummyVM *vclib.VirtualMachine
 	// Check if VM already exist in the folder.
 	// If VM is already present, use it, else create a new dummy VM.
 	dummyVMFullName := vclib.DummyVMPrefixName + "-" + vmdisk.volumeOptions.Name
-	dummyVM, err = datastore.Datacenter.GetVMByPath(ctx, vmdisk.vmOptions.WorkingDirectoryPath+"//"+dummyVMFullName)
+	dummyVM, err = datastore.Datacenter.GetVMByPath(ctx, vmdisk.vmOptions.VMFolder.FolderPath+"//"+dummyVMFullName)
 	if err != nil {
 		// Create a dummy VM
-		dummyVM, err = vmdisk.createDummyVM(ctx, datastore.Datacenter, vmdisk.volumeOptions, dummyVMFullName)
+		dummyVM, err = vmdisk.createDummyVM(ctx, datastore.Datacenter, dummyVMFullName)
 		if err != nil {
 			glog.Errorf("Failed to create Dummy VM. err: %v", err)
 			return err
@@ -113,12 +137,12 @@ func (vmdisk vmDiskManager) Delete(ctx context.Context, datastore *vclib.Datasto
 }
 
 // CreateDummyVM create a Dummy VM at specified location with given name.
-func (vmdisk vmDiskManager) createDummyVM(ctx context.Context, datacenter *vclib.Datacenter, volumeOptions vclib.VolumeOptions, vmName string) (*vclib.VirtualMachine, error) {
+func (vmdisk vmDiskManager) createDummyVM(ctx context.Context, datacenter *vclib.Datacenter, vmName string) (*vclib.VirtualMachine, error) {
 	// Create a virtual machine config spec with 1 SCSI adapter.
 	virtualMachineConfigSpec := types.VirtualMachineConfigSpec{
 		Name: vmName,
 		Files: &types.VirtualMachineFileInfo{
-			VmPathName: "[" + volumeOptions.Datastore + "]",
+			VmPathName: "[" + vmdisk.volumeOptions.Datastore + "]",
 		},
 		NumCPUs:  1,
 		MemoryMB: 4,
@@ -140,7 +164,7 @@ func (vmdisk vmDiskManager) createDummyVM(ctx context.Context, datacenter *vclib
 		},
 	}
 
-	task, err := vmdisk.vmOptions.WorkingDirectoryFolder.CreateVM(ctx, virtualMachineConfigSpec, vmdisk.vmOptions.VmResourcePool, nil)
+	task, err := vmdisk.vmOptions.VMFolder.CreateVM(ctx, virtualMachineConfigSpec, vmdisk.vmOptions.VMResourcePool, nil)
 	if err != nil {
 		glog.Errorf("Failed to create VM. err: %+v", err)
 		return nil, err

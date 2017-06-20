@@ -47,3 +47,23 @@ func (ds *Datastore) GetType(ctx context.Context) (string, error) {
 	}
 	return dsMo.Summary.Type, nil
 }
+
+// IsCompatibleWithStoragePolicy returns true if datastore is compatible with given storage policy else return false
+func (ds *Datastore) IsCompatibleWithStoragePolicy(ctx context.Context, storagePolicyId string) (bool, error) {
+	pbmClient, err := NewPbmClient(ctx, ds.Client())
+	if err != nil {
+		glog.Errorf("Failed to get new PbmClient Object. err: %v", err)
+		return false, err
+	}
+	datastores := []*Datastore{ds}
+	compatibleDatastore, err := pbmClient.GetCompatibleDatastores(ctx, storagePolicyId, datastores)
+	if err != nil {
+		glog.Errorf("Failed to get match compatible datastore for storage policy id: %s. err: %v", storagePolicyId, err)
+		return false, err
+	}
+	if compatibleDatastore[0].Datastore.Reference() == ds.Datastore.Reference() {
+		return true, nil
+	} else {
+		return false, nil
+	}
+}
