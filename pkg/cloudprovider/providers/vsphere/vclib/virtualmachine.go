@@ -164,7 +164,7 @@ func (vm *VirtualMachine) GetResourcePool(ctx context.Context) (*object.Resource
 }
 
 // GetAllAccessibleDatastores gets the list of accessible Datastores for the given Virtual Machine
-func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]Datastore, error) {
+func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]*Datastore, error) {
 	host, err := vm.HostSystem(ctx)
 	if err != nil {
 		glog.Errorf("Failed to get host system for VM: %q. err: %+v", vm.Name(), err)
@@ -177,9 +177,9 @@ func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]Dat
 		glog.Errorf("Failed to retrieve datastores for host: %+v. err: %+v", host, err)
 		return nil, err
 	}
-	var dsObjList []Datastore
+	var dsObjList []*Datastore
 	for _, dsRef := range hostSystemMo.Datastore {
-		dsObjList = append(dsObjList, Datastore{object.NewDatastore(vm.Client(), dsRef), vm.Datacenter})
+		dsObjList = append(dsObjList, &Datastore{object.NewDatastore(vm.Client(), dsRef), vm.Datacenter})
 	}
 	return dsObjList, nil
 }

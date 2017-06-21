@@ -101,7 +101,7 @@ func (dc *Datacenter) GetFolderByPath(ctx context.Context, folderPath string) (*
 		glog.Errorf("Failed to get the folder reference for %s. err: %+v", folderPath, err)
 		return nil, err
 	}
-	folder := Folder{vmFolder, folderPath, dc}
+	folder := Folder{vmFolder, dc}
 	return &folder, nil
 }
 

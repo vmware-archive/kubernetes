@@ -9,13 +9,12 @@ import (
 // Folder extends the govmomi Folder object
 type Folder struct {
 	*object.Folder
-	FolderPath string
 	Datacenter *Datacenter
 }
 
 // GetVirtualMachines returns list of VirtualMachine inside a folder.
 func (folder *Folder) GetVirtualMachines(ctx context.Context) ([]*VirtualMachine, error) {
-	virtualMachines, err := getFinder(folder.Datacenter).VirtualMachineList(ctx, folder.FolderPath)
+	virtualMachines, err := getFinder(folder.Datacenter).VirtualMachineList(ctx, folder.InventoryPath)
 	if err != nil {
 		glog.Errorf("Failed to get VirtualMachineList from Folder. err: %+v", err)
 		return nil, err

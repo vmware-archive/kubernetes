@@ -20,18 +20,21 @@ type vmDiskManager struct {
 // Create implements Disk's Create interface
 // Contains implementation of VM based Provisioning to provision disk with SPBM Policy or VSANStorageProfileData
 func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datastore) (err error) {
-	if vmdisk.volumeOptions.StoragePolicyName != "" {
-		pbmClient, err := vclib.NewPbmClient(ctx, datastore.Client())
-		if err != nil {
-			glog.Errorf("Error Occurred while creating new pbmClient, err: %+v", err)
-			return err
-		}
+
+	pbmClient, err := vclib.NewPbmClient(ctx, datastore.Client())
+	if err != nil {
+		glog.Errorf("Error Occurred while creating new pbmClient, err: %+v", err)
+		return err
+	}
+
+	if vmdisk.volumeOptions.StoragePolicyID == "" && vmdisk.volumeOptions.StoragePolicyName != "" {
 		vmdisk.volumeOptions.StoragePolicyID, err = pbmClient.ProfileIDByName(ctx, vmdisk.volumeOptions.StoragePolicyName)
 		if err != nil {
 			glog.Errorf("Error Occurred while getting Profile Id from Profile Name: %s, err: %+v", vmdisk.volumeOptions.StoragePolicyName, err)
 			return err
 		}
-
+	}
+	if vmdisk.volumeOptions.StoragePolicyName != "" || vmdisk.volumeOptions.StoragePolicyID != "" {
 		compatible, err := datastore.IsCompatibleWithStoragePolicy(ctx, vmdisk.volumeOptions.StoragePolicyID)
 		if err != nil {
 			glog.Errorf("Error Occurred while checking datastore compatibility with storage policy id: %s, err: %+v", vmdisk.volumeOptions.StoragePolicyID, err)
@@ -67,14 +70,14 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datasto
 			ObjectData:   vmdisk.volumeOptions.VSANStorageProfileData,
 		}
 	} else {
-		glog.Errorf("volumeOptions.StoragePolicyID or volumeOptions.VSANStorageProfileData is needed for VM based Volume Provisioning")
-		return fmt.Errorf("volumeOptions.StoragePolicyID and volumeOptions.VSANStorageProfileData is not set")
+		glog.Errorf("Both volumeOptions.StoragePolicyID and volumeOptions.VSANStorageProfileData are not set. One of them should be set")
+		return fmt.Errorf("Both volumeOptions.StoragePolicyID and volumeOptions.VSANStorageProfileData are not set. One of them should be set")
 	}
 	var dummyVM *vclib.VirtualMachine
 	// Check if VM already exist in the folder.
 	// If VM is already present, use it, else create a new dummy VM.
 	dummyVMFullName := vclib.DummyVMPrefixName + "-" + vmdisk.volumeOptions.Name
-	dummyVM, err = datastore.Datacenter.GetVMByPath(ctx, vmdisk.vmOptions.VMFolder.FolderPath+"//"+dummyVMFullName)
+	dummyVM, err = datastore.Datacenter.GetVMByPath(ctx, vmdisk.vmOptions.VMFolder.InventoryPath+"/"+dummyVMFullName)
 	if err != nil {
 		// Create a dummy VM
 		dummyVM, err = vmdisk.createDummyVM(ctx, datastore.Datacenter, dummyVMFullName)

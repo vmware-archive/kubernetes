@@ -56,14 +56,13 @@ func (ds *Datastore) IsCompatibleWithStoragePolicy(ctx context.Context, storageP
 		return false, err
 	}
 	datastores := []*Datastore{ds}
-	compatibleDatastore, err := pbmClient.GetCompatibleDatastores(ctx, storagePolicyId, datastores)
+	compatibleDatastore, faultMessages, err := pbmClient.GetCompatibleDatastores(ctx, storagePolicyId, datastores)
 	if err != nil {
-		glog.Errorf("Failed to get match compatible datastore for storage policy id: %s. err: %v", storagePolicyId, err)
+		glog.Errorf("Failed to match compatible datastore for storage policy id: %s. Fault Message: %s. err: %+v", storagePolicyId, faultMessages, err)
 		return false, err
 	}
 	if compatibleDatastore[0].Datastore.Reference() == ds.Datastore.Reference() {
 		return true, nil
-	} else {
-		return false, nil
 	}
+	return false, nil
 }
