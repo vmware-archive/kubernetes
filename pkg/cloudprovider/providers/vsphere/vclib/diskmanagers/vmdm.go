@@ -34,8 +34,8 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datasto
 			return err
 		}
 	}
-	if vmdisk.volumeOptions.StoragePolicyName != "" || vmdisk.volumeOptions.StoragePolicyID != "" {
-		compatible, err := datastore.IsCompatibleWithStoragePolicy(ctx, vmdisk.volumeOptions.StoragePolicyID)
+	if vmdisk.volumeOptions.StoragePolicyID != "" {
+		compatible, faultMessage, err := datastore.IsCompatibleWithStoragePolicy(ctx, vmdisk.volumeOptions.StoragePolicyID)
 		if err != nil {
 			glog.Errorf("Error Occurred while checking datastore compatibility with storage policy id: %s, err: %+v", vmdisk.volumeOptions.StoragePolicyID, err)
 			return err
@@ -43,7 +43,7 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datasto
 
 		if !compatible {
 			glog.Errorf("Datastore: %s is not compatible with Policy: %s", datastore.Name(), vmdisk.volumeOptions.StoragePolicyName)
-			return fmt.Errorf("Datastore: %s is not compatible with Policy: %s", datastore.Name(), vmdisk.volumeOptions.StoragePolicyName)
+			return fmt.Errorf("User specified datastore is not compatible with the storagePolicy: %q. Failed with faults: %+q", vmdisk.volumeOptions.StoragePolicyName, faultMessage)
 		}
 	}
 
