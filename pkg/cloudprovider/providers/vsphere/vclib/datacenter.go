@@ -21,7 +21,7 @@ type Datacenter struct {
 
 // GetDatacenter returns the DataCenter Object for the given datacenterPath
 // If datacenter is located in a folder, include full path to datacenter else just provide the datacenter name
-func GetDatacenter(ctx context.Context, connection VSphereConnection, datacenterPath string) (*Datacenter, error) {
+func GetDatacenter(ctx context.Context, connection *VSphereConnection, datacenterPath string) (*Datacenter, error) {
 	finder := find.NewFinder(connection.GoVmomiClient.Client, true)
 	dataCenter, err := finder.Datacenter(ctx, datacenterPath)
 	if err != nil {
@@ -43,7 +43,7 @@ func (dc *Datacenter) GetVMByUUID(ctx context.Context, vmUUID string) (*VirtualM
 	}
 	if svm == nil {
 		glog.Errorf("Unable to find VM by UUID. VM UUID: %s", vmUUID)
-		return nil, err
+		return nil, fmt.Errorf("Failed to find VM by UUID: %s", vmUUID)
 	}
 	virtualMachine := VirtualMachine{object.NewVirtualMachine(dc.Client(), svm.Reference()), dc}
 	return &virtualMachine, nil
@@ -101,7 +101,7 @@ func (dc *Datacenter) GetFolderByPath(ctx context.Context, folderPath string) (*
 		glog.Errorf("Failed to get the folder reference for %s. err: %+v", folderPath, err)
 		return nil, err
 	}
-	folder := Folder{vmFolder}
+	folder := Folder{vmFolder, dc}
 	return &folder, nil
 }
 

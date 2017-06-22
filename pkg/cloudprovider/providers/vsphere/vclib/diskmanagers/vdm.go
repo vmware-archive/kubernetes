@@ -12,7 +12,7 @@ import (
 // virtualDiskManager implements VirtualDiskProvider Interface for creating and deleting volume using VirtualDiskManager
 type virtualDiskManager struct {
 	diskPath      string
-	volumeOptions vclib.VolumeOptions
+	volumeOptions *vclib.VolumeOptions
 }
 
 // Create implements Disk's Create interface
@@ -20,13 +20,6 @@ type virtualDiskManager struct {
 func (diskManager virtualDiskManager) Create(ctx context.Context, datastore *vclib.Datastore) (err error) {
 	if diskManager.volumeOptions.SCSIControllerType == "" {
 		diskManager.volumeOptions.SCSIControllerType = vclib.LSILogicControllerType
-	}
-	if diskManager.volumeOptions.DiskFormat == "" {
-		diskManager.volumeOptions.DiskFormat = vclib.ThinDiskType
-	}
-	if !diskManager.volumeOptions.VerifyVolumeOptions() {
-		glog.Error("VolumeOptions verification failed. volumeOptions: ", diskManager.volumeOptions)
-		return vclib.ErrInvalidVolumeOptions
 	}
 	// Create virtual disk
 	diskFormat := vclib.DiskFormatValidType[diskManager.volumeOptions.DiskFormat]
@@ -59,7 +52,7 @@ func (diskManager virtualDiskManager) Delete(ctx context.Context, datastore *vcl
 	virtualDiskManager := object.NewVirtualDiskManager(datastore.Client())
 
 	// Delete virtual disk
-	task, err := virtualDiskManager.DeleteVirtualDisk(ctx, diskManager.diskPath, nil)
+	task, err := virtualDiskManager.DeleteVirtualDisk(ctx, diskManager.diskPath, datastore.Datacenter.Datacenter)
 	if err != nil {
 		glog.Errorf("Failed to delete virtual disk. err: %v", err)
 		return err

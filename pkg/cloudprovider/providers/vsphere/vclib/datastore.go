@@ -23,10 +23,10 @@ func (ds *Datastore) CreateDirectory(ctx context.Context, directoryPath string, 
 	fileManager := object.NewFileManager(ds.Client())
 	err := fileManager.MakeDirectory(ctx, directoryPath, ds.Datacenter.Datacenter, createParents)
 	if err != nil {
-		glog.Errorf("Cannot create dir: %s. err: %v", directoryPath, err)
 		if soap.IsSoapFault(err) {
 			soapFault := soap.ToSoapFault(err)
 			if _, ok := soapFault.VimFault().(types.FileAlreadyExists); ok {
+				glog.Warning("Cannot create dir: %s. err: %v", directoryPath, ErrFileAlreadyExist)
 				return ErrFileAlreadyExist
 			}
 		}
@@ -46,4 +46,15 @@ func (ds *Datastore) GetType(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return dsMo.Summary.Type, nil
+}
+
+// IsCompatibleWithStoragePolicy returns true if datastore is compatible with given storage policy else return false
+// for not compatible datastore, fault message is also returned
+func (ds *Datastore) IsCompatibleWithStoragePolicy(ctx context.Context, storagePolicyID string) (bool, string, error) {
+	pbmClient, err := NewPbmClient(ctx, ds.Client())
+	if err != nil {
+		glog.Errorf("Failed to get new PbmClient Object. err: %v", err)
+		return false, "", err
+	}
+	return pbmClient.IsDatastoreCompatible(ctx, storagePolicyID, ds)
 }
