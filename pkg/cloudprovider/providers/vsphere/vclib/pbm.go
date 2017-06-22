@@ -28,7 +28,7 @@ func NewPbmClient(ctx context.Context, client *vim25.Client) (*PbmClient, error)
 
 // IsDataStoreCompatible check if the datastores is compatible for given storage policy id
 // if datastore is not compatible with policy, fault message with the Datastore Name is returned
-func (pbmClient *PbmClient) IsDataStoreCompatible(ctx context.Context, storagePolicyID string, datastore *Datastore) (bool, string, error) {
+func (pbmClient *PbmClient) IsDatastoreCompatible(ctx context.Context, storagePolicyID string, datastore *Datastore) (bool, string, error) {
 	faultMessage := ""
 	placementHub := pbmtypes.PbmPlacementHub{
 		HubType: datastore.Reference().Type,

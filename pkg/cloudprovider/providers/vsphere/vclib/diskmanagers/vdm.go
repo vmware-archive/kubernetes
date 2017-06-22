@@ -18,6 +18,9 @@ type virtualDiskManager struct {
 // Create implements Disk's Create interface
 // Contains implementation of virtualDiskManager based Provisioning
 func (diskManager virtualDiskManager) Create(ctx context.Context, datastore *vclib.Datastore) (err error) {
+	if diskManager.volumeOptions.SCSIControllerType == "" {
+		diskManager.volumeOptions.SCSIControllerType = vclib.LSILogicControllerType
+	}
 	// Create virtual disk
 	diskFormat := vclib.DiskFormatValidType[diskManager.volumeOptions.DiskFormat]
 	// Create a virtual disk manager

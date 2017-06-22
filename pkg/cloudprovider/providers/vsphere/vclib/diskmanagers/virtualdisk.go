@@ -44,9 +44,6 @@ func getDiskManager(disk *VirtualDisk, diskOperation string) VirtualDiskProvider
 
 // Create gets appropriate disk manager and calls respective create method
 func (virtualDisk *VirtualDisk) Create(ctx context.Context, datastore *vclib.Datastore) error {
-	if virtualDisk.VolumeOptions.SCSIControllerType == "" {
-		virtualDisk.VolumeOptions.SCSIControllerType = vclib.PVSCSIControllerType
-	}
 	if virtualDisk.VolumeOptions.DiskFormat == "" {
 		virtualDisk.VolumeOptions.DiskFormat = vclib.ThinDiskType
 	}
@@ -60,7 +57,7 @@ func (virtualDisk *VirtualDisk) Create(ctx context.Context, datastore *vclib.Dat
 	return getDiskManager(virtualDisk, VirtualDiskCreateOperation).Create(ctx, datastore)
 }
 
-// Create gets appropriate disk manager and calls respective delete method
+// Delete gets appropriate disk manager and calls respective delete method
 func (virtualDisk *VirtualDisk) Delete(ctx context.Context, datastore *vclib.Datastore) error {
 	return getDiskManager(virtualDisk, VirtualDiskDeleteOperation).Delete(ctx, datastore)
 }

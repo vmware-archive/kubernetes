@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 )
 
 // VolumeOptions specifies various options for a volume.
@@ -71,10 +72,20 @@ func CheckControllerSupported(ctrlType string) bool {
 
 // VerifyVolumeOptions checks if volumeOptions.SCIControllerType is valid controller type
 func (volumeOptions VolumeOptions) VerifyVolumeOptions() bool {
-	valid := CheckControllerSupported(volumeOptions.SCSIControllerType)
-	if !valid {
-		return valid
+	// Validate only if SCSIControllerType is set by user.
+	// Default value is set later in virtualDiskManager.Create and vmDiskManager.Create
+	if volumeOptions.SCSIControllerType != "" {
+		isValid := CheckControllerSupported(volumeOptions.SCSIControllerType)
+		if !isValid {
+			return false
+		}
 	}
-	valid = CheckDiskFormatSupported(volumeOptions.DiskFormat)
-	return valid
+	// ThinDiskType is the default, so skip the validation.
+	if volumeOptions.DiskFormat != ThinDiskType {
+		isValid := CheckDiskFormatSupported(volumeOptions.DiskFormat)
+		if !isValid {
+			return false
+		}
+	}
+	return true
 }

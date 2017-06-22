@@ -20,7 +20,9 @@ type vmDiskManager struct {
 // Create implements Disk's Create interface
 // Contains implementation of VM based Provisioning to provision disk with SPBM Policy or VSANStorageProfileData
 func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datastore) (err error) {
-
+	if vmdisk.volumeOptions.SCSIControllerType == "" {
+		vmdisk.volumeOptions.SCSIControllerType = vclib.PVSCSIControllerType
+	}
 	pbmClient, err := vclib.NewPbmClient(ctx, datastore.Client())
 	if err != nil {
 		glog.Errorf("Error Occurred while creating new pbmClient, err: %+v", err)
