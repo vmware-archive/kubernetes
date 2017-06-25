@@ -1,0 +1,35 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: mongodb-node03
+    role: mongoshard
+    tier: backend
+  name: mongodb-node03
+spec:
+  ports:
+    -
+      name: arb01-node03
+      port: 27019
+      protocol: TCP
+    -
+      name: cfg03-node03
+      port: 27018
+      protocol: TCP
+    -
+      name: mgs03-node03
+      port: 27017
+      protocol: TCP
+    -
+      name: rsp03-node03
+      port: 27020
+      protocol: TCP
+    -
+      name: rss02-node03
+      port: 27021
+      protocol: TCP
+  selector:
+    app: mongodb-shard-node03
+    role: mongoshard
+    tier: backend
