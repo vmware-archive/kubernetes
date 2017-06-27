@@ -2,6 +2,7 @@ package diskmanagers
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/vmware/govmomi/object"
@@ -184,4 +185,34 @@ func (vmdisk vmDiskManager) createDummyVM(ctx context.Context, datacenter *vclib
 	vmRef := dummyVMTaskInfo.Result.(object.Reference)
 	dummyVM := object.NewVirtualMachine(datacenter.Client(), vmRef.Reference())
 	return &vclib.VirtualMachine{VirtualMachine: dummyVM, Datacenter: datacenter}, nil
+}
+
+// CleanUpDummyVMs deletes dummyVM's
+func CleanUpDummyVMs(ctx context.Context, folder *vclib.Folder, dc *vclib.Datacenter) error {
+	vmList, err := folder.GetVirtualMachines(ctx)
+	if err != nil {
+		glog.V(4).Infof("Unable to get VM list in the kubernetes cluster: %q. err: %+v", folder.InventoryPath, err)
+		return err
+	}
+	var dummyVMList []*vclib.VirtualMachine
+	// Loop through VM's in the Kubernetes cluster to find dummy VM's
+	for _, vm := range vmList {
+		vmName, err := vm.ObjectName(ctx)
+		if err != nil {
+			glog.V(4).Infof("Unable to get name from VM with err: %+v", err)
+			continue
+		}
+		if strings.HasPrefix(vmName, vclib.DummyVMPrefixName) {
+			vmObj := vclib.VirtualMachine{VirtualMachine: object.NewVirtualMachine(dc.Client(), vm.Reference()), Datacenter: dc}
+			dummyVMList = append(dummyVMList, &vmObj)
+		}
+	}
+	for _, vm := range dummyVMList {
+		err = vm.DeleteVM(ctx)
+		if err != nil {
+			glog.V(4).Infof("Unable to delete dummy VM with err: %+v", err)
+			continue
+		}
+	}
+	return nil
 }
