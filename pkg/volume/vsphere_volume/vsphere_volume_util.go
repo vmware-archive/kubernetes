@@ -27,6 +27,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/volume"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 )
@@ -95,7 +96,7 @@ func (util *VsphereDiskUtil) CreateVolume(v *vsphereVolumeProvisioner) (volSpec 
 	// vSphere works with kilobytes, convert to KiB with rounding up
 	volSizeKB := int(volume.RoundUpSize(volSizeBytes, 1024))
 	name := volume.GenerateVolumeName(v.options.ClusterName, v.options.PVName, 255)
-	volumeOptions := &vsphere.VolumeOptions{
+	volumeOptions := &vclib.VolumeOptions{
 		CapacityKB: volSizeKB,
 		Tags:       *v.options.CloudTags,
 		Name:       name,
@@ -130,7 +131,7 @@ func (util *VsphereDiskUtil) CreateVolume(v *vsphereVolumeProvisioner) (volSpec 
 
 	if volumeOptions.VSANStorageProfileData != "" {
 		if volumeOptions.StoragePolicyName != "" {
-			return nil, fmt.Errorf("Cannot specify storage policy capabilities along with storage policy name. Please specify only one.")
+			return nil, fmt.Errorf("Cannot specify storage policy capabilities along with storage policy name. Please specify only one")
 		}
 		volumeOptions.VSANStorageProfileData = "(" + volumeOptions.VSANStorageProfileData + ")"
 	}
