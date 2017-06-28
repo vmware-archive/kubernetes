@@ -29,6 +29,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -216,8 +217,8 @@ var _ = framework.KubeDescribe("Volume Placement [Volume]", func() {
 	*/
 	It("should create and delete pod with multiple volumes from different datastore", func() {
 		By("creating another vmdk on non default shared datastore")
-		var volumeOptions *vsphere.VolumeOptions
-		volumeOptions = new(vsphere.VolumeOptions)
+		var volumeOptions *vclib.VolumeOptions
+		volumeOptions = new(vclib.VolumeOptions)
 		volumeOptions.CapacityKB = 2097152
 		volumeOptions.Name = "e2e-vmdk-" + strconv.FormatInt(time.Now().UnixNano(), 10)
 		volumeOptions.Datastore = os.Getenv("VSPHERE_SECOND_SHARED_DATASTORE")

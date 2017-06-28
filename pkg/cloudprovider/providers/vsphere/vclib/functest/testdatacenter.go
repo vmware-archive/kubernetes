@@ -45,7 +45,7 @@ func main() {
 	defer cancel()
 
 	// Datacenter functions
-	dc, err = vclib.GetDatacenter(ctx, vSphereConnection, DatacenterName)
+	dc, err = vclib.GetDatacenter(ctx, &vSphereConnection, DatacenterName)
 
 	getVMByUUIDTest(ctx, "423787da-df6c-7306-0518-660397085b6f")
 	fmt.Printf("===============================================\n")
@@ -70,7 +70,7 @@ func main() {
 	fmt.Printf("===============================================\n")
 
 	// Virtual Machine functions
-	attachDiskTest(ctx, "[vsanDatastore] kubevols/redis-slave.vmdk", vclib.VolumeOptions{SCSIControllerType: vclib.PVSCSIControllerType})
+	attachDiskTest(ctx, "[vsanDatastore] kubevols/redis-slave.vmdk", &vclib.VolumeOptions{SCSIControllerType: vclib.PVSCSIControllerType})
 	fmt.Printf("===============================================\n")
 
 	isDiskAttachedTest(ctx, "[vsanDatastore] kubevols/redis-master.vmdk")
@@ -102,7 +102,7 @@ func isDiskAttachedTest(ctx context.Context, diskPath string) {
 	}
 }
 
-func attachDiskTest(ctx context.Context, vmDiskPath string, volumeOptions vclib.VolumeOptions) {
+func attachDiskTest(ctx context.Context, vmDiskPath string, volumeOptions *vclib.VolumeOptions) {
 	diskUUID, err := vmNode.AttachDisk(ctx, vmDiskPath, volumeOptions)
 	if err != nil {
 		glog.Errorf("Failed to attach disk with path: %q for VM: %q. err: %s", vmDiskPath, vmNode.Name(), err)

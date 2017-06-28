@@ -17,8 +17,10 @@ limitations under the License.
 package vsphere
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 )
 
 const (
@@ -105,7 +107,7 @@ func recordvSphereOperationMetric(actionName string, requestTime time.Time, err 
 	}
 }
 
-func recordCreateVolumeMetric(volumeOptions *VolumeOptions, requestTime time.Time, err error) {
+func recordCreateVolumeMetric(volumeOptions *vclib.VolumeOptions, requestTime time.Time, err error) {
 	var actionName string
 	if volumeOptions.StoragePolicyName != "" {
 		actionName = operation_createvolume_with_policy

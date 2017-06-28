@@ -170,7 +170,7 @@ func verifyDiskFormat(nodeName string, pvVolumePath string, diskFormat string) b
 	govMoMiClient, err := vsphere.GetgovmomiClient(nil)
 	Expect(err).NotTo(HaveOccurred())
 
-	f := find.NewFinder(govMoMiClient.Client, true)
+	f := find.NewFinder(govMoMiClient.GoVmomiClient.Client, true)
 	ctx, _ := context.WithCancel(context.Background())
 	vm, err := f.VirtualMachine(ctx, os.Getenv("VSPHERE_WORKING_DIR")+nodeName)
 	Expect(err).NotTo(HaveOccurred())

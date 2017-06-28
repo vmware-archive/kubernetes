@@ -2,6 +2,7 @@ package diskmanagers
 
 import (
 	"fmt"
+
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
