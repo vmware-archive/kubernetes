@@ -357,7 +357,7 @@ func newVSphere(cfg VSphereConfig) (*VSphere, error) {
 	vs := VSphere{
 		client:          c,
 		cfg:             &cfg,
-		localInstanceID: id,
+		localInstanceID: cfg.Global.WorkingDir + id,
 	}
 	runtime.SetFinalizer(&vs, logout)
 
@@ -450,11 +450,8 @@ func getVirtualMachineByName(ctx context.Context, cfg *VSphereConfig, c *govmomi
 	}
 	f.SetDatacenter(dc)
 
-	vmRegex := cfg.Global.WorkingDir + name
-
 	// Retrieve vm by name
-	//TODO: also look for vm inside subfolders
-	vm, err := f.VirtualMachine(ctx, vmRegex)
+	vm, err := f.VirtualMachine(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -604,59 +601,35 @@ func vmNameToNodeName(vmName string) k8stypes.NodeName {
 // ExternalID returns the cloud provider ID of the node with the specified Name (deprecated).
 func (vs *VSphere) ExternalID(nodeName k8stypes.NodeName) (string, error) {
 	if vs.localInstanceID == nodeNameToVMName(nodeName) {
-		return vs.cfg.Global.WorkingDir + vs.localInstanceID, nil
+		return vs.localInstanceID, nil
 	}
 
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	vm, mvm, err := vs.getVMandMO(ctx, nodeName, "summary")
+	result, err := vs.NodeExists(nodeName)
 	if err != nil {
-		glog.Errorf("Failed to getVMandMO for ExternalID: err %v", err)
 		return "", err
 	}
-
-	if mvm.Summary.Runtime.PowerState == ActivePowerState {
-		return vm.InventoryPath, nil
-	}
-
-	if mvm.Summary.Config.Template == false {
-		glog.Warningf("VM %s, is not in %s state", nodeName, ActivePowerState)
+	if result == true {
+		return nodeNameToVMName(nodeName), nil
 	} else {
-		glog.Warningf("VM %s, is a template", nodeName)
+		return "", cloudprovider.InstanceNotFound
 	}
-
-	return "", cloudprovider.InstanceNotFound
 }
 
 // InstanceID returns the cloud provider ID of the node with the specified Name.
 func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 	if vs.localInstanceID == nodeNameToVMName(nodeName) {
-		return vs.cfg.Global.WorkingDir + vs.localInstanceID, nil
+		return vs.localInstanceID, nil
 	}
 
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	vm, mvm, err := vs.getVMandMO(ctx, nodeName, "summary")
+	result, err := vs.NodeExists(nodeName)
 	if err != nil {
-		glog.Errorf("Failed to getVMandMO for InstanceID: err %v", err)
 		return "", err
 	}
-
-	if mvm.Summary.Runtime.PowerState == ActivePowerState {
-		return "/" + vm.InventoryPath, nil
-	}
-
-	if mvm.Summary.Config.Template == false {
-		glog.Warningf("VM %s, is not in %s state", nodeName, ActivePowerState)
+	if result == true {
+		return nodeNameToVMName(nodeName), nil
 	} else {
-		glog.Warningf("VM %s, is a template", nodeName)
+		return "", cloudprovider.InstanceNotFound
 	}
-
-	return "", cloudprovider.InstanceNotFound
 }
 
 // InstanceTypeByProviderID returns the cloudprovider instance type of the node with the specified unique providerID
@@ -713,9 +686,7 @@ func getVirtualMachineDevices(ctx context.Context, cfg *VSphereConfig, c *govmom
 	}
 	f.SetDatacenter(dc)
 
-	vmRegex := cfg.Global.WorkingDir + name
-
-	vm, err := f.VirtualMachine(ctx, vmRegex)
+	vm, err := f.VirtualMachine(ctx, name)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -1681,8 +1652,7 @@ func (vs *VSphere) getCurrentNodeResourcePool(ctx context.Context, datacenter *o
 	f := find.NewFinder(vs.client.Client, true)
 	f.SetDatacenter(datacenter)
 
-	vmRegex := vs.cfg.Global.WorkingDir + vs.localInstanceID
-	currentVM, err := f.VirtualMachine(ctx, vmRegex)
+	currentVM, err := f.VirtualMachine(ctx, vs.localInstanceID)
 	if err != nil {
 		return nil, err
 	}
