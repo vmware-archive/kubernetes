@@ -1,0 +1,118 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: mongodb-shard-node01
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mongodb-shard-node01
+        role: mongoshard
+        tier: backend
+    spec:
+      containers:
+        -
+          args:
+            - "--replSet"
+            - rs03
+            - "--port"
+            - "27019"
+            - "--shardsvr"
+            - "--journal"
+          image: "mongo:3.4"
+          name: arb03-node01
+          ports:
+            -
+              containerPort: 27019
+              name: arb03-node01
+          volumeMounts:
+            -
+              mountPath: /data/db
+              name: vsphere-storage-db-rsa03
+        -
+          args:
+            - "--replSet"
+            - rs04
+            - "--port"
+            - "27021"
+            - "--shardsvr"
+            - "--journal"
+          image: "mongo:3.4"
+          name: rss03-node01
+          ports:
+            -
+              containerPort: 27021
+              name: rss04-node01
+          volumeMounts:
+            -
+              mountPath: /data/db
+              name: vsphere-storage-db-rss04
+        -
+          args:
+            - "--replSet"
+            - rs01
+            - "--port"
+            - "27020"
+            - "--shardsvr"
+            - "--journal"
+          image: "mongo:3.4"
+          name: rsp01-node01
+          ports:
+            -
+              containerPort: 27020
+              name: rsp01-node01
+          volumeMounts:
+            -
+              mountPath: /data/db
+              name: vsphere-storage-db-rsp01
+        -
+          args:
+            - "--configsvr"
+            - "--replSet"
+            - configReplSet01
+            - "--port"
+            - "27018"
+          image: "mongo:3.4"
+          name: cfg01-node01
+          ports:
+            -
+              containerPort: 27018
+              name: cfg01-node01
+          volumeMounts:
+            -
+              mountPath: /data/db
+              name: vsphere-storage-mongoc01
+        -
+          args:
+            - "--configdb"
+            - "configReplSet01/mongodb-node01.default.svc.cluster.local:27018,mongodb-node02.default.svc.cluster.local:27018,mongodb-node03.default.svc.cluster.local:27018,mongodb-node04.default.svc.cluster.local:27018"
+            - "--port"
+            - "27017"
+          command:
+            - mongos
+          image: "mongo:3.4"
+          name: mgs01-node01
+          ports:
+            -
+              containerPort: 27017
+              hostPort: 27017
+              name: mgs01-node01
+      volumes:
+        -
+          name: vsphere-storage-mongoc01
+          persistentVolumeClaim:
+            claimName: pvcmongoc20gb-101
+        -
+          name: vsphere-storage-db-rsp01
+          persistentVolumeClaim:
+            claimName: pvc100gb-101
+        -
+          name: vsphere-storage-db-rss04
+          persistentVolumeClaim:
+            claimName: pvc100gb-102
+        -
+          name: vsphere-storage-db-rsa03
+          persistentVolumeClaim:
+            claimName: pvc5gb-101
