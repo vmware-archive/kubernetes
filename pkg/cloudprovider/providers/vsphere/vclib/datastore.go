@@ -26,7 +26,7 @@ func (ds *Datastore) CreateDirectory(ctx context.Context, directoryPath string, 
 		if soap.IsSoapFault(err) {
 			soapFault := soap.ToSoapFault(err)
 			if _, ok := soapFault.VimFault().(types.FileAlreadyExists); ok {
-				glog.Warning("Cannot create dir: %s. err: %v", directoryPath, ErrFileAlreadyExist)
+				glog.Warningf("Cannot create dir: %s. err: %v", directoryPath, ErrFileAlreadyExist)
 				return ErrFileAlreadyExist
 			}
 		}

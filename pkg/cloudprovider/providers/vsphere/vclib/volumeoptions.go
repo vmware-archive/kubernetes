@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 )
 
 // VolumeOptions specifies various options for a volume.
