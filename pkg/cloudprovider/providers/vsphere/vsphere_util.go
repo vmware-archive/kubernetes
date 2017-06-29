@@ -21,8 +21,6 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
-	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -113,7 +111,12 @@ func getvmUUID() (string, error) {
 func getSharedDatastoresInK8SCluster(ctx context.Context, folder *vclib.Folder) ([]*vclib.Datastore, error) {
 	vmList, err := folder.GetVirtualMachines(ctx)
 	if err != nil {
+		glog.Errorf("Failed to get virtual machines in the kubernetes cluster: %s, err: %+v", folder.InventoryPath, err)
 		return nil, err
+	}
+	if vmList == nil || len(vmList) == 0 {
+		glog.Errorf("No virtual machines found in the kubernetes cluster: %s", folder.InventoryPath)
+		return nil, fmt.Errorf("No virtual machines found in the kubernetes cluster: %s", folder.InventoryPath)
 	}
 	index := 0
 	var sharedDatastores []*vclib.Datastore
@@ -132,7 +135,7 @@ func getSharedDatastoresInK8SCluster(ctx context.Context, folder *vclib.Folder) 
 			} else {
 				sharedDatastores = intersect(sharedDatastores, accessibleDatastores)
 				if len(sharedDatastores) == 0 {
-					return nil, fmt.Errorf("No shared datastores found in the Kubernetes cluster")
+					return nil, fmt.Errorf("No shared datastores found in the Kubernetes cluster: %s", folder.InventoryPath)
 				}
 			}
 			index++
@@ -200,18 +203,22 @@ func getPbmCompatibleDatastore(ctx context.Context, client *vim25.Client, storag
 	}
 	storagePolicyID, err := pbmClient.ProfileIDByName(ctx, storagePolicyName)
 	if err != nil {
+		glog.Errorf("Failed to Profile ID by name: %s. err: %+v", storagePolicyName, err)
 		return "", err
 	}
 	sharedDsList, err := getSharedDatastoresInK8SCluster(ctx, folder)
 	if err != nil {
+		glog.Errorf("Failed to get shared datastores from kubernetes cluster: %s. err: %+v", folder.InventoryPath, err)
 		return "", err
 	}
 	compatibleDatastores, _, err := pbmClient.GetCompatibleDatastores(ctx, storagePolicyID, sharedDsList)
 	if err != nil {
+		glog.Errorf("Failed to get compatible datastores from datastores : %+v with storagePolicy: %s. err: %+v", sharedDsList, storagePolicyID, err)
 		return "", err
 	}
 	datastore, err := getMostFreeDatastoreName(ctx, client, compatibleDatastores)
 	if err != nil {
+		glog.Errorf("Failed to get most free datastore from compatible datastores: %+v. err: %+v", compatibleDatastores, err)
 		return "", err
 	}
 	return datastore, err
@@ -234,17 +241,6 @@ func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter) (*vcl
 	vmOptions.VMFolder = folder
 	vmOptions.VMResourcePool = resourcePool
 	return &vmOptions, nil
-}
-
-// Remove the cluster or folder path from the vDiskPath
-// for vDiskPath [DatastoreCluster/sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk, return value is [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk
-// for vDiskPath [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk, return value remains same [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk
-func removeClusterFromVDiskPath(vDiskPath string) string {
-	datastore := regexp.MustCompile("\\[(.*?)\\]").FindStringSubmatch(vDiskPath)[1]
-	if filepath.Base(datastore) != datastore {
-		vDiskPath = strings.Replace(vDiskPath, datastore, filepath.Base(datastore), 1)
-	}
-	return vDiskPath
 }
 
 // A background routine which will be responsible for deleting stale dummy VM's.

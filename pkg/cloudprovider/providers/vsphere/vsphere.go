@@ -114,7 +114,7 @@ type VSphereConfig struct {
 type Volumes interface {
 	// AttachDisk attaches given disk to given node. Current node
 	// is used when nodeName is empty string.
-	AttachDisk(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskID string, diskUUID string, err error)
+	AttachDisk(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskUUID string, err error)
 
 	// DetachDisk detaches given disk to given node. Current node
 	// is used when nodeName is empty string.
@@ -317,6 +317,7 @@ func (vs *VSphere) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress, 
 	}
 	vmMoList, err := vm.Datacenter.GetVMMoList(ctx, []*vclib.VirtualMachine{vm}, []string{"guest.net"})
 	if err != nil {
+		glog.Errorf("Failed to get VM Managed object with property guest.net for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
 		return nil, err
 	}
 	// retrieve VM's ip(s)
@@ -387,6 +388,7 @@ func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 	}
 	vmMoList, err := vm.Datacenter.GetVMMoList(ctx, []*vclib.VirtualMachine{vm}, []string{"summary"})
 	if err != nil {
+		glog.Errorf("Failed to get VM Managed object with property summary for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
 		return "", err
 	}
 	if vmMoList[0].Summary.Runtime.PowerState == ActivePowerState {
@@ -442,12 +444,46 @@ func (vs *VSphere) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []st
 }
 
 // AttachDisk attaches given virtual disk volume to the compute running kubelet.
-func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskID string, diskUUID string, err error) {
-	return "", "", nil
+func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
+	if nodeName == "" {
+		nodeName = vmNameToNodeName(vs.localInstanceID)
+	}
+	// Create context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vm, err := vs.getVMByName(ctx, nodeName)
+	if err != nil {
+		glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
+		return "", err
+	}
+	// balu - check for datastore cluster
+	diskUUID, err = vm.AttachDisk(ctx, vmDiskPath, &vclib.VolumeOptions{SCSIControllerType: vclib.PVSCSIControllerType, StoragePolicyID: storagePolicyID})
+	if err != nil {
+		glog.Errorf("Failed to attach disk: %s for node: %s. err: +%v", vmDiskPath, nodeNameToVMName(nodeName), err)
+		return "", err
+	}
+	return diskUUID, nil
 }
 
 // DetachDisk detaches given virtual disk volume from the compute running kubelet.
 func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error {
+	if nodeName == "" {
+		nodeName = vmNameToNodeName(vs.localInstanceID)
+	}
+	// Create context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vm, err := vs.getVMByName(ctx, nodeName)
+	if err != nil {
+		glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
+		return err
+	}
+	// balu - check for datastore cluster
+	err = vm.DetachDisk(ctx, volPath)
+	if err != nil {
+		glog.Errorf("Failed to detach disk: %s for node: %s. err: +%v", volPath, nodeNameToVMName(nodeName), err)
+		return err
+	}
 	return nil
 }
 
@@ -536,6 +572,7 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 
 // CreateVolume creates a volume of given size (in KiB).
 func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath string, err error) {
+	glog.V(1).Infof("Starting to create a vSphere volume with volumeOptions: %+v", volumeOptions)
 	var datastore string
 	// Default datastore is the datastore in the vSphere config file that is used to initialize vSphere cloud provider.
 	if volumeOptions.Datastore == "" {
@@ -564,18 +601,21 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath 
 		// This routine will get executed for every 5 minutes and gets initiated only once in its entire lifetime.
 		cleanUpRoutineInitLock.Lock()
 		if !cleanUpRoutineInitialized {
+			glog.V(1).Infof("Starting a clean up routine to remove stale dummy VM's")
 			go vs.cleanUpDummyVMs(DummyVMPrefixName)
 			cleanUpRoutineInitialized = true
 		}
 		cleanUpRoutineInitLock.Unlock()
 		vmOptions, err = vs.setVMOptions(ctx, dc)
 		if err != nil {
+			glog.Errorf("Failed to set VM options requires to create a vsphere volume. err: %+v", err)
 			return "", err
 		}
 	}
 	if volumeOptions.StoragePolicyName != "" && volumeOptions.Datastore == "" {
 		datastore, err = getPbmCompatibleDatastore(ctx, dc.Client(), volumeOptions.StoragePolicyName, vmOptions.VMFolder)
 		if err != nil {
+			glog.Errorf("Failed to get pbm compatible datastore with storagePolicy: %s. err: %+v", volumeOptions.StoragePolicyName, err)
 			return "", err
 		}
 	}
@@ -598,6 +638,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath 
 	}
 	err = disk.Create(ctx, ds)
 	if err != nil {
+		glog.Errorf("Failed to create a vsphere volume with volumeOptions: %+v on datastore: %s. err: %+v", volumeOptions, datastore, err)
 		return "", err
 	}
 	return volumePath, nil
@@ -605,6 +646,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath 
 
 // DeleteVolume deletes a volume given volume name.
 func (vs *VSphere) DeleteVolume(vmDiskPath string) error {
+	glog.V(1).Infof("Starting to delete vSphere volume with vmDiskPath: %s", vmDiskPath)
 	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -621,13 +663,15 @@ func (vs *VSphere) DeleteVolume(vmDiskPath string) error {
 	if err != nil {
 		return err
 	}
-	vmDiskPath = removeClusterFromVDiskPath(vmDiskPath)
 	disk := diskmanagers.VirtualDisk{
 		DiskPath:      vmDiskPath,
 		VolumeOptions: &vclib.VolumeOptions{},
 		VMOptions:     &vclib.VMOptions{},
 	}
 	err = disk.Delete(ctx, ds)
+	if err != nil {
+		glog.Errorf("Failed to delete vsphere volume with vmDiskPath: %s. err: %+v", vmDiskPath, err)
+	}
 	return err
 }
 
@@ -647,6 +691,7 @@ func (vs *VSphere) NodeExists(nodeName k8stypes.NodeName) (bool, error) {
 	}
 	vmMoList, err := vm.Datacenter.GetVMMoList(ctx, []*vclib.VirtualMachine{vm}, []string{"summary"})
 	if err != nil {
+		glog.Errorf("Failed to get VM Managed object with property summary for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
 		return false, err
 	}
 	if vmMoList[0].Summary.Runtime.PowerState == ActivePowerState {
