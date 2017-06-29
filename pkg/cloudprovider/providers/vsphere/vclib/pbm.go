@@ -75,11 +75,14 @@ func (pbmClient *PbmClient) GetCompatibleDatastores(ctx context.Context, storage
 		localizedMessagesForNotCompatibleDatastores = ""
 	)
 	compatibilityResult, err := pbmClient.GetPlacementCompatibilityResult(ctx, storagePolicyID, datastores)
+	if err != nil {
+		glog.Errorf("Error occurred while retrieving placement compatibility result for datastores: %+v with storagePolicyID: %s. err: %+v", datastores, storagePolicyID, err)
+		return nil, "", err
+	}
 	compatibleHubs := compatibilityResult.CompatibleDatastores()
-
-	var compatibleDataStoreList []*Datastore
+	var compatibleDatastoreList []*Datastore
 	for _, hub := range compatibleHubs {
-		compatibleDataStoreList = append(compatibleDataStoreList, getDatastoreFromPlacementHub(datastores, hub))
+		compatibleDatastoreList = append(compatibleDatastoreList, getDatastoreFromPlacementHub(datastores, hub))
 	}
 	for _, res := range compatibilityResult {
 		for _, err := range res.Error {
@@ -93,20 +96,15 @@ func (pbmClient *PbmClient) GetCompatibleDatastores(ctx context.Context, storage
 			localizedMessagesForNotCompatibleDatastores += localizedMessage
 		}
 	}
-	if err != nil {
-		glog.Errorf("Error occurred while getting Placement Compatibility Result. err %+v", err)
-		return nil, localizedMessagesForNotCompatibleDatastores, err
-	}
-
 	// Return an error if there are no compatible datastores.
 	if len(compatibleHubs) < 1 {
-		glog.Errorf("No compatible datastores found that satisfy the storage policy requirements")
+		glog.Errorf("No compatible datastores found that satisfy the storage policy requirements: %s", storagePolicyID)
 		return nil, localizedMessagesForNotCompatibleDatastores, fmt.Errorf("No compatible datastores found that satisfy the storage policy requirements")
 	}
-	return compatibleDataStoreList, localizedMessagesForNotCompatibleDatastores, nil
+	return compatibleDatastoreList, localizedMessagesForNotCompatibleDatastores, nil
 }
 
-// get placement compatibility result based on storage policy requirements.
+// GetPlacementCompatibilityResult gets placement compatibility result based on storage policy requirements.
 func (pbmClient *PbmClient) GetPlacementCompatibilityResult(ctx context.Context, storagePolicyID string, datastore []*Datastore) (pbm.PlacementCompatibilityResult, error) {
 	var hubs []pbmtypes.PbmPlacementHub
 	for _, ds := range datastore {
@@ -124,7 +122,7 @@ func (pbmClient *PbmClient) GetPlacementCompatibilityResult(ctx context.Context,
 	}
 	res, err := pbmClient.CheckRequirements(ctx, hubs, nil, req)
 	if err != nil {
-		glog.Errorf("Error occurred for CheckRequirements call. err %+v", err)
+		glog.Errorf("Error occurred for CheckRequirements call. err: %+v", err)
 		return nil, err
 	}
 	return res, nil
@@ -148,7 +146,7 @@ func getDsMorNameMap(ctx context.Context, datastores []*Datastore) map[string]st
 		if err == nil {
 			dsMorNameMap[ds.Reference().Value] = dsObjectName
 		} else {
-			glog.Errorf("Error occurred while getting datastore object name. err %+v", err)
+			glog.Errorf("Error occurred while getting datastore object name. err: %+v", err)
 		}
 	}
 	return dsMorNameMap

@@ -63,6 +63,8 @@ func (vm *VirtualMachine) AttachDisk(ctx context.Context, vmDiskPath string, vol
 	if !CheckControllerSupported(volumeOptions.SCSIControllerType) {
 		return "", fmt.Errorf("Not a valid SCSI Controller Type. Valid options are %q", SCSIControllerTypeValidOptions())
 	}
+	vmDiskPathCopy := vmDiskPath
+	vmDiskPath = RemoveClusterFromVDiskPath(vmDiskPath)
 	attached, err := vm.IsDiskAttached(ctx, vmDiskPath)
 	if err != nil {
 		glog.Errorf("Error occurred while checking if disk is attached on VM: %q. vmDiskPath: %q, err: %+v", vm.Name(), vmDiskPath, err)
@@ -74,7 +76,7 @@ func (vm *VirtualMachine) AttachDisk(ctx context.Context, vmDiskPath string, vol
 		return diskUUID, nil
 	}
 
-	dsObj, err := vm.Datacenter.GetDatastoreByPath(ctx, vmDiskPath)
+	dsObj, err := vm.Datacenter.GetDatastoreByPath(ctx, vmDiskPathCopy)
 	if err != nil {
 		glog.Errorf("Failed to get datastore from vmDiskPath: %q. err: %+v", vmDiskPath, err)
 		return "", err
@@ -135,6 +137,7 @@ func (vm *VirtualMachine) AttachDisk(ctx context.Context, vmDiskPath string, vol
 
 // DetachDisk detaches the disk specified by vmDiskPath
 func (vm *VirtualMachine) DetachDisk(ctx context.Context, vmDiskPath string) error {
+	vmDiskPath = RemoveClusterFromVDiskPath(vmDiskPath)
 	device, err := vm.getVirtualDeviceByPath(ctx, vmDiskPath)
 	if err != nil {
 		glog.Errorf("Disk ID not found for VM: %q with diskPath: %q", vm.Name(), vmDiskPath)

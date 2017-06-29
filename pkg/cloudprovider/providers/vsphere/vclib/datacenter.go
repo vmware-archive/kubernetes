@@ -25,7 +25,7 @@ func GetDatacenter(ctx context.Context, connection *VSphereConnection, datacente
 	finder := find.NewFinder(connection.GoVmomiClient.Client, true)
 	dataCenter, err := finder.Datacenter(ctx, datacenterPath)
 	if err != nil {
-		glog.Errorf("Failed to find the data center: %s. err: %+v", datacenterPath, err)
+		glog.Errorf("Failed to find the datacenter: %s. err: %+v", datacenterPath, err)
 		return nil, err
 	}
 	dc := Datacenter{dataCenter}

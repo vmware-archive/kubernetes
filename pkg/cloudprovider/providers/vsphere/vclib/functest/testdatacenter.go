@@ -60,7 +60,11 @@ func main() {
 	ds2, err := getDatastoreByNameTest(ctx, "sharedVmfs-0")
 	fmt.Printf("===============================================\n")
 
-	getFolderByPathTest(ctx, "/vcqaDC/vm/kubernetes")
+	f, err := getFolderByPathTest(ctx, "/vcqaDC/vm/kubernetes")
+	fmt.Printf("===============================================\n")
+
+	vmList, err := f.GetVirtualMachines(ctx)
+	fmt.Printf("vmList: %+v\n", vmList)
 	fmt.Printf("===============================================\n")
 
 	getVMMoListTest(ctx, []*vclib.VirtualMachine{vmMaster, vmNode}, []string{"name", "summary"})
@@ -176,12 +180,14 @@ func getDatastoreByNameTest(ctx context.Context, name string) (*vclib.Datastore,
 	return ds, nil
 }
 
-func getFolderByPathTest(ctx context.Context, folderPath string) {
+func getFolderByPathTest(ctx context.Context, folderPath string) (*vclib.Folder, error) {
 	folder, err := dc.GetFolderByPath(ctx, folderPath)
 	if err != nil {
 		glog.Errorf("Failed to get Datastore from folderPath: %q with err: %v", folderPath, err)
+		return nil, err
 	}
 	fmt.Printf("Folder details are %v\n", folder)
+	return folder, nil
 }
 
 func getVMMoListTest(ctx context.Context, vmObjList []*vclib.VirtualMachine, properties []string) {

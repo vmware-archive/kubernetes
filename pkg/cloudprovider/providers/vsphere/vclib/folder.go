@@ -14,15 +14,17 @@ type Folder struct {
 
 // GetVirtualMachines returns list of VirtualMachine inside a folder.
 func (folder *Folder) GetVirtualMachines(ctx context.Context) ([]*VirtualMachine, error) {
-	virtualMachines, err := getFinder(folder.Datacenter).VirtualMachineList(ctx, folder.InventoryPath)
+	vmFolders, err := folder.Children(ctx)
 	if err != nil {
-		glog.Errorf("Failed to get VirtualMachineList from Folder. err: %+v", err)
+		glog.Errorf("Failed to get children from Folder: %s. err: %+v", folder.InventoryPath, err)
 		return nil, err
 	}
-	var vmObjectList []*VirtualMachine
-	for _, vm := range virtualMachines {
-		vmObjct := VirtualMachine{vm, folder.Datacenter}
-		vmObjectList = append(vmObjectList, &vmObjct)
+	var vmObjList []*VirtualMachine
+	for _, vmFolder := range vmFolders {
+		if vmFolder.Reference().Type == VirtualMachineType {
+			vmObj := VirtualMachine{object.NewVirtualMachine(folder.Client(), vmFolder.Reference()), folder.Datacenter}
+			vmObjList = append(vmObjList, &vmObj)
+		}
 	}
-	return vmObjectList, nil
+	return vmObjList, nil
 }
