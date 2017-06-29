@@ -187,12 +187,16 @@ func (vmdisk vmDiskManager) createDummyVM(ctx context.Context, datacenter *vclib
 	return &vclib.VirtualMachine{VirtualMachine: dummyVM, Datacenter: datacenter}, nil
 }
 
-// CleanUpDummyVMs deletes dummyVM's
+// CleanUpDummyVMs deletes stale dummyVM's
 func CleanUpDummyVMs(ctx context.Context, folder *vclib.Folder, dc *vclib.Datacenter) error {
 	vmList, err := folder.GetVirtualMachines(ctx)
 	if err != nil {
-		glog.V(4).Infof("Unable to get VM list in the kubernetes cluster: %q. err: %+v", folder.InventoryPath, err)
+		glog.V(4).Infof("Failed to get virtual machines in the kubernetes cluster: %s, err: %+v", folder.InventoryPath, err)
 		return err
+	}
+	if vmList == nil || len(vmList) == 0 {
+		glog.Errorf("No virtual machines found in the kubernetes cluster: %s", folder.InventoryPath)
+		return fmt.Errorf("No virtual machines found in the kubernetes cluster: %s", folder.InventoryPath)
 	}
 	var dummyVMList []*vclib.VirtualMachine
 	// Loop through VM's in the Kubernetes cluster to find dummy VM's
