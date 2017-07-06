@@ -1,6 +1,8 @@
 package diskmanagers
 
 import (
+	"time"
+
 	"golang.org/x/net/context"
 
 	"github.com/golang/glog"
@@ -33,12 +35,16 @@ func (diskManager virtualDiskManager) Create(ctx context.Context, datastore *vcl
 		},
 		CapacityKb: int64(diskManager.volumeOptions.CapacityKB),
 	}
+	requestTime := time.Now()
+	// Create virtual disk
 	task, err := vdm.CreateVirtualDisk(ctx, diskManager.diskPath, datastore.Datacenter.Datacenter, vmDiskSpec)
 	if err != nil {
+		vclib.RecordvSphereMetric(vclib.APICreateVolume, requestTime, err)
 		glog.Errorf("Failed to create virtual disk: %s. err: %+v", diskManager.diskPath, err)
 		return err
 	}
 	err = task.Wait(ctx)
+	vclib.RecordvSphereMetric(vclib.APICreateVolume, requestTime, err)
 	if err != nil {
 		glog.Errorf("Failed to create virtual disk: %s. err: %+v", diskManager.diskPath, err)
 		return err
@@ -51,13 +57,16 @@ func (diskManager virtualDiskManager) Delete(ctx context.Context, datastore *vcl
 	// Create a virtual disk manager
 	virtualDiskManager := object.NewVirtualDiskManager(datastore.Client())
 	diskPath := vclib.RemoveClusterFromVDiskPath(diskManager.diskPath)
+	requestTime := time.Now()
 	// Delete virtual disk
 	task, err := virtualDiskManager.DeleteVirtualDisk(ctx, diskPath, datastore.Datacenter.Datacenter)
 	if err != nil {
 		glog.Errorf("Failed to delete virtual disk. err: %v", err)
+		vclib.RecordvSphereMetric(vclib.APIDeleteVolume, requestTime, err)
 		return err
 	}
 	err = task.Wait(ctx)
+	vclib.RecordvSphereMetric(vclib.APIDeleteVolume, requestTime, err)
 	if err != nil {
 		glog.Errorf("Failed to delete virtual disk. err: %v", err)
 		return err

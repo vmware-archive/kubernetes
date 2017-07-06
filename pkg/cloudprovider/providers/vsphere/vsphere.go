@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"gopkg.in/gcfg.v1"
 
@@ -149,7 +150,7 @@ func readConfig(config io.Reader) (VSphereConfig, error) {
 }
 
 func init() {
-	registerMetrics()
+	vclib.RegisterMetrics()
 	cloudprovider.RegisterCloudProvider(ProviderName, func(config io.Reader) (cloudprovider.Interface, error) {
 		cfg, err := readConfig(config)
 		if err != nil {
@@ -445,233 +446,274 @@ func (vs *VSphere) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []st
 
 // AttachDisk attaches given virtual disk volume to the compute running kubelet.
 func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
-	if nodeName == "" {
-		nodeName = vmNameToNodeName(vs.localInstanceID)
+	attachDiskInternal := func(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
+		if nodeName == "" {
+			nodeName = vmNameToNodeName(vs.localInstanceID)
+		}
+		// Create context
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		vm, err := vs.getVMByName(ctx, nodeName)
+		if err != nil {
+			glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
+			return "", err
+		}
+		diskUUID, err = vm.AttachDisk(ctx, vmDiskPath, &vclib.VolumeOptions{SCSIControllerType: vclib.PVSCSIControllerType, StoragePolicyID: storagePolicyID})
+		if err != nil {
+			glog.Errorf("Failed to attach disk: %s for node: %s. err: +%v", vmDiskPath, nodeNameToVMName(nodeName), err)
+			return "", err
+		}
+		return diskUUID, nil
 	}
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	vm, err := vs.getVMByName(ctx, nodeName)
-	if err != nil {
-		glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
-		return "", err
-	}
-	// balu - check for datastore cluster
-	diskUUID, err = vm.AttachDisk(ctx, vmDiskPath, &vclib.VolumeOptions{SCSIControllerType: vclib.PVSCSIControllerType, StoragePolicyID: storagePolicyID})
-	if err != nil {
-		glog.Errorf("Failed to attach disk: %s for node: %s. err: +%v", vmDiskPath, nodeNameToVMName(nodeName), err)
-		return "", err
-	}
-	return diskUUID, nil
+	requestTime := time.Now()
+	diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyID, nodeName)
+	vclib.RecordvSphereMetric(vclib.OperationAttachVolume, requestTime, err)
+	return diskUUID, err
 }
 
 // DetachDisk detaches given virtual disk volume from the compute running kubelet.
 func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error {
-	if nodeName == "" {
-		nodeName = vmNameToNodeName(vs.localInstanceID)
+	detachDiskInternal := func(volPath string, nodeName k8stypes.NodeName) error {
+		if nodeName == "" {
+			nodeName = vmNameToNodeName(vs.localInstanceID)
+		}
+		// Create context
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		vm, err := vs.getVMByName(ctx, nodeName)
+		if err != nil {
+			glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
+			return err
+		}
+		err = vm.DetachDisk(ctx, volPath)
+		if err != nil {
+			glog.Errorf("Failed to detach disk: %s for node: %s. err: +%v", volPath, nodeNameToVMName(nodeName), err)
+			return err
+		}
+		return nil
 	}
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	vm, err := vs.getVMByName(ctx, nodeName)
-	if err != nil {
-		glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
-		return err
-	}
-	// balu - check for datastore cluster
-	err = vm.DetachDisk(ctx, volPath)
-	if err != nil {
-		glog.Errorf("Failed to detach disk: %s for node: %s. err: +%v", volPath, nodeNameToVMName(nodeName), err)
-		return err
-	}
-	return nil
+	requestTime := time.Now()
+	err := detachDiskInternal(volPath, nodeName)
+	vclib.RecordvSphereMetric(vclib.OperationDetachVolume, requestTime, nil)
+	return err
 }
 
 // DiskIsAttached returns if disk is attached to the VM using controllers supported by the plugin.
 func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (bool, error) {
-	var vSphereInstance string
-	if nodeName == "" {
-		vSphereInstance = vs.localInstanceID
-		nodeName = vmNameToNodeName(vSphereInstance)
-	} else {
-		vSphereInstance = nodeNameToVMName(nodeName)
+	diskIsAttachedInternal := func(volPath string, nodeName k8stypes.NodeName) (bool, error) {
+		var vSphereInstance string
+		if nodeName == "" {
+			vSphereInstance = vs.localInstanceID
+			nodeName = vmNameToNodeName(vSphereInstance)
+		} else {
+			vSphereInstance = nodeNameToVMName(nodeName)
+		}
+		nodeExist, err := vs.NodeExists(nodeName)
+		if err != nil {
+			glog.Errorf("Failed to check whether node exist. err: %s.", err)
+			return false, err
+		}
+		if !nodeExist {
+			glog.Errorf("DiskIsAttached failed to determine whether disk %q is still attached: node %q does not exist",
+				volPath,
+				vSphereInstance)
+			return false, fmt.Errorf("DiskIsAttached failed to determine whether disk %q is still attached: node %q does not exist",
+				volPath,
+				vSphereInstance)
+		}
+		// Create context
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		vm, err := vs.getVMByName(ctx, nodeName)
+		if err != nil {
+			glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
+			return false, err
+		}
+		attached, err := vm.IsDiskAttached(ctx, volPath)
+		return attached, err
 	}
-	nodeExist, err := vs.NodeExists(nodeName)
-	if err != nil {
-		glog.Errorf("Failed to check whether node exist. err: %s.", err)
-		return false, err
-	}
-	if !nodeExist {
-		glog.Errorf("DiskIsAttached failed to determine whether disk %q is still attached: node %q does not exist",
-			volPath,
-			vSphereInstance)
-		return false, fmt.Errorf("DiskIsAttached failed to determine whether disk %q is still attached: node %q does not exist",
-			volPath,
-			vSphereInstance)
-	}
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	vm, err := vs.getVMByName(ctx, nodeName)
-	if err != nil {
-		glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
-		return false, err
-	}
-	attached, err := vm.IsDiskAttached(ctx, volPath)
-	return attached, err
+	requestTime := time.Now()
+	isAttached, err := diskIsAttachedInternal(volPath, nodeName)
+	vclib.RecordvSphereMetric(vclib.OperationDiskIsAttached, requestTime, err)
+	return isAttached, err
 }
 
 // DisksAreAttached returns if disks are attached to the VM using controllers supported by the plugin.
 func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeName) (map[string]bool, error) {
-	attached := make(map[string]bool)
-	if len(volPaths) == 0 {
-		return attached, nil
-	}
-	var vSphereInstance string
-	if nodeName == "" {
-		vSphereInstance = vs.localInstanceID
-		nodeName = vmNameToNodeName(vSphereInstance)
-	} else {
-		vSphereInstance = nodeNameToVMName(nodeName)
-	}
-	nodeExist, err := vs.NodeExists(nodeName)
-	if err != nil {
-		glog.Errorf("Failed to check whether node exist. err: %s.", err)
-		return nil, err
-	}
-	if !nodeExist {
-		glog.Errorf("DisksAreAttached failed to determine whether disks %v are still attached: node %q does not exist",
-			volPaths,
-			vSphereInstance)
-		return nil, fmt.Errorf("DisksAreAttached failed to determine whether disks %v are still attached: node %q does not exist",
-			volPaths,
-			vSphereInstance)
-	}
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	vm, err := vs.getVMByName(ctx, nodeName)
-	if err != nil {
-		glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
-		return nil, err
-	}
-	for _, volPath := range volPaths {
-		result, err := vm.IsDiskAttached(ctx, volPath)
-		if err == nil {
-			if result {
-				attached[volPath] = true
-			} else {
-				attached[volPath] = false
-			}
+	disksAreAttachedInternal := func(volPaths []string, nodeName k8stypes.NodeName) (map[string]bool, error) {
+		attached := make(map[string]bool)
+		if len(volPaths) == 0 {
+			return attached, nil
+		}
+		var vSphereInstance string
+		if nodeName == "" {
+			vSphereInstance = vs.localInstanceID
+			nodeName = vmNameToNodeName(vSphereInstance)
 		} else {
+			vSphereInstance = nodeNameToVMName(nodeName)
+		}
+		nodeExist, err := vs.NodeExists(nodeName)
+		if err != nil {
+			glog.Errorf("Failed to check whether node exist. err: %s.", err)
 			return nil, err
 		}
+		if !nodeExist {
+			glog.Errorf("DisksAreAttached failed to determine whether disks %v are still attached: node %q does not exist",
+				volPaths,
+				vSphereInstance)
+			return nil, fmt.Errorf("DisksAreAttached failed to determine whether disks %v are still attached: node %q does not exist",
+				volPaths,
+				vSphereInstance)
+		}
+		// Create context
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		vm, err := vs.getVMByName(ctx, nodeName)
+		if err != nil {
+			glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
+			return nil, err
+		}
+		for _, volPath := range volPaths {
+			result, err := vm.IsDiskAttached(ctx, volPath)
+			if err == nil {
+				if result {
+					attached[volPath] = true
+				} else {
+					attached[volPath] = false
+				}
+			} else {
+				return nil, err
+			}
+		}
+		return attached, nil
 	}
-	return attached, nil
+	requestTime := time.Now()
+	attached, err := disksAreAttachedInternal(volPaths, nodeName)
+	vclib.RecordvSphereMetric(vclib.OperationDisksAreAttached, requestTime, err)
+	return attached, err
 }
 
-// CreateVolume creates a volume of given size (in KiB).
+// CreateVolume creates a volume of given size (in KiB) and return the volume path.
+// If the volumeOptions.Datastore is part of datastore cluster for example - [DatastoreCluster/sharedVmfs-0] then
+// return value will be [DatastoreCluster/sharedVmfs-0] kubevols/<volume-name>.vmdk
+// else return value will be [sharedVmfs-0] kubevols/<volume-name>.vmdk
 func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath string, err error) {
 	glog.V(1).Infof("Starting to create a vSphere volume with volumeOptions: %+v", volumeOptions)
-	var datastore string
-	// Default datastore is the datastore in the vSphere config file that is used to initialize vSphere cloud provider.
-	if volumeOptions.Datastore == "" {
-		datastore = vs.cfg.Global.Datastore
-	} else {
-		datastore = volumeOptions.Datastore
-	}
-	// Ensure client is logged in and session is valid
-	err = vs.conn.Connect()
-	if err != nil {
-		return "", err
-	}
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	dc, err := vclib.GetDatacenter(ctx, vs.conn, vs.cfg.Global.Datacenter)
-	if err != nil {
-		return "", err
-	}
-	var vmOptions *vclib.VMOptions
-	if volumeOptions.VSANStorageProfileData != "" || volumeOptions.StoragePolicyName != "" {
-		// Acquire a read lock to ensure multiple PVC requests can be processed simultaneously.
-		cleanUpDummyVMLock.RLock()
-		defer cleanUpDummyVMLock.RUnlock()
-		// Create a new background routine that will delete any dummy VM's that are left stale.
-		// This routine will get executed for every 5 minutes and gets initiated only once in its entire lifetime.
-		cleanUpRoutineInitLock.Lock()
-		if !cleanUpRoutineInitialized {
-			glog.V(1).Infof("Starting a clean up routine to remove stale dummy VM's")
-			go vs.cleanUpDummyVMs(DummyVMPrefixName)
-			cleanUpRoutineInitialized = true
+	createVolumeInternal := func(volumeOptions *vclib.VolumeOptions) (volumePath string, err error) {
+		var datastore string
+		// Default datastore is the datastore in the vSphere config file that is used to initialize vSphere cloud provider.
+		if volumeOptions.Datastore == "" {
+			datastore = vs.cfg.Global.Datastore
+		} else {
+			datastore = volumeOptions.Datastore
 		}
-		cleanUpRoutineInitLock.Unlock()
-		vmOptions, err = vs.setVMOptions(ctx, dc)
+		// Ensure client is logged in and session is valid
+		err = vs.conn.Connect()
 		if err != nil {
-			glog.Errorf("Failed to set VM options requires to create a vsphere volume. err: %+v", err)
 			return "", err
 		}
-	}
-	if volumeOptions.StoragePolicyName != "" && volumeOptions.Datastore == "" {
-		datastore, err = getPbmCompatibleDatastore(ctx, dc.Client(), volumeOptions.StoragePolicyName, vmOptions.VMFolder)
+		// Create context
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		dc, err := vclib.GetDatacenter(ctx, vs.conn, vs.cfg.Global.Datacenter)
 		if err != nil {
-			glog.Errorf("Failed to get pbm compatible datastore with storagePolicy: %s. err: %+v", volumeOptions.StoragePolicyName, err)
 			return "", err
 		}
+		var vmOptions *vclib.VMOptions
+		if volumeOptions.VSANStorageProfileData != "" || volumeOptions.StoragePolicyName != "" {
+			// Acquire a read lock to ensure multiple PVC requests can be processed simultaneously.
+			cleanUpDummyVMLock.RLock()
+			defer cleanUpDummyVMLock.RUnlock()
+			// Create a new background routine that will delete any dummy VM's that are left stale.
+			// This routine will get executed for every 5 minutes and gets initiated only once in its entire lifetime.
+			cleanUpRoutineInitLock.Lock()
+			if !cleanUpRoutineInitialized {
+				glog.V(1).Infof("Starting a clean up routine to remove stale dummy VM's")
+				go vs.cleanUpDummyVMs(DummyVMPrefixName)
+				cleanUpRoutineInitialized = true
+			}
+			cleanUpRoutineInitLock.Unlock()
+			vmOptions, err = vs.setVMOptions(ctx, dc)
+			if err != nil {
+				glog.Errorf("Failed to set VM options requires to create a vsphere volume. err: %+v", err)
+				return "", err
+			}
+		}
+		if volumeOptions.StoragePolicyName != "" && volumeOptions.Datastore == "" {
+			datastore, err = getPbmCompatibleDatastore(ctx, dc.Client(), volumeOptions.StoragePolicyName, vmOptions.VMFolder)
+			if err != nil {
+				glog.Errorf("Failed to get pbm compatible datastore with storagePolicy: %s. err: %+v", volumeOptions.StoragePolicyName, err)
+				return "", err
+			}
+		}
+		ds, err := dc.GetDatastoreByName(ctx, datastore)
+		if err != nil {
+			return "", err
+		}
+		volumeOptions.Datastore = datastore
+		kubeVolsPath := filepath.Clean(ds.Path(VolDir)) + "/"
+		err = ds.CreateDirectory(ctx, kubeVolsPath, false)
+		if err != nil && err != vclib.ErrFileAlreadyExist {
+			glog.Errorf("Cannot create dir %#v. err %s", kubeVolsPath, err)
+			return "", err
+		}
+		volumePath = kubeVolsPath + volumeOptions.Name + ".vmdk"
+		disk := diskmanagers.VirtualDisk{
+			DiskPath:      volumePath,
+			VolumeOptions: volumeOptions,
+			VMOptions:     vmOptions,
+		}
+		err = disk.Create(ctx, ds)
+		if err != nil {
+			glog.Errorf("Failed to create a vsphere volume with volumeOptions: %+v on datastore: %s. err: %+v", volumeOptions, datastore, err)
+			return "", err
+		}
+		if filepath.Base(datastore) != datastore {
+			// If datastore is within cluster, add cluster path to the volumePath
+			volumePath = strings.Replace(volumePath, filepath.Base(datastore), datastore, 1)
+		}
+		return volumePath, nil
 	}
-	ds, err := dc.GetDatastoreByName(ctx, datastore)
-	if err != nil {
-		return "", err
-	}
-	volumeOptions.Datastore = datastore
-	kubeVolsPath := filepath.Clean(ds.Path(VolDir)) + "/"
-	err = ds.CreateDirectory(ctx, kubeVolsPath, false)
-	if err != nil && err != vclib.ErrFileAlreadyExist {
-		glog.Errorf("Cannot create dir %#v. err %s", kubeVolsPath, err)
-		return "", err
-	}
-	volumePath = kubeVolsPath + volumeOptions.Name + ".vmdk"
-	disk := diskmanagers.VirtualDisk{
-		DiskPath:      volumePath,
-		VolumeOptions: volumeOptions,
-		VMOptions:     vmOptions,
-	}
-	err = disk.Create(ctx, ds)
-	if err != nil {
-		glog.Errorf("Failed to create a vsphere volume with volumeOptions: %+v on datastore: %s. err: %+v", volumeOptions, datastore, err)
-		return "", err
-	}
-	return volumePath, nil
+	requestTime := time.Now()
+	volumePath, err = createVolumeInternal(volumeOptions)
+	vclib.RecordCreateVolumeMetric(volumeOptions, requestTime, err)
+	return volumePath, err
 }
 
 // DeleteVolume deletes a volume given volume name.
 func (vs *VSphere) DeleteVolume(vmDiskPath string) error {
 	glog.V(1).Infof("Starting to delete vSphere volume with vmDiskPath: %s", vmDiskPath)
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	// Ensure client is logged in and session is valid
-	err := vs.conn.Connect()
-	if err != nil {
+	deleteVolumeInternal := func(vmDiskPath string) error {
+		// Create context
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		// Ensure client is logged in and session is valid
+		err := vs.conn.Connect()
+		if err != nil {
+			return err
+		}
+		dc, err := vclib.GetDatacenter(ctx, vs.conn, vs.cfg.Global.Datacenter)
+		if err != nil {
+			return err
+		}
+		ds, err := dc.GetDatastoreByName(ctx, vs.cfg.Global.Datastore)
+		if err != nil {
+			return err
+		}
+		disk := diskmanagers.VirtualDisk{
+			DiskPath:      vmDiskPath,
+			VolumeOptions: &vclib.VolumeOptions{},
+			VMOptions:     &vclib.VMOptions{},
+		}
+		err = disk.Delete(ctx, ds)
+		if err != nil {
+			glog.Errorf("Failed to delete vsphere volume with vmDiskPath: %s. err: %+v", vmDiskPath, err)
+		}
 		return err
 	}
-	dc, err := vclib.GetDatacenter(ctx, vs.conn, vs.cfg.Global.Datacenter)
-	if err != nil {
-		return err
-	}
-	ds, err := dc.GetDatastoreByName(ctx, vs.cfg.Global.Datastore)
-	if err != nil {
-		return err
-	}
-	disk := diskmanagers.VirtualDisk{
-		DiskPath:      vmDiskPath,
-		VolumeOptions: &vclib.VolumeOptions{},
-		VMOptions:     &vclib.VMOptions{},
-	}
-	err = disk.Delete(ctx, ds)
-	if err != nil {
-		glog.Errorf("Failed to delete vsphere volume with vmDiskPath: %s. err: %+v", vmDiskPath, err)
-	}
+	requestTime := time.Now()
+	err := deleteVolumeInternal(vmDiskPath)
+	vclib.RecordvSphereMetric(vclib.OperationDeleteVolume, requestTime, err)
 	return err
 }
 

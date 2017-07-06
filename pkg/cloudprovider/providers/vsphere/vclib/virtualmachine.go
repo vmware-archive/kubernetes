@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/vmware/govmomi/object"
@@ -105,8 +106,10 @@ func (vm *VirtualMachine) AttachDisk(ctx context.Context, vmDiskPath string, vol
 		deviceConfigSpec.Profile = append(deviceConfigSpec.Profile, profileSpec)
 	}
 	virtualMachineConfigSpec.DeviceChange = append(virtualMachineConfigSpec.DeviceChange, deviceConfigSpec)
+	requestTime := time.Now()
 	task, err := vm.Reconfigure(ctx, virtualMachineConfigSpec)
 	if err != nil {
+		RecordvSphereMetric(APIAttachVolume, requestTime, err)
 		glog.Errorf("Failed to attach the disk with storagePolicy: %q on VM: %q. err - %+v", volumeOptions.StoragePolicyID, vm.Name(), err)
 		if newSCSIController != nil {
 			vm.deleteController(ctx, newSCSIController, vmDevices)
@@ -114,6 +117,7 @@ func (vm *VirtualMachine) AttachDisk(ctx context.Context, vmDiskPath string, vol
 		return "", err
 	}
 	err = task.Wait(ctx)
+	RecordvSphereMetric(APIAttachVolume, requestTime, err)
 	if err != nil {
 		glog.Errorf("Failed to attach the disk with storagePolicy: %+q on VM: %q. err - %+v", volumeOptions.StoragePolicyID, vm.Name(), err)
 		if newSCSIController != nil {
@@ -148,7 +152,9 @@ func (vm *VirtualMachine) DetachDisk(ctx context.Context, vmDiskPath string) err
 		return fmt.Errorf("No virtual device found with diskPath: %q on VM: %q", vmDiskPath, vm.Name())
 	}
 	// Detach disk from VM
+	requestTime := time.Now()
 	err = vm.RemoveDevice(ctx, true, device)
+	RecordvSphereMetric(APIDetachVolume, requestTime, err)
 	if err != nil {
 		glog.Errorf("Error occurred while removing disk device for VM: %q. err: %v", vm.Name(), err)
 		return err
