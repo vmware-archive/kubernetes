@@ -7,20 +7,20 @@ export DEBIAN_FRONTEND="noninteractive"
 export GOVERSION="1.8.3"
 export GOROOT="/opt/go"
 export GOPATH="/root/.go"
+mkdir $GOPATH
 
 cd /opt
 curl -LO https://storage.googleapis.com/golang/go${GOVERSION}.linux-amd64.tar.gz
 tar zxf go${GOVERSION}.linux-amd64.tar.gz && rm go${GOVERSION}.linux-amd64.tar.gz
 ln -s /opt/go/bin/go /usr/bin/
 
-mkdir $GOPATH
-go get github.com/vmware/govmomi/govc
-ln -s /root/.go/bin/govc /usr/bin
+
+curl -L https://github.com/vmware/govmomi/releases/download/v0.15.0/govc_linux_amd64.gz | gunzip > /usr/local/bin/govc
+chmod +x /usr/local/bin/govc
 govc version
 
-
-go get github.com/y13i/j2y
-ln -s /root/.go/bin/j2y /usr/bin
+curl -L https://github.com/y13i/j2y/releases/download/v0.0.8/j2y-linux_amd64.zip | gunzip > /usr/bin/j2y
+chmod +x /usr/bin/j2y
 j2y --version
 
 cd /opt
