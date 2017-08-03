@@ -1,0 +1,84 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: vmware
+  labels:
+    name: vmware
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vsphere-cloud-provider-secret
+  namespace: vmware
+type: Opaque
+data:
+  # base64 encode username and password
+  # echo -n 'username' | base64
+  # echo -n 'password' | base64
+  vc_admin_username: QWRtaW5pc3RyYXRvckB2c3BoZXJlLmxvY2Fs
+  vc_admin_password: QWRtaW4hMjM=
+  vcp_username: dmNwdXNlckB2c3BoZXJlLmxvY2Fs
+  vcp_password: QWRtaW4hMjM=
+stringData:
+  vc_ip: "10.162.26.135"
+  vc_port: "443"
+  # datacenter is the datacenter name in which Node VMs are located.
+  datacenter: vcqaDC
+  # default_datastore is the Default datastore VCP will use for provisioning volumes using storage classes/dynamic provisioning
+  default_datastore: "vsanDatastore"
+  # node_vms_folder is the name of VM folder where all node VMs are located or to be placed under vcp_datacenter. This folder will be created if not present.
+  node_vms_folder: "kubernetes"
+  # node_vms_cluster_or_host is the name of host or cluster on which node VMs are located.
+  node_vms_cluster_or_host : "cluster-vsan-1"
+  
+  # vcp_configuration_file_location is the location where the VCP configuration file will be created.
+  vcp_configuration_file_location: "/etc/kubernetes/vsphere.conf"
+ 
+  # kubernetes_api_server_manifest is the file from which api server pod takes parameters
+  kubernetes_api_server_manifest: "/etc/kubernetes/manifests/kube-apiserver.json"
+  # kubernetes_controller_manager_manifest is the file from which controller manager pod takes parameters
+  kubernetes_controller_manager_manifest: "/etc/kubernetes/manifests/kube-controller-manager.json"
+  # kubernetes_kubelet_service_name is the name of the kubelet service
+  kubernetes_kubelet_service_name: kubelet.service
+  # kubernetes_kubelet_service_configuration_file is the file from which kubelet reads parameters
+  kubernetes_kubelet_service_configuration_file: "/etc/systemd/system/kubelet.service"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: vmware
+  name: vcpsa
+---
+apiVersion: v1
+kind: Pod
+metadata:
+    name: vcp-manager
+    namespace: vmware
+spec:
+    containers:
+    - name: vcp-manager-container
+      image: divyen/enablevcp:v1
+      env:
+      - name: POD_ROLE
+        value: "MANAGER"
+      - name: POD_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+      - name: POD_NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      - name: NODE_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: spec.nodeName
+      volumeMounts:
+      - name: secret-volume
+        mountPath: /secret-volume
+        readOnly: true
+    restartPolicy: Never
+    volumes:
+    - name: secret-volume
+      secret:
+        secretName: vsphere-cloud-provider-secret
