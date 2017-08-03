@@ -10,7 +10,8 @@ if [ $POD_ROLE = "MANAGER" ]; then
     /opt/enable-vcp-scripts/manager_pod.sh
 elif [ $POD_ROLE = "DAEMON" ]; then
     echo "Running Daemon Role"
+    /opt/enable-vcp-scripts/daemonset_pod.sh
 else
-    echo "[ERROR] Invalid Role is not set"; exit 1;
+    echo "[ERROR] Invalid Role"; exit 1;
 fi
 sleep infinity
