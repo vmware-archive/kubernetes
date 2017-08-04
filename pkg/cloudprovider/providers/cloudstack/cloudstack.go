@@ -23,6 +23,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/xanzy/go-cloudstack/cloudstack"
 	"gopkg.in/gcfg.v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
 )
@@ -124,4 +125,14 @@ func (cs *CSCloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []st
 func (cs *CSCloud) GetZone() (cloudprovider.Zone, error) {
 	glog.V(2).Infof("Current zone is %v", cs.zone)
 	return cloudprovider.Zone{Region: cs.zone}, nil
+}
+
+// Notification handler when node is registered.
+func (cs *CSCloud) NodeRegistered(node *v1.Node) {
+
+}
+
+// Notification handler when node is unregistered.
+func (cs *CSCloud) NodeUnregistered(node *v1.Node) {
+
 }

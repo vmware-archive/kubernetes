@@ -290,3 +290,13 @@ func (f *FakeCloud) DeleteRoute(clusterName string, route *cloudprovider.Route) 
 	delete(f.RouteMap, name)
 	return nil
 }
+
+// Notification handler when node is registered.
+func (f *FakeCloud) NodeRegistered(node *v1.Node) {
+
+}
+
+// Notification handler when node is unregistered.
+func (f *FakeCloud) NodeUnregistered(node *v1.Node) {
+
+}

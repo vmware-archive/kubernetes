@@ -29,6 +29,7 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/flowcontrol"
@@ -542,4 +543,14 @@ func (manager *GCEServiceManager) DeleteDisk(
 
 func (manager *GCEServiceManager) WaitForZoneOp(op *compute.Operation, zone string, mc *metricContext) error {
 	return manager.gce.waitForZoneOp(op, zone, mc)
+}
+
+// Notification handler when node is registered.
+func (gce *GCECloud) NodeRegistered(node *v1.Node) {
+
+}
+
+// Notification handler when node is unregistered.
+func (gce *GCECloud) NodeUnregistered(node *v1.Node) {
+
 }

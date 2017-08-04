@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -63,10 +64,9 @@ var cleanUpDummyVMLock sync.RWMutex
 
 // VSphere is an implementation of cloud provider Interface for VSphere.
 type VSphere struct {
-	conn *vclib.VSphereConnection
-	cfg  *VSphereConfig
-	// InstanceID of the server where this VSphere object is instantiated.
-	localInstanceID string
+	conn     *vclib.VSphereConnection
+	cfg      *VSphereConfig
+	hostName string
 }
 
 // VSphereConfig information that is used by vSphere Cloud Provider to connect to VC
@@ -98,6 +98,23 @@ type VSphereConfig struct {
 		// Combining the WorkingDir and VMName can form a unique InstanceID.
 		// When vm-name is set, no username/password is required on worker nodes.
 		VMName string `gcfg:"vm-name"`
+	}
+
+	VirtualCenter map[string]*struct {
+		// vCenter username.
+		User string `gcfg:"user"`
+		// vCenter password in clear text.
+		Password string `gcfg:"password"`
+		// vCenter port.
+		VCenterPort string `gcfg:"port"`
+		// True if vCenter uses self-signed cert.
+		InsecureFlag bool `gcfg:"insecure-flag"`
+		// Datacenter in which VMs are located.
+		Datacenter string `gcfg:"datacenter"`
+		// WorkingDir is path where VMs can be found.
+		WorkingDir string `gcfg:"working-dir"`
+		// Soap round tripper count (retries = RoundTripper - 1)
+		RoundTripperCount uint `gcfg:"soap-roundtrip-count"`
 	}
 
 	Network struct {
@@ -151,19 +168,38 @@ func readConfig(config io.Reader) (VSphereConfig, error) {
 func init() {
 	vclib.RegisterMetrics()
 	cloudprovider.RegisterCloudProvider(ProviderName, func(config io.Reader) (cloudprovider.Interface, error) {
+		// If vSphere.conf file is not present then it is worker node.
+		if config == nil {
+			return newWorkerNode()
+		}
 		cfg, err := readConfig(config)
 		if err != nil {
 			return nil, err
 		}
-		return newVSphere(cfg)
+		return newControlllerNode(cfg)
 	})
 }
 
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
 func (vs *VSphere) Initialize(clientBuilder controller.ControllerClientBuilder) {}
 
-func newVSphere(cfg VSphereConfig) (*VSphere, error) {
+// Creates new worker node interface and returns
+func newWorkerNode() (*VSphere, error) {
 	var err error
+	vs := VSphere{}
+	vs.hostName, err = os.Hostname()
+	if err != nil {
+		glog.Errorf("Failed to get hostname. err: %+v", err)
+		return nil, err
+	}
+
+	return &vs, nil
+}
+
+// Creates new Contreoller node interface and returns
+func newControlllerNode(cfg VSphereConfig) (*VSphere, error) {
+	var err error
+	glog.Errorf("cfg is\n%+v\n", cfg)
 	if cfg.Disk.SCSIControllerType == "" {
 		cfg.Disk.SCSIControllerType = vclib.PVSCSIControllerType
 	} else if !vclib.CheckControllerSupported(cfg.Disk.SCSIControllerType) {
@@ -194,40 +230,18 @@ func newVSphere(cfg VSphereConfig) (*VSphere, error) {
 		Insecure:          cfg.Global.InsecureFlag,
 		RoundTripperCount: cfg.Global.RoundTripperCount,
 	}
-	var instanceID string
 
-	if cfg.Global.VMName == "" {
-		// if VMName is not set in the cloud config file, each nodes (including worker nodes) need credentials to obtain VMName from vCenter
-		glog.V(4).Infof("Cannot find VMName from cloud config file, start obtaining it from vCenter")
-		// Create context
-		ctx, cancel := context.WithCancel(context.TODO())
-		defer cancel()
-		err = vSphereConn.Connect(ctx)
-		if err != nil {
-			glog.Errorf("Failed to connect to vSphere")
-			return nil, err
-		}
-		dc, err := vclib.GetDatacenter(ctx, &vSphereConn, cfg.Global.Datacenter)
-		if err != nil {
-			return nil, err
-		}
-		vm, err := dc.GetVMByUUID(ctx, cfg.Global.VMUUID)
-		if err != nil {
-			return nil, err
-		}
-		vmName, err := vm.ObjectName(ctx)
-		if err != nil {
-			return nil, err
-		}
-		instanceID = vmName
-	} else {
-		instanceID = cfg.Global.VMName
-	}
 	vs := VSphere{
-		conn:            &vSphereConn,
-		cfg:             &cfg,
-		localInstanceID: instanceID,
+		conn: &vSphereConn,
+		cfg:  &cfg,
 	}
+
+	vs.hostName, err = os.Hostname()
+	if err != nil {
+		glog.Errorf("Failed to get hostname. err: %+v", err)
+		return nil, err
+	}
+
 	runtime.SetFinalizer(&vs, logout)
 	return &vs, nil
 }
@@ -299,47 +313,12 @@ func (vs *VSphere) getVMByName(ctx context.Context, nodeName k8stypes.NodeName) 
 // NodeAddresses is an implementation of Instances.NodeAddresses.
 func (vs *VSphere) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress, error) {
 	// Get local IP addresses if node is local node
-	if vs.localInstanceID == nodeNameToVMName(nodeName) {
+	if vs.hostName == nodeNameToVMName(nodeName) {
 		return getLocalIP()
 	}
-	addrs := []v1.NodeAddress{}
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	// Ensure client is logged in and session is valid
-	err := vs.conn.Connect(ctx)
-	if err != nil {
-		return nil, err
-	}
-	vm, err := vs.getVMByName(ctx, nodeName)
-	if err != nil {
-		glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
-		return nil, err
-	}
-	vmMoList, err := vm.Datacenter.GetVMMoList(ctx, []*vclib.VirtualMachine{vm}, []string{"guest.net"})
-	if err != nil {
-		glog.Errorf("Failed to get VM Managed object with property guest.net for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
-		return nil, err
-	}
-	// retrieve VM's ip(s)
-	for _, v := range vmMoList[0].Guest.Net {
-		if vs.cfg.Network.PublicNetwork == v.Network {
-			for _, ip := range v.IpAddress {
-				if net.ParseIP(ip).To4() != nil {
-					v1helper.AddToNodeAddresses(&addrs,
-						v1.NodeAddress{
-							Type:    v1.NodeExternalIP,
-							Address: ip,
-						}, v1.NodeAddress{
-							Type:    v1.NodeInternalIP,
-							Address: ip,
-						},
-					)
-				}
-			}
-		}
-	}
-	return addrs, nil
+
+	// TODO: Need to see what to do if nodename and localNodeName are not matching.
+	return nil, cloudprovider.InstanceNotFound
 }
 
 // NodeAddressesByProviderID returns the node addresses of an instances with the specified unique providerID
@@ -357,7 +336,7 @@ func (vs *VSphere) AddSSHKeyToAllInstances(user string, keyData []byte) error {
 
 // CurrentNodeName gives the current node name
 func (vs *VSphere) CurrentNodeName(hostname string) (k8stypes.NodeName, error) {
-	return vmNameToNodeName(vs.localInstanceID), nil
+	return vmNameToNodeName(vs.hostName), nil
 }
 
 // nodeNameToVMName maps a NodeName to the vmware infrastructure name
@@ -377,30 +356,11 @@ func (vs *VSphere) ExternalID(nodeName k8stypes.NodeName) (string, error) {
 
 // InstanceID returns the cloud provider ID of the node with the specified Name.
 func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
-	if vs.localInstanceID == nodeNameToVMName(nodeName) {
-		return vs.cfg.Global.WorkingDir + "/" + vs.localInstanceID, nil
+	if vs.hostName == nodeNameToVMName(nodeName) {
+		return vs.hostName, nil
 	}
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	// Ensure client is logged in and session is valid
-	err := vs.conn.Connect(ctx)
-	if err != nil {
-		return "", err
-	}
-	vm, err := vs.getVMByName(ctx, nodeName)
-	if err != nil {
-		glog.Errorf("Failed to get VM object for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
-		return "", err
-	}
-	nodeExist, err := vm.Exists(ctx)
-	if err != nil {
-		glog.Errorf("Failed to check whether node %q exist. err: %+v.", nodeNameToVMName(nodeName), err)
-		return "", err
-	}
-	if nodeExist {
-		return "/" + vm.InventoryPath, nil
-	}
+
+	// TODO: Need to see what to do if nodename and localNodeName are not matching.
 	return "", cloudprovider.InstanceNotFound
 }
 
@@ -449,7 +409,7 @@ func (vs *VSphere) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []st
 func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
 	attachDiskInternal := func(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
 		if nodeName == "" {
-			nodeName = vmNameToNodeName(vs.localInstanceID)
+			nodeName = vmNameToNodeName(vs.hostName)
 		}
 		// Create context
 		ctx, cancel := context.WithCancel(context.Background())
@@ -481,7 +441,7 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeNam
 func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error {
 	detachDiskInternal := func(volPath string, nodeName k8stypes.NodeName) error {
 		if nodeName == "" {
-			nodeName = vmNameToNodeName(vs.localInstanceID)
+			nodeName = vmNameToNodeName(vs.hostName)
 		}
 		// Create context
 		ctx, cancel := context.WithCancel(context.Background())
@@ -514,7 +474,7 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 	diskIsAttachedInternal := func(volPath string, nodeName k8stypes.NodeName) (bool, error) {
 		var vSphereInstance string
 		if nodeName == "" {
-			vSphereInstance = vs.localInstanceID
+			vSphereInstance = vs.hostName
 			nodeName = vmNameToNodeName(vSphereInstance)
 		} else {
 			vSphereInstance = nodeNameToVMName(nodeName)
@@ -568,7 +528,7 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 		}
 		var vSphereInstance string
 		if nodeName == "" {
-			vSphereInstance = vs.localInstanceID
+			vSphereInstance = vs.hostName
 			nodeName = vmNameToNodeName(vSphereInstance)
 		} else {
 			vSphereInstance = nodeNameToVMName(nodeName)
@@ -745,4 +705,14 @@ func (vs *VSphere) DeleteVolume(vmDiskPath string) error {
 	err := deleteVolumeInternal(vmDiskPath)
 	vclib.RecordvSphereMetric(vclib.OperationDeleteVolume, requestTime, err)
 	return err
+}
+
+// Notification handler when node is registered.
+func (vs *VSphere) NodeRegistered(node *v1.Node) {
+	glog.Errorf("Node Registered: %+v", node)
+}
+
+// Notification handler when node is unregistered.
+func (vs *VSphere) NodeUnregistered(node *v1.Node) {
+	glog.Errorf("Node Unregistered: %+v", node)
 }

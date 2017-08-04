@@ -556,12 +556,20 @@ func (nc *NodeController) monitorNodeStatus() error {
 		} else {
 			nc.cancelPodEviction(added[i])
 		}
+		instance, isSupported := nc.cloud.Instances()
+		if isSupported {
+			instance.NodeRegistered(added[i])
+		}
 	}
 
 	for i := range deleted {
 		glog.V(1).Infof("NodeController observed a Node deletion: %v", deleted[i].Name)
 		recordNodeEvent(nc.recorder, deleted[i].Name, string(deleted[i].UID), v1.EventTypeNormal, "RemovingNode", fmt.Sprintf("Removing Node %v from NodeController", deleted[i].Name))
 		delete(nc.knownNodeSet, deleted[i].Name)
+		instance, isSupported := nc.cloud.Instances()
+		if isSupported {
+			instance.NodeUnregistered(deleted[i])
+		}
 	}
 
 	zoneToNodeConditions := map[string][]*v1.NodeCondition{}
