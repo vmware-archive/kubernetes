@@ -20,8 +20,6 @@ fi
 if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
     # connect to vCenter using VC Admin username and password
     export GOVC_URL='https://'$k8s_secret_vc_admin_username':'$k8s_secret_vc_admin_password'@'$k8s_secret_vc_ip':'$k8s_secret_vc_port'/sdk'
-
-
     # Verify if the Datacenter exists or not.
     govc datacenter.info $k8s_secret_datacenter &> /dev/null
     if [ $? -eq 0 ]; then
@@ -79,7 +77,6 @@ if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
     System.View"
     assign_previledges_to_role $ROLE_NAME $PREVILEDGES
 
-
     ROLE_NAME=manage-k8s-node-vms
     create_role $ROLE_NAME
     PREVILEDGES="Resource.AssignVMToPool \
@@ -94,7 +91,6 @@ if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
     VirtualMachine.Inventory.Delete"
     assign_previledges_to_role $ROLE_NAME $PREVILEDGES
 
-
     ROLE_NAME=k8s-system-read-and-spbm-profile-view
     create_role $ROLE_NAME
     PREVILEDGES="StorageProfile.View \
@@ -103,9 +99,7 @@ if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
     System.View"
     assign_previledges_to_role $ROLE_NAME $PREVILEDGES
 
-
     echo "[INFO] Assigining Role to the VCP user and entities"
-
     ROLE_NAME=k8s-system-read-and-spbm-profile-view
     PROPAGATE=false
     assign_role_to_user_and_entity $k8s_secret_vcp_username $ROLE_NAME "/" $PROPAGATE
@@ -132,7 +126,6 @@ if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
         parentFolder=$parentFolder/$vmFolder
     done
 
-
     ROLE_NAME=manage-k8s-node-vms
     ENTITY="/$k8s_secret_datacenter/host/$k8s_secret_node_vms_cluster_or_host"
     PROPAGATE=true
@@ -140,7 +133,6 @@ if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
 else
     echo "Skipping Operations for VCP user. VCP user and Administrator user is same."
 fi
-
 
 kubectl create -f /opt/enable-vcp-scripts/vcp-daemontset.yaml
 if [ $? -eq 0 ]; then

@@ -28,6 +28,10 @@ create_role() {
         if [ $? -eq 0 ]; then
             echo "[INFO] Role:" $ROLE_NAME " created successfully"
             wait_for_role_to_exist $ROLE_NAME
+            if [ $? -eq 1 ]; then
+              echo "[ERROR] Failed to list the Role:" $ROLE_NAME
+              exit 1;
+            fi
         else
             echo "[ERROR] Failed to create the Role:" $ROLE_NAME
             exit 1;
@@ -37,12 +41,15 @@ create_role() {
 
 wait_for_role_to_exist() {
     ROLE_NAME=$1
-    while true; do
+    for i in `seq 1 60`
+    do
         govc role.ls $ROLE_NAME &> /dev/null
         if [ $? -eq 0 ]; then
-            break;
+            return 0
         fi
+        sleep 1
     done
+    return 1
 }
 
 assign_previledges_to_role() {
