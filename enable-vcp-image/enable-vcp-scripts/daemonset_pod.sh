@@ -1,5 +1,6 @@
 #!/bin/bash
 source $(dirname "$0")/common_func.sh
+source $(dirname "$0")/exit_codes.sh
 
 echo "Running script in the Pod:" $POD_NAME "deployed on the Node:" $NODE_NAME
 

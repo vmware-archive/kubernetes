@@ -1,5 +1,5 @@
 #!/bin/bash
-
+source $(dirname "$0")/exit_codes.sh
 read_secret_keys() {
     export k8s_secret_vc_admin_username=`cat /secret-volume/vc_admin_username; echo;`
     export k8s_secret_vc_admin_password=`cat /secret-volume/vc_admin_password; echo;`
@@ -11,7 +11,6 @@ read_secret_keys() {
     export k8s_secret_default_datastore=`cat /secret-volume/default_datastore; echo;`
     export k8s_secret_node_vms_folder=`cat /secret-volume/node_vms_folder; echo;`
     export k8s_secret_node_vms_cluster_or_host=`cat /secret-volume/node_vms_cluster_or_host; echo;`
-
     export k8s_secret_vcp_configuration_file_location=`cat /secret-volume/vcp_configuration_file_location; echo;`
     export k8s_secret_kubernetes_api_server_manifest=`cat /secret-volume/kubernetes_api_server_manifest; echo;`
     export k8s_secret_kubernetes_controller_manager_manifest=`cat /secret-volume/kubernetes_controller_manager_manifest; echo;`
@@ -30,11 +29,11 @@ create_role() {
             wait_for_role_to_exist $ROLE_NAME
             if [ $? -eq 1 ]; then
               echo "[ERROR] Failed to list the Role:" $ROLE_NAME
-              exit 1;
+              exit $ERROR_VC_OBJECT_NOT_FOUND;
             fi
         else
             echo "[ERROR] Failed to create the Role:" $ROLE_NAME
-            exit 1;
+            exit $ERROR_ROLE_CREATE;
         fi
     fi
 }
@@ -62,7 +61,7 @@ assign_previledges_to_role() {
         echo "[INFO] Previledges added to the Role:" $ROLE_NAME
     else
         echo "[ERROR] Failed to add Previledges:['$PREVILEDGES'] to the Role:" $ROLE_NAME
-        exit 1;
+        exit $ERROR_ADD_PRIVILEGES;
     fi
 }
 
@@ -76,6 +75,6 @@ assign_role_to_user_and_entity() {
         echo "[INFO] Role:["$ROLE_NAME"] assigned to the User:['$vcp_user'] on Entity:['$ENTITY']"
     else
         echo "[ERROR] Failed to Assign Role:["$ROLE_NAME"] to the User:['$vcp_user'] on Entity:['$ENTITY']"
-        exit 1;
+        exit $ERROR_ASSIGN_ROLE;
     fi
 }

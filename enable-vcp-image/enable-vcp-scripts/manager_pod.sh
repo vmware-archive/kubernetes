@@ -1,5 +1,6 @@
 #!/bin/bash
 source $(dirname "$0")/common_func.sh
+source $(dirname "$0")/exit_codes.sh
 
 # read secret keys from volume /secret-volume/ and set values in an environment
 read_secret_keys
@@ -10,9 +11,14 @@ export GOVC_URL='https://'$k8s_secret_vcp_username':'$k8s_secret_vcp_password'@'
 error_message=$(govc ls 2>&1 >/dev/null)
 
 if [ $? -eq 1 ]; then
-    if [$error_message == "govc: ServerFaultCode: Cannot complete login due to an incorrect user name or password."]; then
-        echo "Failed to login to vCenter using VCP Username:" $k8s_secret_vcp_username " and VCP Password:" $k8s_secret_vcp_password
-        exit 1;
+    if [[ $error_message == *"Cannot complete login due to an incorrect user name or password."* ]]; then
+        echo "Failed to login to vCenter using VCP User:" $k8s_secret_vcp_username " and VCP Password specifed in the secret file"
+        exit $ERROR_VC_LOGIN
+    elif [[ $error_message == *"Permission to perform this operation was denied."* ]]; then
+        echo "[INFO] Successfully able to login using VCP Username:" $k8s_secret_vcp_username
+        echo "[INFO] Permissions will be added to User:" $k8s_secret_vcp_username "to allow performing Kubernetes Operations."
+    else
+        exit $ERROR_UNKNOWN
     fi
 fi
 
@@ -26,7 +32,7 @@ if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
         echo "[INFO] Verified Datacenter:" $k8s_secret_datacenter is present in the inventory.
     else
         echo "[ERROR] Unable to find Datacenter:" $k8s_secret_datacenter.
-        exit 1;
+        exit $ERROR_VC_OBJECT_NOT_FOUND;
     fi
 
     # Verify if the Datastore exists or not.
@@ -35,7 +41,7 @@ if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
         echo "[INFO] Verified Datastore:" $k8s_secret_default_datastore is present in the inventory.
     else
         echo "[ERROR] Unable to find Datastore:" $k8s_secret_default_datastore.
-        exit 1;
+        exit $ERROR_VC_OBJECT_NOT_FOUND;
     fi
 
     # Check if the working directory VM folder exists. If not then create this folder
@@ -54,7 +60,7 @@ if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
                 echo "[INFO] Successfully created a new VM Folder:"/$k8s_secret_datacenter/vm/$parentFolder/$vmFolder
             else
                 echo "[ERROR] Failed to create a vm folder:" /$k8s_secret_datacenter/vm/$parentFolder/$vmFolder
-                exit 1;
+                exit $ERROR_FOLDER_CREATE;
             fi
         fi
         parentFolder=$parentFolder/$vmFolder
@@ -65,7 +71,7 @@ if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
         echo "[INFO] Verified Node VMs Folder:" "/$k8s_secret_datacenter/vm/$k8s_secret_node_vms_folder" is present in the inventory.
     else
         echo "[ERROR] Unable to find VM Folder:" "/$k8s_secret_datacenter/vm/$k8s_secret_node_vms_folder"
-        exit 1;
+        exit $ERROR_VC_OBJECT_NOT_FOUND;
     fi
 
     ROLE_NAME=manage-k8s-volumes
