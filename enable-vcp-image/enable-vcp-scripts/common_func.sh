@@ -1,6 +1,7 @@
 #!/bin/bash
 source $(dirname "$0")/exit_codes.sh
 read_secret_keys() {
+    export k8s_secret_master_node_name=`cat /secret-volume/master_node_name; echo;`
     export k8s_secret_vc_admin_username=`cat /secret-volume/vc_admin_username; echo;`
     export k8s_secret_vc_admin_password=`cat /secret-volume/vc_admin_password; echo;`
     export k8s_secret_vcp_username=`cat /secret-volume/vcp_username; echo;`
@@ -76,5 +77,67 @@ assign_role_to_user_and_entity() {
     else
         echo "[ERROR] Failed to Assign Role:["$ROLE_NAME"] to the User:['$vcp_user'] on Entity:['$ENTITY']"
         exit $ERROR_ASSIGN_ROLE;
+    fi
+}
+
+locate_validate_and_backup_files() {
+    CONFIG_FILE=$1
+    BACKUP_DIR=$2
+
+    ls $CONFIG_FILE &> /dev/null
+    if [ $? -eq 0 ]; then
+        echo "[INFO] Found file:" $CONFIG_FILE
+        if [ "${CONFIG_FILE##*.}" == "json" ]; then
+            jq "." $CONFIG_FILE &> /dev/null
+            if [ $? -eq 0 ]; then
+                echo "[INFO] Verified " $CONFIG_FILE " is a Valid JSON file"
+            else
+                echo "[ERROR] Failed to Validate JSON for file:" $CONFIG_FILE
+                exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
+            fi
+        elif [ "${CONFIG_FILE##*.}" == "yaml" ]; then
+            j2y -r $CONFIG_FILE &> /dev/null
+            if [ $? -eq 0 ]; then
+                echo "[INFO] Verified " $CONFIG_FILE " is a Valid YAML file"
+            else
+                echo "[ERROR] Failed to Validate YAML for file:" $CONFIG_FILE
+                exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
+            fi
+        fi
+        cp $CONFIG_FILE $BACKUP_DIR
+        if [ $? -eq 0 ]; then
+            echo "[INFO] Successfully backed up " $CONFIG_FILE at $BACKUP_DIR
+        else
+            exit $ERROR_FAIL_TO_BACKUP_FILE
+        fi
+    fi
+}
+
+add_flags_to_manifest_file() {
+    MANIFEST_FILE=$1
+    commandflag=`jq '.spec.containers[0].command' ${MANIFEST_FILE} | grep "\-\-cloud-provider=vsphere"`
+    if [ -z "$commandflag" ]; then
+        # adding --cloud-provider=vsphere flag to the manifest file
+        jq '.spec.containers[0].command |= .+ ["--cloud-provider=vsphere"]' ${MANIFEST_FILE} > ${MANIFEST_FILE}
+        if [ $? -eq 0 ]; then
+            echo "[INFO] Sucessfully added --cloud-provider=vsphere flag to ${MANIFEST_FILE}"
+        else
+            exit $ERROR_FAIL_TO_ADD_CONFIG_PARAMETER
+        fi
+    else
+        echo "[INFO] --cloud-provider=vsphere flag is already present in the manifest file: ${MANIFEST_FILE}"
+    fi
+
+    commandflag=`jq '.spec.containers[0].command' ${MANIFEST_FILE} | grep "\-\-cloud-config=${k8s_secret_vcp_configuration_file_location}/vsphere.conf"`
+    if [ -z "$commandflag" ]; then
+        # adding --cloud-config=/k8s_secret_vcp_configuration_file_location/vsphere.conf flag to the manifest file
+        jq '.spec.containers[0].command |= .+ ["--cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf"]' ${MANIFEST_FILE} > ${MANIFEST_FILE}
+        if [ $? -eq 0 ]; then
+            echo "[INFO] Sucessfully added --cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf flag to ${MANIFEST_FILE}"
+        else
+            exit $ERROR_FAIL_TO_ADD_CONFIG_PARAMETER
+        fi
+    else
+        echo "[INFO] --cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf flag is already present in the manifest file: ${MANIFEST_FILE}"
     fi
 }

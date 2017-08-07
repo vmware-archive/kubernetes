@@ -20,6 +20,7 @@ data:
   vcp_username: dmNwdXNlckB2c3BoZXJlLmxvY2Fs
   vcp_password: QWRtaW4hMjM=
 stringData:
+  master_node_name: "master"
   vc_ip: "10.162.26.135"
   vc_port: "443"
   # datacenter is the datacenter name in which Node VMs are located.
@@ -32,7 +33,7 @@ stringData:
   node_vms_cluster_or_host : "cluster-vsan-1"
   
   # vcp_configuration_file_location is the location where the VCP configuration file will be created.
-  vcp_configuration_file_location: "/etc/kubernetes/vsphere.conf"
+  vcp_configuration_file_location: "/etc/kubernetes"
  
   # kubernetes_api_server_manifest is the file from which api server pod takes parameters
   kubernetes_api_server_manifest: "/etc/kubernetes/manifests/kube-apiserver.json"

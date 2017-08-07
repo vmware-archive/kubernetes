@@ -1,6 +1,6 @@
 #!/bin/bash
 #### ---- Install Package Dependencies ---- ####
-apt-get update && apt-get install -y curl git jq
+apt-get update && apt-get install -y curl git jq crudini
 rm -rf /var/lib/apt/lists/*
 
 export DEBIAN_FRONTEND="noninteractive"
