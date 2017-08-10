@@ -110,7 +110,7 @@ type VSphereConfig struct {
 		// True if vCenter uses self-signed cert.
 		InsecureFlag bool `gcfg:"insecure-flag"`
 		// Datacenter in which VMs are located.
-		Datacenters string `gcfg:"datacenter"`
+		Datacenters string `gcfg:"datacenters"`
 		// WorkingDir is path where VMs can be found.
 		WorkingDir string `gcfg:"working-dir"`
 		// Soap round tripper count (retries = RoundTripper - 1)
