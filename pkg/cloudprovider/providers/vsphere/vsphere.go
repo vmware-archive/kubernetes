@@ -83,9 +83,9 @@ type VSphereConfig struct {
 		// True if vCenter uses self-signed cert.
 		InsecureFlag bool `gcfg:"insecure-flag"`
 		// Datacenter in which VMs are located.
-		Datacenter string `gcfg:"datacenter"`
+		Datacenters string `gcfg:"datacenters"`
 		// Datastore in which vmdks are stored.
-		Datastore string `gcfg:"datastore"`
+		DeafultDatastore string `gcfg:"default-datastore"`
 		// WorkingDir is path where VMs can be found.
 		WorkingDir string `gcfg:"working-dir"`
 		// Soap round tripper count (retries = RoundTripper - 1)
@@ -110,7 +110,7 @@ type VSphereConfig struct {
 		// True if vCenter uses self-signed cert.
 		InsecureFlag bool `gcfg:"insecure-flag"`
 		// Datacenter in which VMs are located.
-		Datacenter string `gcfg:"datacenter"`
+		Datacenters string `gcfg:"datacenter"`
 		// WorkingDir is path where VMs can be found.
 		WorkingDir string `gcfg:"working-dir"`
 		// Soap round tripper count (retries = RoundTripper - 1)
@@ -176,7 +176,7 @@ func init() {
 		if err != nil {
 			return nil, err
 		}
-		return newControlllerNode(cfg)
+		return newControllerNode(cfg)
 	})
 }
 
@@ -197,9 +197,10 @@ func newWorkerNode() (*VSphere, error) {
 }
 
 // Creates new Contreoller node interface and returns
-func newControlllerNode(cfg VSphereConfig) (*VSphere, error) {
+func newControllerNode(cfg VSphereConfig) (*VSphere, error) {
 	var err error
-	glog.Errorf("cfg is\n%+v\n", cfg)
+	// TODO: Remove this log as it will print VC credentials in log.
+	glog.V(4).Infof("cfg is %+v", cfg)
 	if cfg.Disk.SCSIControllerType == "" {
 		cfg.Disk.SCSIControllerType = vclib.PVSCSIControllerType
 	} else if !vclib.CheckControllerSupported(cfg.Disk.SCSIControllerType) {
@@ -709,10 +710,10 @@ func (vs *VSphere) DeleteVolume(vmDiskPath string) error {
 
 // Notification handler when node is registered.
 func (vs *VSphere) NodeRegistered(node *v1.Node) {
-	glog.Errorf("Node Registered: %+v", node)
+	glog.V(4).Infof("Node Registered: %+v", node)
 }
 
 // Notification handler when node is unregistered.
 func (vs *VSphere) NodeUnregistered(node *v1.Node) {
-	glog.Errorf("Node Unregistered: %+v", node)
+	glog.V(4).Infof("Node Unregistered: %+v", node)
 }
