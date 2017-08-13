@@ -31,6 +31,7 @@ import (
 	"gopkg.in/gcfg.v1"
 
 	"github.com/golang/glog"
+	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -561,18 +562,11 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 }
 
 // DisksAreAttached returns if disks are attached to the VM using controllers supported by the plugin.
-func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeName) (map[string]bool, error) {
-	disksAreAttachedInternal := func(volPaths []string, nodeName k8stypes.NodeName) (map[string]bool, error) {
-		attached := make(map[string]bool)
-		if len(volPaths) == 0 {
+func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName]map[string]bool, error) {
+	disksAreAttachedInternal := func(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName]map[string]bool, error) {
+		attached := make(map[k8stypes.NodeName]map[string]bool)
+		if len(nodeVolumes) == 0 {
 			return attached, nil
-		}
-		var vSphereInstance string
-		if nodeName == "" {
-			vSphereInstance = vs.localInstanceID
-			nodeName = vmNameToNodeName(vSphereInstance)
-		} else {
-			vSphereInstance = nodeNameToVMName(nodeName)
 		}
 		// Create context
 		ctx, cancel := context.WithCancel(context.Background())
@@ -582,23 +576,61 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 		if err != nil {
 			return nil, err
 		}
-		vm, err := vs.getVMByName(ctx, nodeName)
+		dc, err := vclib.GetDatacenter(ctx, vs.conn, vs.cfg.Global.Datacenter)
 		if err != nil {
-			glog.Errorf("Failed to get VM object for node: %q. err: +%v", vSphereInstance, err)
 			return nil, err
 		}
-		nodeExist, err := vm.Exists(ctx)
+		nodeVolumes := make(map[string]map[string]bool)
+		for nodeName, volPaths := range nodeVolumes {
+			for _, volPath := range volPaths {
+				setNodeDisk(attached, volPath, nodeName, false)
+			}
+		}
+		dc.checkDisksAttached(nodeVolumes)
+
+		var vSphereInstance string
+		var vmRefs []types.ManagedObjectReference
+		var dc *vclib.Datacenter
+		for nodeName, volPaths := range nodeVolumes {
+			vSphereInstance = nodeNameToVMName(nodeName)
+			for _, volPath := range volPaths {
+				setNodeDisk(attached, volPath, nodeName, false)
+			}
+			vm, err := vs.getVMByName(ctx, nodeName)
+			if err != nil {
+				glog.Warningf("Failed to get VM object for node: %q. err: +%v", vSphereInstance, err)
+			}
+			vmRefs = append(vmRefs, vm.Reference())
+			if dc != nil {
+				dc = vm.Datacenter
+			}
+		}
+		vmMoList, err := dc.GetVMMoList(ctx, vmRefs, []string{"guest.net"})
 		if err != nil {
-			glog.Errorf("Failed to check whether node %q exist. err: %+v", vSphereInstance, err)
+			glog.Errorf("Failed to get VM Managed object with property guest.net for node: %q. err: +%v", nodeNameToVMName(nodeName), err)
 			return nil, err
 		}
-		if !nodeExist {
-			glog.Errorf("DisksAreAttached failed to determine whether disks %v are still attached: node %q does not exist",
-				volPaths,
-				vSphereInstance)
-			return nil, fmt.Errorf("DisksAreAttached failed to determine whether disks %v are still attached: node %q does not exist",
-				volPaths,
-				vSphereInstance)
+		for nodeName, volPaths := range nodeVolumes {
+			vSphereInstance = nodeNameToVMName(nodeName)
+			vm, err := vs.getVMByName(ctx, nodeName)
+			if err != nil {
+				glog.Warningf("Failed to get VM object for node: %q. err: +%v", vSphereInstance, err)
+				continue
+			}
+			nodeExist, err := vm.Exists(ctx)
+			if err != nil {
+				glog.Warningf("Failed to check whether node %q exist. err: %+v", vSphereInstance, err)
+				continue
+			}
+			if !nodeExist {
+				glog.Warningf("DisksAreAttached failed to determine whether disks %v are still attached: node %q does not exist",
+					volPaths,
+					vSphereInstance)
+				continue
+			}
+			for _, volPath := range volPaths {
+
+			}
 		}
 		for _, volPath := range volPaths {
 			result, err := vm.IsDiskAttached(ctx, volPath)
@@ -619,7 +651,7 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 		return attached, nil
 	}
 	requestTime := time.Now()
-	attached, err := disksAreAttachedInternal(volPaths, nodeName)
+	attached, err := disksAreAttachedInternal(nodeVolumes)
 	vclib.RecordvSphereMetric(vclib.OperationDisksAreAttached, requestTime, err)
 	return attached, err
 }

@@ -33,6 +33,7 @@ import (
 
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers"
 )
@@ -292,4 +293,19 @@ func (vs *VSphere) cleanUpDummyVMs(dummyVMPrefix string) {
 			glog.V(4).Infof("Unable to clean up dummy VM's in the kubernetes cluster: %q. err: %+v", vs.cfg.Global.WorkingDir, err)
 		}
 	}
+}
+
+func setNodeDisk(
+	nodeVolumeMap map[types.NodeName]map[string]bool,
+	volumePath string,
+	nodeName types.NodeName,
+	check bool) {
+
+	volumeMap := nodeVolumeMap[nodeName]
+
+	if volumeMap == nil {
+		volumeMap = make(map[string]bool)
+		nodeVolumeMap[nodeName] = volumeMap
+	}
+	volumeMap[volumePath] = check
 }
