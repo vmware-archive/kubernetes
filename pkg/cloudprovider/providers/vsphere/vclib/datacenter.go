@@ -185,7 +185,7 @@ func (dc *Datacenter) CheckDisksAttached(ctx context.Context, nodeVolumes map[st
 		return attached, nil
 	}
 	glog.V(1).Infof("balu - CheckDisksAttached vmList is %+v and len is %d", vmList, len(vmList))
-	vmMoList, err := dc.GetVMMoList(ctx, vmList, []string{"config.hardware.device", "summary", "name"})
+	vmMoList, err := dc.GetVMMoList(ctx, vmList, []string{"config.hardware.device", "name"})
 	if err != nil {
 		// When there is an error fetching instance information
 		// it is safer to return nil and let volume information not be touched.
@@ -194,17 +194,15 @@ func (dc *Datacenter) CheckDisksAttached(ctx context.Context, nodeVolumes map[st
 	}
 
 	for _, vmMo := range vmMoList {
-		if vmMo.Summary.Runtime.PowerState == ActivePowerState {
-			if vmMo.Config == nil {
-				glog.Errorf("Config is not available for VM: %q", vmMo.Name)
-				continue
-				// TODO: code here?
-			}
-			for nodeName, volPaths := range nodeVolumes {
-				if nodeName == vmMo.Name {
-					glog.V(1).Infof("balu - CheckDisksAttached nodeName is %+q match found", nodeName)
-					verifyVolumePathsForVM(vmMo, volPaths, attached)
-				}
+		if vmMo.Config == nil {
+			glog.Errorf("Config is not available for VM: %q", vmMo.Name)
+			continue
+			// TODO: code here?
+		}
+		for nodeName, volPaths := range nodeVolumes {
+			if nodeName == vmMo.Name {
+				glog.V(1).Infof("balu - CheckDisksAttached nodeName is %+q match found", nodeName)
+				verifyVolumePathsForVM(vmMo, volPaths, attached)
 			}
 		}
 		// TODO: Write code to what happens if node is not active. (Powered off)
