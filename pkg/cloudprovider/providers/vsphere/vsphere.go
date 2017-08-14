@@ -582,14 +582,14 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 
 		vmVolumes := make(map[string][]string)
 		for nodeName, volPaths := range nodeVolumes {
-			for _, volPath := range volPaths {
-				// setNodeDisk(attached, volPath, nodeName, false)
-				vmVolumes[nodeNameToVMName(nodeName)] = volPaths
-			}
+			// for _, volPath := range volPaths {
+			// setNodeDisk(attached, volPath, nodeName, false)
+			vmVolumes[nodeNameToVMName(nodeName)] = volPaths
+			// }
 		}
 		glog.V(1).Infof("balu - DisksAreAttached vmVolumes is %+v", vmVolumes)
 		// TODO: Print vmVolumes
-		disksAttachedList, err := dc.CheckDisksAttached(vmVolumes)
+		disksAttachedList, err := dc.CheckDisksAttached(ctx, vmVolumes)
 		if err != nil {
 			glog.V(1).Infof("balu - err in call to CheckDisksAttached")
 			return nil, err
