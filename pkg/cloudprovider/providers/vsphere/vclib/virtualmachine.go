@@ -326,15 +326,9 @@ func (vm *VirtualMachine) createAndAttachSCSIController(ctx context.Context, dis
 
 // getVirtualDeviceByPath gets the virtual device by path
 func (vm *VirtualMachine) getVirtualDeviceByPath(ctx context.Context, diskPath string) (types.BaseVirtualDevice, error) {
-	var diskUUID string
 	vmDevices, err := vm.Device(ctx)
 	if err != nil {
 		glog.Errorf("Failed to get the devices for VM: %q. err: %+v", vm.InventoryPath, err)
-		return nil, err
-	}
-	volumeUUID, err := vm.GetVirtualDiskPage83Data(ctx, diskPath)
-	if err != nil {
-		glog.Errorf("Failed to get disk UUID for path: %q on VM: %q. err: %+v", diskPath, vm.InventoryPath, err)
 		return nil, err
 	}
 	// filter vm devices to retrieve device for the given vmdk file identified by disk path
@@ -342,8 +336,7 @@ func (vm *VirtualMachine) getVirtualDeviceByPath(ctx context.Context, diskPath s
 		if vmDevices.TypeName(device) == "VirtualDisk" {
 			virtualDevice := device.GetVirtualDevice()
 			if backing, ok := virtualDevice.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
-				diskUUID = formatVirtualDiskUUID(backing.Uuid)
-				if diskUUID == volumeUUID {
+				if backing.FileName == diskPath {
 					return device, nil
 				}
 			}
