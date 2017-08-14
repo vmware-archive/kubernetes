@@ -127,7 +127,7 @@ type Volumes interface {
 
 	// DisksAreAttached checks if a list disks are attached to the given node.
 	// Assumption: If node doesn't exist, disks are not attached to the node.
-	DisksAreAttached(volPath []string, nodeName k8stypes.NodeName) (map[string]bool, error)
+	DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName]map[string]bool, error)
 
 	// CreateVolume creates a new vmdk with specified parameters.
 	CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath string, err error)
