@@ -6,13 +6,13 @@ source $(dirname "$0")/exit_codes.sh
 init_VcpConigStatus "$POD_NAME"
 
 PHASE=$DAEMONSET_SCRIPT_PHASE1
-update_VcpConigStatus "$POD_NAME" "$PHASE" "RUNNING" ""
+update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 ERROR_MSG="NODE_NAME is not set"
-[ -z "$NODE_NAME" ] && { echo "[ERROR] ${ERROR_MSG}"; PHASE_STATUS="FAILED"; update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"; exit $ERROR_POD_ENV_VALIDATION; }
+[ -z "$NODE_NAME" ] && {update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_POD_ENV_VALIDATION; }
 
-ERROR_MSG="POD_ROLE NODE_NAME is not set"
-[ -z "$POD_ROLE" ] && { echo "[ERROR] ${ERROR_MSG}"; PHASE_STATUS="FAILED"; update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"; exit $ERROR_POD_ENV_VALIDATION; }
+ERROR_MSG="POD_ROLE is not set"
+[ -z "$POD_ROLE" ] && {update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_POD_ENV_VALIDATION; }
 
 echo "Running script in the Pod:" $POD_NAME "deployed on the Node:" $NODE_NAME
 # read secret keys from volume /secret-volume/ and set values in an environment
@@ -25,7 +25,7 @@ else
 fi
 
 PHASE=$DAEMONSET_SCRIPT_PHASE2
-update_VcpConigStatus "$POD_NAME" "$PHASE" "RUNNING" ""
+update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # connect to vCenter using VC Admin username and password
 export GOVC_INSECURE=1
@@ -34,24 +34,23 @@ export GOVC_URL='https://'$k8s_secret_vc_admin_username':'$k8s_secret_vc_admin_p
 # Get VM's UUID, Find VM Path using VM UUID and set disk.enableUUID to 1 on the VM
 vmuuid=$(cat /host/sys/class/dmi/id/product_serial | sed -e 's/^VMware-//' -e 's/-/ /' | awk '{ print tolower($1$2$3$4 "-" $5$6 "-" $7$8 "-" $9$10 "-" $11$12$13$14$15$16) }')
 ERROR_MSG="Unable to get VM UUID from /host/sys/class/dmi/id/product_serial"
-[ -z "$vmuuid" ] && { echo "[ERROR] ${ERROR_MSG}"; update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"; exit $ERROR_UNKNOWN; }
+[ -z "$vmuuid" ] && {update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_UNKNOWN; }
 
 vmpath=$(govc vm.info -vm.uuid=$vmuuid | grep "Path:" | awk 'BEGIN {FS=":"};{print $2}' | tr -d ' ')
 ERROR_MSG="Unable to find VM using VM UUID: ${vmuuid}"
-[ -z "$vmpath" ] && { echo "[ERROR] ${ERROR_MSG}"; update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"; exit $ERROR_VC_OBJECT_NOT_FOUND; }
+[ -z "$vmpath" ] && {update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_VC_OBJECT_NOT_FOUND; }
 
 govc vm.change -e="disk.enableUUID=1" -vm="$vmpath" &> /dev/null
 if [ $? -eq 0 ]; then
     echo "[INFO] Successfully enabled disk.enableUUID flag on the Node Virtual Machine".
 else
     ERROR_MSG="Failed to enable disk.enableUUID flag on the Node Virtual Machine"
-    echo "[ERROR] ${ERROR_MSG}"
-    update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+    update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
     exit $ERROR_ENABLE_DISK_UUID
 fi
 
 PHASE=$DAEMONSET_SCRIPT_PHASE3
-update_VcpConigStatus "$POD_NAME" "$PHASE" "RUNNING" ""
+update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # Move Node VM to the VM Folder.
 govc object.mv $vmpath $k8s_secret_node_vms_folder &> /dev/null
@@ -59,14 +58,13 @@ if [ $? -eq 0 ]; then
     echo "[INFO] Moved Node Virtual Machine to the Working Directory Folder".
 else
     ERROR_MSG="Failed to move Node Virtual Machine to the Working Directory Folder"
-    echo "[ERROR] ${ERROR_MSG}"
-    update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+    update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
     exit $ERROR_MOVE_NODE_TO_WORKING_DIR
 fi
 
 
 PHASE=$DAEMONSET_SCRIPT_PHASE4
-update_VcpConigStatus "$POD_NAME" "$PHASE" "RUNNING" ""
+update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # Creating back up directory for manifest files and kubelet service configuration file.
 echo "[INFO] Creating directory: '/host/tmp/$POD_NAME' for back up of manifest files and kubelet service configuration file"
@@ -75,8 +73,7 @@ if [ $? -eq 0 ]; then
     echo "[INFO] Successfully created back up directory:" /host/tmp/$POD_NAME " on $NODE_NAME node"
 else
     ERROR_MSG="Failed to create directory: '/host/tmp/${POD_NAME}' for back up of manifest files and kubelet service configuration file"
-    echo "[ERROR] ${ERROR_MSG}"
-    update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+    update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
     exit $ERROR_FAIL_TO_CREATE_BACKUP_DIRECTORY
 fi
 
@@ -86,8 +83,7 @@ if [ $? -eq 0 ]; then
     echo "[INFO] Verified that the directory for the vSphere Cloud Provider configuration file is accessible. Path: ("/host/$k8s_secret_vcp_configuration_file_location ")"
 else
     ERROR_MSG="Directory (/host/${k8s_secret_vcp_configuration_file_location}) for vSphere Cloud Provider Configuration file is not present"
-    echo "[ERROR] ${ERROR_MSG}"
-    update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+    update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
     exit $ERROR_VSPHERE_CONF_DIRECTORY_NOT_PRESENT
 fi
 
@@ -99,8 +95,7 @@ if [ $? -eq 0 ]; then
         echo "[INFO] Existing vsphere.conf file is copied to" /host/tmp/$POD_NAME/vsphere.conf
     else
         ERROR_MSG="Failed to back up vsphere.conf file at " /host/tmp/${POD_NAME}/vsphere.conf
-        echo "[ERROR] ${ERROR_MSG}"
-        update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
         exit $ERROR_FAIL_TO_BACKUP_FILE
     fi
 fi
@@ -118,7 +113,7 @@ locate_validate_and_backup_files $file $backupdir $POD_NAME
 
 
 PHASE=$DAEMONSET_SCRIPT_PHASE5
-update_VcpConigStatus "$POD_NAME" "$PHASE" "RUNNING" ""
+update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # Create vSphere Cloud Provider configuration file
 echo "[INFO] Creating vSphere Cloud Provider configuration file at /host/tmp/vsphere.conf"
@@ -138,13 +133,12 @@ if [ $? -eq 0 ]; then
     echo "[INFO] successfully created vSphere.conf file at :" /host/tmp/vsphere.conf
 else
     ERROR_MSG="Failed to create vsphere.conf file at : /host/tmp/vsphere.conf"
-    echo "[ERROR] ${ERROR_MSG}"
     update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
     exit $ERROR_FAIL_TO_CREATE_FILE
 fi
 
 PHASE=$DAEMONSET_SCRIPT_PHASE6
-update_VcpConigStatus "$POD_NAME" "$PHASE" "RUNNING" ""
+update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # update manifest files
 ls /host/$k8s_secret_kubernetes_api_server_manifest &> /dev/null
@@ -160,14 +154,23 @@ if [ $? -eq 0 ]; then
         cp /host/$k8s_secret_kubernetes_api_server_manifest $YAML_MANIFEST_FILE
         # Convert YAML to JSON format
         j2y -r $YAML_MANIFEST_FILE > $JSON_MANIFEST_FILE
+        if [ $? -ne 0 ]; then
+            ERROR_MSG="Failed to convert file from YAML to JSON format"
+            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+            exit $ERROR_J2Y_FAILURE
+        fi
         add_flags_to_manifest_file $JSON_MANIFEST_FILE $POD_NAME
         # Convert JSON to YAML foramt
         j2y $JSON_MANIFEST_FILE > $YAML_MANIFEST_FILE
+        if [ $? -ne 0 ]; then
+            ERROR_MSG="Failed to convert file from JSON to YAML format"
+            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+            exit $ERROR_J2Y_FAILURE
+        fi
         rm -rf $JSON_MANIFEST_FILE
     else
         ERROR_MSG="Unsupported file format"
-        echo "[ERROR] ${ERROR_MSG}"
-        update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
         exit $ERROR_UNSUPPORTED_FILE_FORMAT
     fi
 fi
@@ -186,21 +189,22 @@ if [ $? -eq 0 ]; then
         # Convert YAML to JSON format
         j2y -r $YAML_MANIFEST_FILE > $JSON_MANIFEST_FILE
         if [ $? -ne 0 ]; then
-            echo "[ERROR] Failed to convert file from YAML to JSON format"
+            ERROR_MSG="Failed to convert file from YAML to JSON format"
+            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
             exit $ERROR_J2Y_FAILURE
         fi
         add_flags_to_manifest_file $JSON_MANIFEST_FILE $POD_NAME
         # Convert JSON to YAML foramt
         j2y $JSON_MANIFEST_FILE > $YAML_MANIFEST_FILE
         if [ $? -ne 0 ]; then
-            echo "[ERROR] Failed to convert file from JSON to YAML format"
+            ERROR_MSG="Failed to convert file from JSON to YAML format"
+            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
             exit $ERROR_J2Y_FAILURE
         fi
         rm -rf $JSON_MANIFEST_FILE
     else
         ERROR_MSG="Unsupported file format"
-        echo "[ERROR] ${ERROR_MSG}"
-        update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
         exit $ERROR_UNSUPPORTED_FILE_FORMAT
     fi
 fi
@@ -228,8 +232,7 @@ if [ $? -eq 0 ]; then
         echo "[INFO] Sucessfully updated kubelet.service configuration"
     else
         ERROR_MSG="Failed to update kubelet.service configuration"
-        echo "[ERROR] ${ERROR_MSG}"
-        update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
         exit $ERROR_FAIL_TO_ADD_CONFIG_PARAMETER
     fi
 fi
@@ -260,7 +263,7 @@ if [ -f /host/tmp/kubelet-service-configuration ]; then
 fi
 
 PHASE=$DAEMONSET_SCRIPT_PHASE7
-update_VcpConigStatus "$POD_NAME" "$PHASE" "RUNNING" ""
+update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 echo "systemctl daemon-reload
 systemctl restart ${k8s_secret_kubernetes_kubelet_service_name}
@@ -273,8 +276,7 @@ if [ $? -eq 0 ]; then
     echo "[INFO] kubelet service restarted sucessfully"
 else
     ERROR_MSG="Failed to restart kubelet service"
-    echo "[ERROR] ${ERROR_MSG}"
-    update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+    update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
 fi
 
-update_VcpConigStatus "$POD_NAME" "$PHASE" "COMPLETE" ""
+update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_COMPLETE" ""

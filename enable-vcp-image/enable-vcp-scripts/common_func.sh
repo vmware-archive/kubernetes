@@ -9,6 +9,10 @@ DAEMONSET_SCRIPT_PHASE5="[PHASE 5] Create vSphere.conf file"
 DAEMONSET_SCRIPT_PHASE6="[PHASE 6] Update Manifest files and service configuration file"
 DAEMONSET_SCRIPT_PHASE7="[PHASE 7] Restart Kubelet Service"
 
+DAEMONSET_PHASE_RUNNING="RUNNING"
+DAEMONSET_PHASE_FAILED="FAILED"
+DAEMONSET_PHASE_COMPLETE="COMPLETE"
+
 read_secret_keys() {
     export k8s_secret_master_node_name=`cat /secret-volume/master_node_name; echo;`
     export k8s_secret_vc_admin_username=`cat /secret-volume/vc_admin_username; echo;`
@@ -104,8 +108,7 @@ locate_validate_and_backup_files() {
                 echo "[INFO] Verified " $CONFIG_FILE " is a Valid JSON file"
             else
                 ERROR_MSG="Failed to Validate JSON for file:" $CONFIG_FILE
-                echo "[ERROR] ${ERROR_MSG}"
-                update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+                update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
                 exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
             fi
         elif [ "${CONFIG_FILE##*.}" == "yaml" ]; then
@@ -114,8 +117,7 @@ locate_validate_and_backup_files() {
                 echo "[INFO] Verified " $CONFIG_FILE " is a Valid YAML file"
             else
                 ERROR_MSG="Failed to Validate YAML for file:" $CONFIG_FILE
-                echo "[ERROR] ${ERROR_MSG}"
-                update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+                update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
                 exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
             fi
         fi
@@ -124,8 +126,7 @@ locate_validate_and_backup_files() {
             echo "[INFO] Successfully backed up " $CONFIG_FILE at $BACKUP_DIR
         else
             ERROR_MSG="Failed to back up " $CONFIG_FILE at $BACKUP_DIR
-            echo "[ERROR] ${ERROR_MSG}"
-            update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
             exit $ERROR_FAIL_TO_BACKUP_FILE
         fi
     fi
@@ -144,8 +145,7 @@ add_flags_to_manifest_file() {
             echo "[INFO] Sucessfully added --cloud-provider=vsphere flag to ${MANIFEST_FILE}"
         else
             ERROR_MSG="Failed to add --cloud-provider=vsphere flag to ${MANIFEST_FILE}"
-            echo "[ERROR] ${ERROR_MSG}"
-            update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
             exit $ERROR_FAIL_TO_ADD_CONFIG_PARAMETER
         fi
     else
@@ -160,8 +160,7 @@ add_flags_to_manifest_file() {
             echo "[INFO] Sucessfully added --cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf flag to ${MANIFEST_FILE}"
         else
             ERROR_MSG="Failed to add --cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf flag to ${MANIFEST_FILE}"
-            echo "[ERROR] ${ERROR_MSG}"
-            update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
             exit $ERROR_FAIL_TO_ADD_CONFIG_PARAMETER
         fi
     else
@@ -189,6 +188,11 @@ update_VcpConigStatus() {
     PHASE="$2"
     STATUS="$3"
     ERROR="$4"
+
+    if [ "$STATUS" == "FAILED" ]; then
+        echo "[ERROR] ${ERROR}"
+    fi
+
 echo "apiVersion: \"vmware.com/v1\"
 kind: VcpStatus
 metadata:
