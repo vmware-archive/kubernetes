@@ -22,6 +22,9 @@ if [ $? -eq 1 ]; then
     fi
 fi
 
+# Capture Number of Registerd Nodes including master before making any configuration change.
+NUMBER_OF_REGISTERED_NODES=`kubectl get nodes -o json | jq '.items | length'`
+
 # if Administrator user is passed as VCP user, then skip all Operations for VCP user.
 if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
     # connect to vCenter using VC Admin username and password
@@ -146,3 +149,19 @@ if [ $? -eq 0 ]; then
 else
     echo "[ERROR] 'kubectl create' failed to create vcp-daemonset."
 fi
+
+init_VcpConfigSummaryStatus "$NUMBER_OF_REGISTERED_NODES"
+
+while true
+do
+    error=$(kubectl get VcpStatus --namespace=vmware 2>&1 >/dev/null)
+    if [ -z "$error" ]; then
+        update_VcpConfigSummaryStatus "$NUMBER_OF_REGISTERED_NODES"
+        TOTAL_WITH_COMPLETE_STATUS=`kubectl get VcpStatus --namespace=vmware -o json | jq '.items[] .spec.status' | grep "${DAEMONSET_PHASE_COMPLETE}" | wc -l`
+        if [ $TOTAL_WITH_COMPLETE_STATUS -eq $NUMBER_OF_REGISTERED_NODES ]; then
+            echo "[INFO] All Daemonset Pods has reached to the Complete Phase"
+            break
+        fi
+    fi
+    sleep 1
+done

@@ -9,10 +9,10 @@ PHASE=$DAEMONSET_SCRIPT_PHASE1
 update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 ERROR_MSG="NODE_NAME is not set"
-[ -z "$NODE_NAME" ] && {update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_POD_ENV_VALIDATION; }
+[ -z "$NODE_NAME" ] && { update_VcpConigStatus "${POD_NAME}" "${PHASE}" "${DAEMONSET_PHASE_FAILED}" "${ERROR_MSG}"; exit $ERROR_POD_ENV_VALIDATION; }
 
 ERROR_MSG="POD_ROLE is not set"
-[ -z "$POD_ROLE" ] && {update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_POD_ENV_VALIDATION; }
+[ -z "$POD_ROLE" ] && { update_VcpConigStatus "${POD_NAME}" "${PHASE}" "${DAEMONSET_PHASE_FAILED}" "${ERROR_MSG}"; exit $ERROR_POD_ENV_VALIDATION; }
 
 echo "Running script in the Pod:" $POD_NAME "deployed on the Node:" $NODE_NAME
 # read secret keys from volume /secret-volume/ and set values in an environment
@@ -34,11 +34,11 @@ export GOVC_URL='https://'$k8s_secret_vc_admin_username':'$k8s_secret_vc_admin_p
 # Get VM's UUID, Find VM Path using VM UUID and set disk.enableUUID to 1 on the VM
 vmuuid=$(cat /host/sys/class/dmi/id/product_serial | sed -e 's/^VMware-//' -e 's/-/ /' | awk '{ print tolower($1$2$3$4 "-" $5$6 "-" $7$8 "-" $9$10 "-" $11$12$13$14$15$16) }')
 ERROR_MSG="Unable to get VM UUID from /host/sys/class/dmi/id/product_serial"
-[ -z "$vmuuid" ] && {update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_UNKNOWN; }
+[ -z "$vmuuid" ] && { update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_UNKNOWN; }
 
 vmpath=$(govc vm.info -vm.uuid=$vmuuid | grep "Path:" | awk 'BEGIN {FS=":"};{print $2}' | tr -d ' ')
 ERROR_MSG="Unable to find VM using VM UUID: ${vmuuid}"
-[ -z "$vmpath" ] && {update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_VC_OBJECT_NOT_FOUND; }
+[ -z "$vmpath" ] && { update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_VC_OBJECT_NOT_FOUND; }
 
 govc vm.change -e="disk.enableUUID=1" -vm="$vmpath" &> /dev/null
 if [ $? -eq 0 ]; then
@@ -118,8 +118,8 @@ update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 # Create vSphere Cloud Provider configuration file
 echo "[INFO] Creating vSphere Cloud Provider configuration file at /host/tmp/vsphere.conf"
 echo "[Global]
-    user = ""\"${k8s_secret_vc_admin_username}"\""
-    password = ""\"${k8s_secret_vc_admin_password}"\""
+    user = ""\"${k8s_secret_vcp_username}"\""
+    password = ""\"${k8s_secret_vcp_password}"\""
     server = ""\"${k8s_secret_vc_ip}"\""
     port = ""\"${k8s_secret_vc_port}"\""
     insecure-flag = ""\"1"\""
@@ -251,7 +251,7 @@ if [ "${k8s_secret_kubernetes_api_server_manifest##*.}" == "yaml" ]; then
     UPDATED_MANIFEST_FILE="/host/tmp/kube-apiserver.yaml"
 fi
 if [ -f $UPDATED_MANIFEST_FILE ]; then
-    cp $$UPDATED_MANIFEST_FILE /host/$k8s_secret_kubernetes_api_server_manifest
+    cp $UPDATED_MANIFEST_FILE /host/$k8s_secret_kubernetes_api_server_manifest
 fi
 
 if [ -f /host/tmp/vsphere.conf ]; then
@@ -274,9 +274,9 @@ echo "[INFO] Reloading systemd manager configuration and restarting kubelet serv
 chroot /host /tmp/restart_kubelet.sh
 if [ $? -eq 0 ]; then
     echo "[INFO] kubelet service restarted sucessfully"
+    PHASE=$DAEMONSET_SCRIPT_PHASE8
+    update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_COMPLETE" ""
 else
     ERROR_MSG="Failed to restart kubelet service"
     update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
 fi
-
-update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_COMPLETE" ""
