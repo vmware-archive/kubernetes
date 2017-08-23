@@ -174,7 +174,7 @@ func (dc *Datacenter) CheckDisksAttached(ctx context.Context, nodeVolumes map[st
 		vm, err := dc.GetVMByPath(ctx, nodeName)
 		if err != nil {
 			if IsNotFound(err) {
-				glog.Infof("Node %q does not exist, vSphere CP will assume disks %v are not attached to it.", nodeName, volPaths)
+				glog.Warningf("Node %q does not exist, vSphere CP will assume disks %v are not attached to it.", nodeName, volPaths)
 			}
 			continue
 		}
@@ -197,7 +197,6 @@ func (dc *Datacenter) CheckDisksAttached(ctx context.Context, nodeVolumes map[st
 		if vmMo.Config == nil {
 			glog.Errorf("Config is not available for VM: %q", vmMo.Name)
 			continue
-			// TODO: code here?
 		}
 		for nodeName, volPaths := range nodeVolumes {
 			if nodeName == vmMo.Name {
@@ -205,8 +204,6 @@ func (dc *Datacenter) CheckDisksAttached(ctx context.Context, nodeVolumes map[st
 				verifyVolumePathsForVM(vmMo, volPaths, attached)
 			}
 		}
-		// TODO: Write code to what happens if node is not active. (Powered off)
-		// Basically would need to return err for that node.
 	}
 	glog.V(1).Infof("balu - CheckDisksAttached attached is %+v", attached)
 	return attached, nil
