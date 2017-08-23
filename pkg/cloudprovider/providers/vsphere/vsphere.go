@@ -614,9 +614,9 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 // If the volumeOptions.Datastore is part of datastore cluster for example - [DatastoreCluster/sharedVmfs-0] then
 // return value will be [DatastoreCluster/sharedVmfs-0] kubevols/<volume-name>.vmdk
 // else return value will be [sharedVmfs-0] kubevols/<volume-name>.vmdk
-func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath string, err error) {
+func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVolumePath string, err error) {
 	glog.V(1).Infof("Starting to create a vSphere volume with volumeOptions: %+v", volumeOptions)
-	createVolumeInternal := func(volumeOptions *vclib.VolumeOptions) (volumePath string, err error) {
+	createVolumeInternal := func(volumeOptions *vclib.VolumeOptions) (canonicalVolumePath string, err error) {
 		var datastore string
 		// Default datastore is the datastore in the vSphere config file that is used to initialize vSphere cloud provider.
 		if volumeOptions.Datastore == "" {
@@ -674,27 +674,28 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath 
 			glog.Errorf("Cannot create dir %#v. err %s", kubeVolsPath, err)
 			return "", err
 		}
-		volumePath = kubeVolsPath + volumeOptions.Name + ".vmdk"
+		volumePath := kubeVolsPath + volumeOptions.Name + ".vmdk"
 		disk := diskmanagers.VirtualDisk{
 			DiskPath:      volumePath,
 			VolumeOptions: volumeOptions,
 			VMOptions:     vmOptions,
 		}
-		err = disk.Create(ctx, ds)
+		canonicalVolumePath, err = disk.Create(ctx, ds)
 		if err != nil {
 			glog.Errorf("Failed to create a vsphere volume with volumeOptions: %+v on datastore: %s. err: %+v", volumeOptions, datastore, err)
 			return "", err
 		}
 		if filepath.Base(datastore) != datastore {
 			// If datastore is within cluster, add cluster path to the volumePath
-			volumePath = strings.Replace(volumePath, filepath.Base(datastore), datastore, 1)
+			canonicalVolumePath = strings.Replace(canonicalVolumePath, filepath.Base(datastore), datastore, 1)
 		}
-		return volumePath, nil
+		return canonicalVolumePath, nil
 	}
 	requestTime := time.Now()
-	volumePath, err = createVolumeInternal(volumeOptions)
+	canonicalVolumePath, err = createVolumeInternal(volumeOptions)
 	vclib.RecordCreateVolumeMetric(volumeOptions, requestTime, err)
-	return volumePath, err
+	glog.V(1).Infof("The canonical volume path for the newly created vSphere volume is %q", canonicalVolumePath)
+	return canonicalVolumePath, err
 }
 
 // DeleteVolume deletes a volume given volume name.

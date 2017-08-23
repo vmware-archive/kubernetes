@@ -285,6 +285,25 @@ func (vm *VirtualMachine) CreateDiskSpec(ctx context.Context, diskPath string, d
 	return disk, newSCSIController, nil
 }
 
+// GetVirtualDiskPath gets the first available virtual disk devicePath from the VM
+func (vm *VirtualMachine) GetVirtualDiskPath(ctx context.Context) (string, error) {
+	vmDevices, err := vm.Device(ctx)
+	if err != nil {
+		glog.Errorf("Failed to get the devices for VM: %q. err: %+v", vm.InventoryPath, err)
+		return "", err
+	}
+	// filter vm devices to retrieve device for the given vmdk file identified by disk path
+	for _, device := range vmDevices {
+		if vmDevices.TypeName(device) == "VirtualDisk" {
+			virtualDevice := device.GetVirtualDevice()
+			if backing, ok := virtualDevice.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
+				return backing.FileName, nil
+			}
+		}
+	}
+	return "", nil
+}
+
 // createAndAttachSCSIController creates and attachs the SCSI controller to the VM.
 func (vm *VirtualMachine) createAndAttachSCSIController(ctx context.Context, diskControllerType string) (types.BaseVirtualDevice, error) {
 	// Get VM device list
