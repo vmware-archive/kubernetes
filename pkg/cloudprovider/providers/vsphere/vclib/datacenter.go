@@ -162,3 +162,80 @@ func (dc *Datacenter) GetDatastoreMoList(ctx context.Context, dsObjList []*Datas
 	}
 	return dsMoList, nil
 }
+
+// CheckDisksAttached checks if the disk is attached to node.
+func (dc *Datacenter) CheckDisksAttached(ctx context.Context, nodeVolumes map[string][]string) (map[string]map[string]bool, error) {
+	attached := make(map[string]map[string]bool)
+	var vmList []*VirtualMachine
+	for nodeName, volPaths := range nodeVolumes {
+		for _, volPath := range volPaths {
+			setNodeVolumeMap(attached, volPath, nodeName, false)
+		}
+		vm, err := dc.GetVMByPath(ctx, nodeName)
+		if err != nil {
+			if IsNotFound(err) {
+				glog.Warningf("Node %q does not exist, vSphere CP will assume disks %v are not attached to it.", nodeName, volPaths)
+			}
+			continue
+		}
+		vmList = append(vmList, vm)
+	}
+	if len(vmList) == 0 {
+		glog.V(2).Infof("vSphere CP will assume no disks are attached to any node.")
+		return attached, nil
+	}
+	glog.V(1).Infof("balu - CheckDisksAttached vmList is %+v and len is %d", vmList, len(vmList))
+	vmMoList, err := dc.GetVMMoList(ctx, vmList, []string{"config.hardware.device", "name"})
+	if err != nil {
+		// When there is an error fetching instance information
+		// it is safer to return nil and let volume information not be touched.
+		glog.Errorf("Failed to get VM Managed object for nodes: %+v. err: +%v", vmList, err)
+		return nil, err
+	}
+
+	for _, vmMo := range vmMoList {
+		if vmMo.Config == nil {
+			glog.Errorf("Config is not available for VM: %q", vmMo.Name)
+			continue
+		}
+		for nodeName, volPaths := range nodeVolumes {
+			if nodeName == vmMo.Name {
+				glog.V(1).Infof("balu - CheckDisksAttached nodeName is %+q match found", nodeName)
+				verifyVolumePathsForVM(vmMo, volPaths, attached)
+			}
+		}
+	}
+	glog.V(1).Infof("balu - CheckDisksAttached attached is %+v", attached)
+	return attached, nil
+}
+
+func verifyVolumePathsForVM(vmMo mo.VirtualMachine, volPaths []string, nodeVolumeMap map[string]map[string]bool) {
+	// Veirfy the volume paths exist in the VM devices
+	for _, volPath := range volPaths {
+		vmDevices := object.VirtualDeviceList(vmMo.Config.Hardware.Device)
+		for _, device := range vmDevices {
+			if vmDevices.TypeName(device) == "VirtualDisk" {
+				virtualDevice := device.GetVirtualDevice()
+				if backing, ok := virtualDevice.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
+					glog.V(1).Infof("balu - backing.FileName in verifyVolumePathsForVM is %q", backing.FileName)
+					if backing.FileName == volPath {
+						setNodeVolumeMap(nodeVolumeMap, volPath, vmMo.Name, true)
+					}
+				}
+			}
+		}
+	}
+}
+
+func setNodeVolumeMap(
+	nodeVolumeMap map[string]map[string]bool,
+	volumePath string,
+	nodeName string,
+	check bool) {
+	volumeMap := nodeVolumeMap[nodeName]
+	if volumeMap == nil {
+		volumeMap = make(map[string]bool)
+		nodeVolumeMap[nodeName] = volumeMap
+	}
+	volumeMap[volumePath] = check
+}
