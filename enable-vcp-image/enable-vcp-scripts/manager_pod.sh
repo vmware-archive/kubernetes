@@ -22,7 +22,7 @@ if [ $? -eq 1 ]; then
     fi
 fi
 
-# Capture Number of Registerd Nodes including master before making any configuration change.
+# Capture Number of Registered Nodes including master before making any configuration change.
 NUMBER_OF_REGISTERED_NODES=`kubectl get nodes -o json | jq '.items | length'`
 
 # if Administrator user is passed as VCP user, then skip all Operations for VCP user.
@@ -158,7 +158,10 @@ do
     if [ -z "$error" ]; then
         update_VcpConfigSummaryStatus "$NUMBER_OF_REGISTERED_NODES"
         TOTAL_WITH_COMPLETE_STATUS=`kubectl get VcpStatus --namespace=vmware -o json | jq '.items[] .spec.status' | grep "${DAEMONSET_PHASE_COMPLETE}" | wc -l`
+        echo "[INFO] Waiting for [${NUMBER_OF_REGISTERED_NODES}] nodes to report successfully configured. Found [${TOTAL_WITH_COMPLETE_STATUS}] nodes configured successfully."
         if [ $TOTAL_WITH_COMPLETE_STATUS -eq $NUMBER_OF_REGISTERED_NODES ]; then
+            # Need to update final status before exiting the loop, so that nodes_sucessfully_configured is reported correctly.
+            update_VcpConfigSummaryStatus "$NUMBER_OF_REGISTERED_NODES"
             echo "[INFO] All Daemonset Pods has reached to the Complete Phase"
             break
         fi
