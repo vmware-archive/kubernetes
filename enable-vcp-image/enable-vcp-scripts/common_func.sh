@@ -8,6 +8,7 @@ DAEMONSET_SCRIPT_PHASE4="[PHASE 4] Validate and backup existing node configurati
 DAEMONSET_SCRIPT_PHASE5="[PHASE 5] Create vSphere.conf file"
 DAEMONSET_SCRIPT_PHASE6="[PHASE 6] Update Manifest files and service configuration file"
 DAEMONSET_SCRIPT_PHASE7="[PHASE 7] Restart Kubelet Service"
+DAEMONSET_SCRIPT_PHASE8="COMPLETE"
 
 DAEMONSET_PHASE_RUNNING="RUNNING"
 DAEMONSET_PHASE_FAILED="FAILED"
@@ -171,16 +172,19 @@ add_flags_to_manifest_file() {
 init_VcpConigStatus() {
     POD_NAME="$1"
     INIT_STATUS="TPR Object for Pods Status is Created."
-    cat <<EOF | kubectl create --save-config -f -
-    apiVersion: "vmware.com/v1"
-    kind: VcpStatus
-    metadata:
-        name: $POD_NAME
-    spec:
-        phase: "$PHASE"
-        status: "$INIT_STATUS"
-        error: ""
-EOF
+    INIT_PHASE="CREATE"
+    ERROR=""
+
+echo "apiVersion: \"vmware.com/v1\"
+kind: VcpStatus
+metadata:
+    name: $POD_NAME
+spec:
+    phase: "\"${INIT_PHASE}\""
+    status: "\"${INIT_STATUS}\""
+    error: "\"${ERROR}\""" > /tmp/${POD_NAME}_daemonset_status_create.yaml
+
+    kubectl create --save-config -f /tmp/${POD_NAME}_daemonset_status_update.yaml
 }
 
 update_VcpConigStatus() {
@@ -202,4 +206,61 @@ spec:
     status: "\"${STATUS}\""
     error: "\"${ERROR}\""" > /tmp/${POD_NAME}_daemonset_status_update.yaml
 kubectl apply -f /tmp/${POD_NAME}_daemonset_status_update.yaml
+}
+
+init_VcpConfigSummaryStatus() {
+    TOTAL_NUMBER_OF_NODES="$1"
+    cat <<EOF | kubectl create --save-config -f -
+    apiVersion: "vmware.com/v1"
+    kind: VcpSummary
+    metadata:
+        name: vcpinstallstatus
+    spec:
+        nodes_in_phase1: 0
+        nodes_in_phase2: 0
+        nodes_in_phase3: 0
+        nodes_in_phase4: 0
+        nodes_in_phase5: 0
+        nodes_in_phase6: 0
+        nodes_in_phase7: 0
+        nodes_being_configured: 0
+        nodes_failed_to_configure: 0
+        nodes_sucessfully_configured: 0
+        total_number_of_nodes: "$TOTAL_NUMBER_OF_NODES"
+EOF
+}
+
+update_VcpConfigSummaryStatus() {
+    TOTAL_NUMBER_OF_NODES="$1"
+
+    VcpStatus_OBJECTS=`kubectl get VcpStatus --namespace=vmware -o json | jq '.items'`
+    TOTAL_IN_PHASE1=`echo $VcpStatus_OBJECTS | jq '.[] .spec.phase' | grep "PHASE 1" | wc -l`
+    TOTAL_IN_PHASE2=`echo $VcpStatus_OBJECTS | jq '.[] .spec.phase' | grep "PHASE 2" | wc -l`
+    TOTAL_IN_PHASE3=`echo $VcpStatus_OBJECTS | jq '.[] .spec.phase' | grep "PHASE 3" | wc -l`
+    TOTAL_IN_PHASE4=`echo $VcpStatus_OBJECTS | jq '.[] .spec.phase' | grep "PHASE 4" | wc -l`
+    TOTAL_IN_PHASE5=`echo $VcpStatus_OBJECTS | jq '.[] .spec.phase' | grep "PHASE 5" | wc -l`
+    TOTAL_IN_PHASE6=`echo $VcpStatus_OBJECTS | jq '.[] .spec.phase' | grep "PHASE 6" | wc -l`
+    TOTAL_IN_PHASE7=`echo $VcpStatus_OBJECTS | jq '.[] .spec.phase' | grep "PHASE 7" | wc -l`    
+    TOTAL_WITH_RUNNING_STATUS=`echo $VcpStatus_OBJECTS | jq '.[] .spec.status' | grep "${DAEMONSET_PHASE_RUNNING}" | wc -l`
+    TOTAL_WITH_FAILED_STATUS=`echo $VcpStatus_OBJECTS | jq '.[] .spec.status' | grep "${DAEMONSET_PHASE_FAILED}" | wc -l`
+    TOTAL_WITH_COMPLETE_STATUS=`echo $VcpStatus_OBJECTS | jq '.[] .spec.status' | grep "${DAEMONSET_PHASE_COMPLETE}" | wc -l`
+
+echo "apiVersion: \"vmware.com/v1\"
+kind: VcpSummary
+metadata:
+    name: vcpinstallstatus
+spec:
+    nodes_in_phase1 : "\"${TOTAL_IN_PHASE1}\""
+    nodes_in_phase2 : "\"${TOTAL_IN_PHASE2}\""
+    nodes_in_phase3 : "\"${TOTAL_IN_PHASE3}\""
+    nodes_in_phase4 : "\"${TOTAL_IN_PHASE4}\""
+    nodes_in_phase5 : "\"${TOTAL_IN_PHASE5}\""
+    nodes_in_phase6 : "\"${TOTAL_IN_PHASE6}\""
+    nodes_in_phase7 : "\"${TOTAL_IN_PHASE7}\""
+    nodes_being_configured : "\"${TOTAL_WITH_RUNNING_STATUS}\""
+    nodes_failed_to_configure : "\"${TOTAL_WITH_FAILED_STATUS}\""
+    nodes_sucessfully_configured : "\"${TOTAL_WITH_COMPLETE_STATUS}\""
+    total_number_of_nodes: "\"${TOTAL_NUMBER_OF_NODES}\""" > /tmp/enablevcpstatussummary.yaml
+
+kubectl apply -f /tmp/enablevcpstatussummary.yaml
 }
