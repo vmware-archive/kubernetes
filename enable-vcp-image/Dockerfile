@@ -1,6 +1,10 @@
-FROM ubuntu:16.10
-MAINTAINER cna-storage@vmware.com
+FROM gliderlabs/alpine
+MAINTAINER containers@vmware.com
 
+RUN apk add --no-cache bash jq py-pip openssl go git libc-dev
+ENV GOPATH /go
+ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
+RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
 
 #### ---- Installer Files ---- ####
 ARG INSTALLER=install.sh

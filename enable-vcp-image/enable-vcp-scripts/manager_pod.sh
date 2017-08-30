@@ -25,58 +25,58 @@ fi
 # Capture Number of Registered Nodes including master before making any configuration change.
 NUMBER_OF_REGISTERED_NODES=`kubectl get nodes -o json | jq '.items | length'`
 
+ # connect to vCenter using VC Admin username and password
+export GOVC_URL='https://'$k8s_secret_vc_admin_username':'$k8s_secret_vc_admin_password'@'$k8s_secret_vc_ip':'$k8s_secret_vc_port'/sdk'
+# Verify if the Datacenter exists or not.
+govc datacenter.info $k8s_secret_datacenter &> /dev/null
+if [ $? -eq 0 ]; then
+    echo "[INFO] Verified Datacenter:" $k8s_secret_datacenter is present in the inventory.
+else
+    echo "[ERROR] Unable to find Datacenter:" $k8s_secret_datacenter.
+    exit $ERROR_VC_OBJECT_NOT_FOUND;
+fi
+
+# Verify if the Datastore exists or not.
+govc datastore.info -dc=$k8s_secret_datacenter $k8s_secret_default_datastore &> /dev/null
+if [ $? -eq 0 ]; then
+    echo "[INFO] Verified Datastore:" $k8s_secret_default_datastore is present in the inventory.
+else
+    echo "[ERROR] Unable to find Datastore:" $k8s_secret_default_datastore.
+    exit $ERROR_VC_OBJECT_NOT_FOUND;
+fi
+
+# Check if the working directory VM folder exists. If not then create this folder
+IFS="/"
+vmFolders=($k8s_secret_node_vms_folder)
+parentFolder=""
+for vmFolder in "${vmFolders[@]}"
+do
+    govc folder.info -dc=$k8s_secret_datacenter "/$k8s_secret_datacenter/vm/$parentFolder/$vmFolder" &> /dev/null
+    if [ $? -eq 0 ]; then
+        echo "[INFO] Verified Node VMs Folder:" /$k8s_secret_datacenter/vm/$parentFolder/$vmFolder is present in the inventory.
+    else
+        echo "Creating folder: " /$k8s_secret_datacenter/vm/$parentFolder/$vmFolder
+        govc folder.create "/$k8s_secret_datacenter/vm/$parentFolder/$vmFolder" &> /dev/null
+        if [ $? -eq 0 ]; then
+            echo "[INFO] Successfully created a new VM Folder:"/$k8s_secret_datacenter/vm/$parentFolder/$vmFolder
+        else
+            echo "[ERROR] Failed to create a vm folder:" /$k8s_secret_datacenter/vm/$parentFolder/$vmFolder
+            exit $ERROR_FOLDER_CREATE;
+        fi
+    fi
+    parentFolder=$parentFolder/$vmFolder
+done
+
+govc folder.info -dc=$k8s_secret_datacenter "/$k8s_secret_datacenter/vm/$k8s_secret_node_vms_folder" &> /dev/null
+if [ $? -eq 0 ]; then
+    echo "[INFO] Verified Node VMs Folder:" "/$k8s_secret_datacenter/vm/$k8s_secret_node_vms_folder" is present in the inventory.
+else
+    echo "[ERROR] Unable to find VM Folder:" "/$k8s_secret_datacenter/vm/$k8s_secret_node_vms_folder"
+    exit $ERROR_VC_OBJECT_NOT_FOUND;
+fi
+
 # if Administrator user is passed as VCP user, then skip all Operations for VCP user.
 if [ "$k8s_secret_vc_admin_username" != "$k8s_secret_vcp_username" ]; then
-    # connect to vCenter using VC Admin username and password
-    export GOVC_URL='https://'$k8s_secret_vc_admin_username':'$k8s_secret_vc_admin_password'@'$k8s_secret_vc_ip':'$k8s_secret_vc_port'/sdk'
-    # Verify if the Datacenter exists or not.
-    govc datacenter.info $k8s_secret_datacenter &> /dev/null
-    if [ $? -eq 0 ]; then
-        echo "[INFO] Verified Datacenter:" $k8s_secret_datacenter is present in the inventory.
-    else
-        echo "[ERROR] Unable to find Datacenter:" $k8s_secret_datacenter.
-        exit $ERROR_VC_OBJECT_NOT_FOUND;
-    fi
-
-    # Verify if the Datastore exists or not.
-    govc datastore.info $k8s_secret_default_datastore &> /dev/null
-    if [ $? -eq 0 ]; then
-        echo "[INFO] Verified Datastore:" $k8s_secret_default_datastore is present in the inventory.
-    else
-        echo "[ERROR] Unable to find Datastore:" $k8s_secret_default_datastore.
-        exit $ERROR_VC_OBJECT_NOT_FOUND;
-    fi
-
-    # Check if the working directory VM folder exists. If not then create this folder
-    IFS="/"
-    vmFolders=($k8s_secret_node_vms_folder)
-    parentFolder=""
-    for vmFolder in "${vmFolders[@]}"
-    do
-        govc folder.info "/$k8s_secret_datacenter/vm/$parentFolder/$vmFolder" &> /dev/null
-        if [ $? -eq 0 ]; then
-            echo "[INFO] Verified Node VMs Folder:" /$k8s_secret_datacenter/vm/$parentFolder/$vmFolder is present in the inventory.
-        else
-            echo "Creating folder: " /$k8s_secret_datacenter/vm/$parentFolder/$vmFolder
-            govc folder.create "/$k8s_secret_datacenter/vm/$parentFolder/$vmFolder" &> /dev/null
-            if [ $? -eq 0 ]; then
-                echo "[INFO] Successfully created a new VM Folder:"/$k8s_secret_datacenter/vm/$parentFolder/$vmFolder
-            else
-                echo "[ERROR] Failed to create a vm folder:" /$k8s_secret_datacenter/vm/$parentFolder/$vmFolder
-                exit $ERROR_FOLDER_CREATE;
-            fi
-        fi
-        parentFolder=$parentFolder/$vmFolder
-    done
-
-    govc folder.info "/$k8s_secret_datacenter/vm/$k8s_secret_node_vms_folder" &> /dev/null
-    if [ $? -eq 0 ]; then
-        echo "[INFO] Verified Node VMs Folder:" "/$k8s_secret_datacenter/vm/$k8s_secret_node_vms_folder" is present in the inventory.
-    else
-        echo "[ERROR] Unable to find VM Folder:" "/$k8s_secret_datacenter/vm/$k8s_secret_node_vms_folder"
-        exit $ERROR_VC_OBJECT_NOT_FOUND;
-    fi
-
     ROLE_NAME=manage-k8s-volumes
     create_role $ROLE_NAME
     PREVILEDGES="Datastore.AllocateSpace \
