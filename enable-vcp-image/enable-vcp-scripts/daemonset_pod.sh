@@ -61,14 +61,15 @@ PHASE=$DAEMONSET_SCRIPT_PHASE4
 update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # Creating back up directory for manifest files and kubelet service configuration file.
-ls /host/tmp/$POD_NAME &> /dev/null
+backupdir=$k8s_secret_config_backup/$POD_NAME
+ls $backupdir &> /dev/null
 if [ $? -ne 0 ]; then
-    echo "[INFO] Creating directory: '/host/tmp/$POD_NAME' for back up of manifest files and kubelet service configuration file"
-    mkdir /host/tmp/$POD_NAME
+    echo "[INFO] Creating directory: '${backupdir}' for back up of manifest files and kubelet service configuration file"
+    mkdir -p $backupdir
     if [ $? -eq 0 ]; then
-        echo "[INFO] Successfully created back up directory:" /host/tmp/$POD_NAME " on $NODE_NAME node"
+        echo "[INFO] Successfully created back up directory: ${backupdir} on ${NODE_NAME} node"
     else
-        ERROR_MSG="Failed to create directory: '/host/tmp/${POD_NAME}' for back up of manifest files and kubelet service configuration file"
+        ERROR_MSG="Failed to create directory: '${backupdir}' for back up of manifest files and kubelet service configuration file"
         update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
         exit $ERROR_FAIL_TO_CREATE_BACKUP_DIRECTORY
     fi
@@ -79,7 +80,7 @@ ls /host/$k8s_secret_vcp_configuration_file_location &> /dev/null
 if [ $? -eq 0 ]; then
     echo "[INFO] Verified that the directory for the vSphere Cloud Provider configuration file is accessible. Path: ("/host/$k8s_secret_vcp_configuration_file_location ")"
 else
-    mkdir /host/$k8s_secret_vcp_configuration_file_location
+    mkdir -p /host/$k8s_secret_vcp_configuration_file_location
     if [ $? -ne 0 ]; then
         ERROR_MSG="Unable to Create Directory: /host/$k8s_secret_vcp_configuration_file_location for vSphere Conf file"
         update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
@@ -111,7 +112,6 @@ if [ $? -ne 0 ]; then
 fi
 
 # locate and back up manifest files and kubelet service configuration file.
-backupdir=/host/tmp/$POD_NAME
 file=/host/$k8s_secret_kubernetes_api_server_manifest
 locate_validate_and_backup_files $file $backupdir $POD_NAME
 

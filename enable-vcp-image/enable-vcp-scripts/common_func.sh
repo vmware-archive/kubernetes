@@ -9,12 +9,12 @@ DAEMONSET_SCRIPT_PHASE5="[PHASE 5] Create vSphere.conf file"
 DAEMONSET_SCRIPT_PHASE6="[PHASE 6] Update Manifest files and service configuration file"
 DAEMONSET_SCRIPT_PHASE7="[PHASE 7] Restart Kubelet Service"
 DAEMONSET_SCRIPT_PHASE8="COMPLETE"
-
 DAEMONSET_PHASE_RUNNING="RUNNING"
 DAEMONSET_PHASE_FAILED="FAILED"
 DAEMONSET_PHASE_COMPLETE="COMPLETE"
 
 read_secret_keys() {
+    export k8s_secret_config_backup=`cat /secret-volume/configuration_backup_directory; echo;`
     export k8s_secret_vc_admin_username=`cat /secret-volume/vc_admin_username; echo;`
     export k8s_secret_vc_admin_password=`cat /secret-volume/vc_admin_password; echo;`
     export k8s_secret_vcp_username=`cat /secret-volume/vcp_username; echo;`

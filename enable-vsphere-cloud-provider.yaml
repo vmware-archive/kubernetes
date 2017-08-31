@@ -37,7 +37,7 @@ stringData:
   # vcp_configuration_file_location is the location where the VCP configuration file will be created.
   # This location should be mounted and accessible to controller pod, api server pod and kubelet pod.
   vcp_configuration_file_location: "/etc/vsphereconf"
- 
+
   # kubernetes_api_server_manifest is the file from which api server pod takes parameters
   kubernetes_api_server_manifest: "/etc/kubernetes/manifests/kube-apiserver.json"
   # kubernetes_controller_manager_manifest is the file from which controller manager pod takes parameters
@@ -46,6 +46,8 @@ stringData:
   kubernetes_kubelet_service_name: kubelet.service
   # kubernetes_kubelet_service_configuration_file is the file from which kubelet reads parameters
   kubernetes_kubelet_service_configuration_file: "/etc/systemd/system/kubelet.service"
+
+  configuration_backup_directory: "/configurationbackup"
 ---
 apiVersion: v1
 kind: ServiceAccount
