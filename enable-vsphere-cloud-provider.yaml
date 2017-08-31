@@ -13,18 +13,20 @@ metadata:
 type: Opaque
 data:
   # base64 encode username and password
-  # echo -n 'username' | base64
-  # echo -n 'password' | base64
+  # vc_admin_username ==> echo -n 'Administrator@vsphere.local' | base64
+  # vc_admin_password ==> echo -n 'Admin!23' | base64
+  # vcp_username ==> echo -n 'vcpuser@vsphere.local' | base64
+  # vcp_password ==> echo -n 'Admin!23' | base64
+  #
   vc_admin_username: QWRtaW5pc3RyYXRvckB2c3BoZXJlLmxvY2Fs
   vc_admin_password: QWRtaW4hMjM=
   vcp_username: dmNwdXNlckB2c3BoZXJlLmxvY2Fs
   vcp_password: QWRtaW4hMjM=
 stringData:
-  master_node_name: "master"
-  vc_ip: "10.162.26.135"
+  vc_ip: "10.162.12.94"
   vc_port: "443"
   # datacenter is the datacenter name in which Node VMs are located.
-  datacenter: vcqaDC
+  datacenter: cna-storage-dc
   # default_datastore is the Default datastore VCP will use for provisioning volumes using storage classes/dynamic provisioning
   default_datastore: "vsanDatastore"
   # node_vms_folder is the name of VM folder where all node VMs are located or to be placed under vcp_datacenter. This folder will be created if not present.
@@ -33,8 +35,9 @@ stringData:
   node_vms_cluster_or_host : "cluster-vsan-1"
   
   # vcp_configuration_file_location is the location where the VCP configuration file will be created.
-  vcp_configuration_file_location: "/etc/kubernetes"
- 
+  # This location should be mounted and accessible to controller pod, api server pod and kubelet pod.
+  vcp_configuration_file_location: "/etc/vsphereconf"
+
   # kubernetes_api_server_manifest is the file from which api server pod takes parameters
   kubernetes_api_server_manifest: "/etc/kubernetes/manifests/kube-apiserver.json"
   # kubernetes_controller_manager_manifest is the file from which controller manager pod takes parameters
@@ -43,6 +46,8 @@ stringData:
   kubernetes_kubelet_service_name: kubelet.service
   # kubernetes_kubelet_service_configuration_file is the file from which kubelet reads parameters
   kubernetes_kubelet_service_configuration_file: "/etc/systemd/system/kubelet.service"
+
+  configuration_backup_directory: "/configurationbackup"
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -58,7 +63,7 @@ metadata:
 spec:
     containers:
     - name: vcp-manager-container
-      image: divyen/enablevcp:v1
+      image: cnastorage/enablevcp:v1
       env:
       - name: POD_ROLE
         value: "MANAGER"

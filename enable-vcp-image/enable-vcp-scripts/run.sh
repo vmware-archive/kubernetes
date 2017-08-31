@@ -11,10 +11,16 @@ if [ "$POD_ROLE" == "MANAGER" ]; then
     echo "Running Manager Role"
     /opt/enable-vcp-scripts/manager_pod.sh
 elif [ "$POD_ROLE" == "DAEMON" ]; then
+    ls /host/tmp/vcp-configuration-complete &> /dev/null
+    if [ $? -eq 0 ]; then
+        # Daemon Pod has already completed VCP Configuration, So Pause infinity
+        python -c 'while 1: import ctypes; ctypes.CDLL(None).pause()'
+    fi
     echo "Running Daemon Role"
-    /opt/enable-vcp-scripts/daemonset_pod.sh
+    bash /opt/enable-vcp-scripts/daemonset_pod.sh
 else
     echo "[ERROR] Invalid Role"; 
     exit $ERROR_INVALID_POD_ROLE;
 fi
-sleep infinity
+# sleep infinity
+python -c 'while 1: import ctypes; ctypes.CDLL(None).pause()'

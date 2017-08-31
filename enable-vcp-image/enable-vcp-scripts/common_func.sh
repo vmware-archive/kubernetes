@@ -9,13 +9,12 @@ DAEMONSET_SCRIPT_PHASE5="[PHASE 5] Create vSphere.conf file"
 DAEMONSET_SCRIPT_PHASE6="[PHASE 6] Update Manifest files and service configuration file"
 DAEMONSET_SCRIPT_PHASE7="[PHASE 7] Restart Kubelet Service"
 DAEMONSET_SCRIPT_PHASE8="COMPLETE"
-
 DAEMONSET_PHASE_RUNNING="RUNNING"
 DAEMONSET_PHASE_FAILED="FAILED"
 DAEMONSET_PHASE_COMPLETE="COMPLETE"
 
 read_secret_keys() {
-    export k8s_secret_master_node_name=`cat /secret-volume/master_node_name; echo;`
+    export k8s_secret_config_backup=`cat /secret-volume/configuration_backup_directory; echo;`
     export k8s_secret_vc_admin_username=`cat /secret-volume/vc_admin_username; echo;`
     export k8s_secret_vc_admin_password=`cat /secret-volume/vc_admin_password; echo;`
     export k8s_secret_vcp_username=`cat /secret-volume/vcp_username; echo;`
@@ -100,36 +99,42 @@ locate_validate_and_backup_files() {
     BACKUP_DIR=$2
     POD_NAME=$3
 
-    ls $CONFIG_FILE &> /dev/null
-    if [ $? -eq 0 ]; then
-        echo "[INFO] Found file:" $CONFIG_FILE
-        if [ "${CONFIG_FILE##*.}" == "json" ]; then
-            jq "." $CONFIG_FILE &> /dev/null
+    file_name="${CONFIG_FILE##*/}"
+    ls $BACKUP_DIR/$file_name &> /dev/null
+    if [ $? -ne 0 ]; then
+            ls $CONFIG_FILE &> /dev/null
             if [ $? -eq 0 ]; then
-                echo "[INFO] Verified " $CONFIG_FILE " is a Valid JSON file"
-            else
-                ERROR_MSG="Failed to Validate JSON for file:" $CONFIG_FILE
-                update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
-                exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
+                echo "[INFO] Found file:" $CONFIG_FILE
+                if [ "${CONFIG_FILE##*.}" == "json" ]; then
+                    jq "." $CONFIG_FILE &> /dev/null
+                    if [ $? -eq 0 ]; then
+                        echo "[INFO] Verified " $CONFIG_FILE " is a Valid JSON file"
+                    else
+                        ERROR_MSG="Failed to Validate JSON for file:" $CONFIG_FILE
+                        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+                        exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
+                    fi
+                elif [ "${CONFIG_FILE##*.}" == "yaml" ]; then
+                    j2y -r $CONFIG_FILE &> /dev/null
+                    if [ $? -eq 0 ]; then
+                        echo "[INFO] Verified " $CONFIG_FILE " is a Valid YAML file"
+                    else
+                        ERROR_MSG="Failed to Validate YAML for file:" $CONFIG_FILE
+                        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+                        exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
+                    fi
+                fi
+                cp $CONFIG_FILE $BACKUP_DIR
+                if [ $? -eq 0 ]; then
+                    echo "[INFO] Successfully backed up " $CONFIG_FILE at $BACKUP_DIR
+                else
+                    ERROR_MSG="Failed to back up " $CONFIG_FILE at $BACKUP_DIR
+                    update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+                    exit $ERROR_FAIL_TO_BACKUP_FILE
+                fi
             fi
-        elif [ "${CONFIG_FILE##*.}" == "yaml" ]; then
-            j2y -r $CONFIG_FILE &> /dev/null
-            if [ $? -eq 0 ]; then
-                echo "[INFO] Verified " $CONFIG_FILE " is a Valid YAML file"
-            else
-                ERROR_MSG="Failed to Validate YAML for file:" $CONFIG_FILE
-                update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
-                exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
-            fi
-        fi
-        cp $CONFIG_FILE $BACKUP_DIR
-        if [ $? -eq 0 ]; then
-            echo "[INFO] Successfully backed up " $CONFIG_FILE at $BACKUP_DIR
-        else
-            ERROR_MSG="Failed to back up " $CONFIG_FILE at $BACKUP_DIR
-            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
-            exit $ERROR_FAIL_TO_BACKUP_FILE
-        fi
+    else
+        echo "[INFO] Skipping Backup - File: ${file_name} already present at the back up directory: ${BACKUP_DIR}"
     fi
 }
 
@@ -141,8 +146,9 @@ add_flags_to_manifest_file() {
     commandflag=`jq '.spec.containers[0].command' ${MANIFEST_FILE} | grep "\-\-cloud-provider=vsphere"`
     if [ -z "$commandflag" ]; then
         # adding --cloud-provider=vsphere flag to the manifest file
-        jq '.spec.containers[0].command |= .+ ["--cloud-provider=vsphere"]' ${MANIFEST_FILE} > ${MANIFEST_FILE}
+        jq '.spec.containers[0].command |= .+ ["--cloud-provider=vsphere"]' ${MANIFEST_FILE} > ${MANIFEST_FILE}.tmp
         if [ $? -eq 0 ]; then
+            mv ${MANIFEST_FILE}.tmp ${MANIFEST_FILE}
             echo "[INFO] Sucessfully added --cloud-provider=vsphere flag to ${MANIFEST_FILE}"
         else
             ERROR_MSG="Failed to add --cloud-provider=vsphere flag to ${MANIFEST_FILE}"
@@ -156,9 +162,10 @@ add_flags_to_manifest_file() {
     commandflag=`jq '.spec.containers[0].command' ${MANIFEST_FILE} | grep "\-\-cloud-config=${k8s_secret_vcp_configuration_file_location}/vsphere.conf"`
     if [ -z "$commandflag" ]; then
         # adding --cloud-config=/k8s_secret_vcp_configuration_file_location/vsphere.conf flag to the manifest file
-        jq '.spec.containers[0].command |= .+ ["--cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf"]' ${MANIFEST_FILE} > ${MANIFEST_FILE}
+        jq '.spec.containers[0].command |= .+ ["--cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf"]' ${MANIFEST_FILE} > ${MANIFEST_FILE}.tmp
         if [ $? -eq 0 ]; then
-            echo "[INFO] Sucessfully added --cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf flag to ${MANIFEST_FILE}"
+            mv ${MANIFEST_FILE}.tmp ${MANIFEST_FILE}
+            echo "[INFO] Sucessfully added --cloud-config='${k8s_secret_vcp_configuration_file_location}/vsphere.conf' flag to ${MANIFEST_FILE}"
         else
             ERROR_MSG="Failed to add --cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf flag to ${MANIFEST_FILE}"
             update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
@@ -166,6 +173,35 @@ add_flags_to_manifest_file() {
         fi
     else
         echo "[INFO] --cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf flag is already present in the manifest file: ${MANIFEST_FILE}"
+    fi
+
+    ## If VCP configuration file path is not mounted on the containers, mount the path, so that containers can read vsphere.conf file
+    volumepath=`jq '.spec.volumes' ${MANIFEST_FILE} | grep ${k8s_secret_vcp_configuration_file_location}`
+    if [ -z "$volumepath" ]; then
+        jq '.spec.volumes [.spec.volumes| length] |= . + { "hostPath": { "path": "'${k8s_secret_vcp_configuration_file_location}'" }, "name": "vsphereconf" }' ${MANIFEST_FILE} > ${MANIFEST_FILE}.tmp
+        if [ $? -eq 0 ]; then
+            mv ${MANIFEST_FILE}.tmp ${MANIFEST_FILE}
+            echo "[INFO] Suceessfully added volume: ${k8s_secret_vcp_configuration_file_location} in the manifest file: ${MANIFEST_FILE}"
+        else
+            ERROR_MSG="Failed to add volume: ${k8s_secret_vcp_configuration_file_location} in the manifest file: ${MANIFEST_FILE}"
+            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+        fi
+    else
+        echo "[INFO] volume: ${k8s_secret_vcp_configuration_file_location} is already available in the manifest file: ${MANIFEST_FILE}"
+    fi
+
+    mountpath=`jq '.spec.containers[0].volumeMounts' ${MANIFEST_FILE} | grep ${k8s_secret_vcp_configuration_file_location}`
+    if [ -z "$mountpath" ]; then
+        jq '.spec.containers[0].volumeMounts[.spec.containers[0].volumeMounts| length] |= . + { "mountPath": "'${k8s_secret_vcp_configuration_file_location}'", "name": "vsphereconf", "readOnly": true }' ${MANIFEST_FILE} > ${MANIFEST_FILE}.tmp
+        if [ $? -eq 0 ]; then
+            mv ${MANIFEST_FILE}.tmp ${MANIFEST_FILE}
+            echo "[INFO] Suceessfully added mount path: ${k8s_secret_vcp_configuration_file_location} in the manifest file: ${MANIFEST_FILE}"
+        else
+            ERROR_MSG="Failed to add mount path: ${k8s_secret_vcp_configuration_file_location} in the manifest file: ${MANIFEST_FILE}"
+            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+        fi
+    else
+        echo "[INFO] Path: ${k8s_secret_vcp_configuration_file_location} is already mounted in the manifest file: ${MANIFEST_FILE}"
     fi
 }
 
@@ -184,7 +220,7 @@ spec:
     status: "\"${INIT_STATUS}\""
     error: "\"${ERROR}\""" > /tmp/${POD_NAME}_daemonset_status_create.yaml
 
-    kubectl create --save-config -f /tmp/${POD_NAME}_daemonset_status_update.yaml
+    kubectl create --save-config -f /tmp/${POD_NAME}_daemonset_status_create.yaml
 }
 
 update_VcpConigStatus() {
@@ -205,7 +241,12 @@ spec:
     phase: "\"${PHASE}\""
     status: "\"${STATUS}\""
     error: "\"${ERROR}\""" > /tmp/${POD_NAME}_daemonset_status_update.yaml
-kubectl apply -f /tmp/${POD_NAME}_daemonset_status_update.yaml
+
+retry_attempt=1
+until kubectl apply -f /tmp/${POD_NAME}_daemonset_status_update.yaml &> /dev/null || [ $retry_attempt -eq 12 ]; do
+    sleep 5
+    $(( retry_attempt++ ))
+done
 }
 
 init_VcpConfigSummaryStatus() {
@@ -262,5 +303,10 @@ spec:
     nodes_sucessfully_configured : "\"${TOTAL_WITH_COMPLETE_STATUS}\""
     total_number_of_nodes: "\"${TOTAL_NUMBER_OF_NODES}\""" > /tmp/enablevcpstatussummary.yaml
 
-kubectl apply -f /tmp/enablevcpstatussummary.yaml
+retry_attempt=1
+until kubectl apply -f /tmp/enablevcpstatussummary.yaml &> /dev/null || [ $retry_attempt -eq 12 ]; do
+    sleep 5
+    $(( retry_attempt++ ))
+done
+
 }

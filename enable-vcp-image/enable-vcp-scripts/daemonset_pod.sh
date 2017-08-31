@@ -18,12 +18,6 @@ echo "Running script in the Pod:" $POD_NAME "deployed on the Node:" $NODE_NAME
 # read secret keys from volume /secret-volume/ and set values in an environment
 read_secret_keys
 
-if [ "$k8s_secret_master_node_name" == "$NODE_NAME" ]; then
-    echo "Daemonset pod is running on the master node"
-else
-    echo "Daemonset pod is running on the worker node"
-fi
-
 PHASE=$DAEMONSET_SCRIPT_PHASE2
 update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
@@ -36,7 +30,7 @@ vmuuid=$(cat /host/sys/class/dmi/id/product_serial | sed -e 's/^VMware-//' -e 's
 ERROR_MSG="Unable to get VM UUID from /host/sys/class/dmi/id/product_serial"
 [ -z "$vmuuid" ] && { update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_UNKNOWN; }
 
-vmpath=$(govc vm.info -vm.uuid=$vmuuid | grep "Path:" | awk 'BEGIN {FS=":"};{print $2}' | tr -d ' ')
+vmpath=$(govc vm.info -dc=$k8s_secret_datacenter -vm.uuid=$vmuuid | grep "Path:" | awk 'BEGIN {FS=":"};{print $2}' | tr -d ' ')
 ERROR_MSG="Unable to find VM using VM UUID: ${vmuuid}"
 [ -z "$vmpath" ] && { update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"; exit $ERROR_VC_OBJECT_NOT_FOUND; }
 
@@ -53,7 +47,7 @@ PHASE=$DAEMONSET_SCRIPT_PHASE3
 update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # Move Node VM to the VM Folder.
-govc object.mv $vmpath $k8s_secret_node_vms_folder &> /dev/null
+govc object.mv -dc=$k8s_secret_datacenter $vmpath $k8s_secret_node_vms_folder &> /dev/null
 if [ $? -eq 0 ]; then
     echo "[INFO] Moved Node Virtual Machine to the Working Directory Folder".
 else
@@ -67,14 +61,18 @@ PHASE=$DAEMONSET_SCRIPT_PHASE4
 update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # Creating back up directory for manifest files and kubelet service configuration file.
-echo "[INFO] Creating directory: '/host/tmp/$POD_NAME' for back up of manifest files and kubelet service configuration file"
-mkdir /host/tmp/$POD_NAME
-if [ $? -eq 0 ]; then
-    echo "[INFO] Successfully created back up directory:" /host/tmp/$POD_NAME " on $NODE_NAME node"
-else
-    ERROR_MSG="Failed to create directory: '/host/tmp/${POD_NAME}' for back up of manifest files and kubelet service configuration file"
-    update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
-    exit $ERROR_FAIL_TO_CREATE_BACKUP_DIRECTORY
+backupdir=$k8s_secret_config_backup/$POD_NAME
+ls $backupdir &> /dev/null
+if [ $? -ne 0 ]; then
+    echo "[INFO] Creating directory: '${backupdir}' for back up of manifest files and kubelet service configuration file"
+    mkdir -p $backupdir
+    if [ $? -eq 0 ]; then
+        echo "[INFO] Successfully created back up directory: ${backupdir} on ${NODE_NAME} node"
+    else
+        ERROR_MSG="Failed to create directory: '${backupdir}' for back up of manifest files and kubelet service configuration file"
+        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+        exit $ERROR_FAIL_TO_CREATE_BACKUP_DIRECTORY
+    fi
 fi
 
 # Verify that the directory for the vSphere Cloud Provider configuration file is accessible.
@@ -82,27 +80,39 @@ ls /host/$k8s_secret_vcp_configuration_file_location &> /dev/null
 if [ $? -eq 0 ]; then
     echo "[INFO] Verified that the directory for the vSphere Cloud Provider configuration file is accessible. Path: ("/host/$k8s_secret_vcp_configuration_file_location ")"
 else
-    ERROR_MSG="Directory (/host/${k8s_secret_vcp_configuration_file_location}) for vSphere Cloud Provider Configuration file is not present"
-    update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
-    exit $ERROR_VSPHERE_CONF_DIRECTORY_NOT_PRESENT
+    mkdir -p /host/$k8s_secret_vcp_configuration_file_location
+    if [ $? -ne 0 ]; then
+        ERROR_MSG="Unable to Create Directory: /host/$k8s_secret_vcp_configuration_file_location for vSphere Conf file"
+        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+        exit $ERROR_VSPHERE_CONF_DIRECTORY_NOT_PRESENT
+    fi
+    chmod 0750 /host/$k8s_secret_vcp_configuration_file_location
+    ls /host/$k8s_secret_vcp_configuration_file_location &> /dev/null
+    if [ $? -ne 0 ]; then
+        ERROR_MSG="Directory (/host/${k8s_secret_vcp_configuration_file_location}) for vSphere Cloud Provider Configuration file is not present"
+        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+        exit $ERROR_VSPHERE_CONF_DIRECTORY_NOT_PRESENT
+    fi
 fi
 
-ls /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf &> /dev/null
-if [ $? -eq 0 ]; then
-    echo "[INFO] vsphere.conf file is already available at /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf"
-    cp /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf /host/tmp/$POD_NAME
+ls /host/tmp/$POD_NAME/vsphere.conf &> /dev/null
+if [ $? -ne 0 ]; then
+    ls /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf &> /dev/null
     if [ $? -eq 0 ]; then
-        echo "[INFO] Existing vsphere.conf file is copied to" /host/tmp/$POD_NAME/vsphere.conf
-    else
-        ERROR_MSG="Failed to back up vsphere.conf file at " /host/tmp/${POD_NAME}/vsphere.conf
-        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
-        exit $ERROR_FAIL_TO_BACKUP_FILE
+        echo "[INFO] vsphere.conf file is already available at /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf"
+        cp /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf /host/tmp/$POD_NAME
+        if [ $? -eq 0 ]; then
+            echo "[INFO] Existing vsphere.conf file is copied to" /host/tmp/$POD_NAME/vsphere.conf
+        else
+            ERROR_MSG="Failed to back up vsphere.conf file at " /host/tmp/${POD_NAME}/vsphere.conf
+            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+            exit $ERROR_FAIL_TO_BACKUP_FILE
+        fi
     fi
 fi
 
 # locate and back up manifest files and kubelet service configuration file.
 file=/host/$k8s_secret_kubernetes_api_server_manifest
-backupdir=/host/tmp/$POD_NAME
 locate_validate_and_backup_files $file $backupdir $POD_NAME
 
 file=/host/$k8s_secret_kubernetes_controller_manager_manifest
@@ -111,30 +121,33 @@ locate_validate_and_backup_files $file $backupdir $POD_NAME
 file=/host/$k8s_secret_kubernetes_kubelet_service_configuration_file
 locate_validate_and_backup_files $file $backupdir $POD_NAME
 
-
 PHASE=$DAEMONSET_SCRIPT_PHASE5
 update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # Create vSphere Cloud Provider configuration file
-echo "[INFO] Creating vSphere Cloud Provider configuration file at /host/tmp/vsphere.conf"
-echo "[Global]
-    user = ""\"${k8s_secret_vcp_username}"\""
-    password = ""\"${k8s_secret_vcp_password}"\""
-    server = ""\"${k8s_secret_vc_ip}"\""
-    port = ""\"${k8s_secret_vc_port}"\""
-    insecure-flag = ""\"1"\""
-    datacenter = ""\"${k8s_secret_datacenter}"\""
-    datastore = ""\"${k8s_secret_default_datastore}"\""
-    working-dir = ""\"${k8s_secret_node_vms_folder}"\""
-[Disk]
-    scsicontrollertype = pvscsi" > /host/tmp/vsphere.conf
 
-if [ $? -eq 0 ]; then
-    echo "[INFO] successfully created vSphere.conf file at :" /host/tmp/vsphere.conf
-else
-    ERROR_MSG="Failed to create vsphere.conf file at : /host/tmp/vsphere.conf"
-    update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
-    exit $ERROR_FAIL_TO_CREATE_FILE
+ls /host/tmp/vsphere.conf &> /dev/null
+if [ $? -ne 0 ]; then
+    echo "[INFO] Creating vSphere Cloud Provider configuration file at /host/tmp/vsphere.conf"
+    echo "[Global]
+        user = ""\"${k8s_secret_vcp_username}"\""
+        password = ""\"${k8s_secret_vcp_password}"\""
+        server = ""\"${k8s_secret_vc_ip}"\""
+        port = ""\"${k8s_secret_vc_port}"\""
+        insecure-flag = ""\"1"\""
+        datacenter = ""\"${k8s_secret_datacenter}"\""
+        datastore = ""\"${k8s_secret_default_datastore}"\""
+        working-dir = ""\"${k8s_secret_node_vms_folder}"\""
+    [Disk]
+        scsicontrollertype = pvscsi" > /host/tmp/vsphere.conf
+
+    if [ $? -eq 0 ]; then
+        echo "[INFO] successfully created vSphere.conf file at :" /host/tmp/vsphere.conf
+    else
+        ERROR_MSG="Failed to create vsphere.conf file at : /host/tmp/vsphere.conf"
+        update_VcpConigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
+        exit $ERROR_FAIL_TO_CREATE_FILE
+    fi
 fi
 
 PHASE=$DAEMONSET_SCRIPT_PHASE6
@@ -221,12 +234,22 @@ if [ $? -eq 0 ]; then
     else
         ExecStart=$(echo $ExecStart "--cloud-provider=vsphere")
     fi
+    
     echo $ExecStart | grep "\-\-cloud-config=${k8s_secret_vcp_configuration_file_location}/vsphere.conf" &> /dev/null
     if [ $? -eq 0 ]; then
         echo "[INFO] cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf flag is already present in the kubelet service configuration"
     else
         ExecStart=$(echo $ExecStart "--cloud-config=${k8s_secret_vcp_configuration_file_location}/vsphere.conf")
     fi
+
+    echo $ExecStart | grep "${k8s_secret_vcp_configuration_file_location}:${k8s_secret_vcp_configuration_file_location}" &> /dev/null
+    if [ $? -eq 0 ]; then
+        echo "[INFO] Volume ${k8s_secret_vcp_configuration_file_location} is already present in the kubelet service configuration"
+    else
+        addvolumeoption="docker run -v ${k8s_secret_vcp_configuration_file_location}:${k8s_secret_vcp_configuration_file_location}"
+        ExecStart="${ExecStart/docker run/$addvolumeoption}"
+    fi
+
     echo ExecStart="$ExecStart" | crudini --merge /host/tmp/kubelet-service-configuration Service
     if [ $? -eq 0 ]; then 
         echo "[INFO] Sucessfully updated kubelet.service configuration"
@@ -265,9 +288,10 @@ fi
 PHASE=$DAEMONSET_SCRIPT_PHASE7
 update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
-echo "systemctl daemon-reload
+echo '#!/bin/sh
+systemctl daemon-reload
 systemctl restart ${k8s_secret_kubernetes_kubelet_service_name}
-" > /host/tmp/restart_kubelet.sh
+' > /host/tmp/restart_kubelet.sh
 chmod +x /host/tmp/restart_kubelet.sh
 
 echo "[INFO] Reloading systemd manager configuration and restarting kubelet service"
@@ -280,3 +304,4 @@ else
     ERROR_MSG="Failed to restart kubelet service"
     update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
 fi
+touch /host/tmp/vcp-configuration-complete
