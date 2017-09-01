@@ -61,7 +61,7 @@ PHASE=$DAEMONSET_SCRIPT_PHASE4
 update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # Creating back up directory for manifest files and kubelet service configuration file.
-backupdir=$k8s_secret_config_backup/$POD_NAME
+backupdir=/host/${k8s_secret_config_backup}
 ls $backupdir &> /dev/null
 if [ $? -ne 0 ]; then
     echo "[INFO] Creating directory: '${backupdir}' for back up of manifest files and kubelet service configuration file"
@@ -242,12 +242,17 @@ if [ $? -eq 0 ]; then
         ExecStart=$(echo $ExecStart "--cloud-config=${k8s_secret_vcp_configuration_file_location}/vsphere.conf")
     fi
 
-    echo $ExecStart | grep "${k8s_secret_vcp_configuration_file_location}:${k8s_secret_vcp_configuration_file_location}" &> /dev/null
+    echo $ExecStart | grep "docker run"  &> /dev/null
     if [ $? -eq 0 ]; then
-        echo "[INFO] Volume ${k8s_secret_vcp_configuration_file_location} is already present in the kubelet service configuration"
-    else
-        addvolumeoption="docker run -v ${k8s_secret_vcp_configuration_file_location}:${k8s_secret_vcp_configuration_file_location}"
-        ExecStart="${ExecStart/docker run/$addvolumeoption}"
+        # If Kubelet is running in Docker Container, Need to mount directory where vsphere.conf file is located.
+        # else skip this step
+        echo $ExecStart | grep "${k8s_secret_vcp_configuration_file_location}:${k8s_secret_vcp_configuration_file_location}" &> /dev/null
+        if [ $? -eq 0 ]; then
+            echo "[INFO] Volume ${k8s_secret_vcp_configuration_file_location} is already present in the kubelet service configuration"
+        else
+            addvolumeoption="docker run -v ${k8s_secret_vcp_configuration_file_location}:${k8s_secret_vcp_configuration_file_location}"
+            ExecStart="${ExecStart/docker run/$addvolumeoption}"
+        fi
     fi
 
     echo ExecStart="$ExecStart" | crudini --merge /host/tmp/kubelet-service-configuration Service
@@ -288,12 +293,7 @@ fi
 PHASE=$DAEMONSET_SCRIPT_PHASE7
 update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
-echo '#!/bin/sh
-systemctl daemon-reload
-systemctl restart ${k8s_secret_kubernetes_kubelet_service_name}
-' > /host/tmp/restart_kubelet.sh
-chmod +x /host/tmp/restart_kubelet.sh
-
+create_script_for_restarting_kubelet
 echo "[INFO] Reloading systemd manager configuration and restarting kubelet service"
 chroot /host /tmp/restart_kubelet.sh
 if [ $? -eq 0 ]; then
