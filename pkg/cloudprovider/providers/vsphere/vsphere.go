@@ -31,6 +31,7 @@ import (
 	"gopkg.in/gcfg.v1"
 
 	"github.com/golang/glog"
+	"github.com/vmware/govmomi/object"
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -56,6 +57,7 @@ const (
 )
 
 var cleanUpRoutineInitialized = false
+var datastoreDirectoryIDMap = make(map[string]string)
 
 var clientLock sync.Mutex
 var cleanUpRoutineInitLock sync.Mutex
@@ -585,6 +587,35 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 
 		vmVolumes := make(map[string][]string)
 		for nodeName, volPaths := range nodeVolumes {
+			for i, volPath := range volPaths {
+				datastorePathObj := new(object.DatastorePath)
+				isSuccess := datastorePathObj.FromString(volPath)
+				if !isSuccess {
+					glog.Errorf("Failed to parse volPath: %s", volPath)
+					return nil, fmt.Errorf("Failed to parse volPath: %s", volPath)
+				}
+				vmDiskFolder := strings.Split(strings.TrimSpace(datastorePathObj.Path), "/")[0]
+				if !vclib.IsValidUUID(vmDiskFolder) {
+					ds, err := dc.GetDatastoreByName(ctx, datastorePathObj.Datastore)
+					if err != nil {
+						glog.Errorf("Unable to get datastore by Name in DisksAreAttached for datastore: %s", datastorePathObj.Datastore)
+						return nil, err
+					}
+					if _, ok := datastoreDirectoryIDMap[datastorePathObj.Datastore]; !ok {
+						canonicalVolPath, err := createDummyVirtualDisk(ctx, ds)
+						if err != nil {
+							return nil, err
+						}
+						deleteDummyVirtualDisk(ctx, ds)
+						diskPath := vclib.GetPathFromVMDiskPath(canonicalVolPath)
+						if diskPath == "" {
+							return nil, fmt.Errorf("Failed to parse canonicalVolPath: %s", canonicalVolPath)
+						}
+						datastoreDirectoryIDMap[datastorePathObj.Datastore] = strings.Split(strings.TrimSpace(diskPath), "/")[0]
+					}
+					volPaths[i] = strings.Replace(volPath, vmDiskFolder, datastoreDirectoryIDMap[datastorePathObj.Datastore], 1)
+				}
+			}
 			vmVolumes[nodeNameToVMName(nodeName)] = volPaths
 		}
 		glog.V(1).Infof("balu - DisksAreAttached vmVolumes is %+v", vmVolumes)
@@ -621,6 +652,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 		} else {
 			datastore = volumeOptions.Datastore
 		}
+		datastore = strings.TrimSpace(datastore)
 		// Create context
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -682,6 +714,30 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 			glog.Errorf("Failed to create a vsphere volume with volumeOptions: %+v on datastore: %s. err: %+v", volumeOptions, datastore, err)
 			return "", err
 		}
+		// If the datastore doesn't exist in datastoreDirectoryMap
+		if _, ok := datastoreDirectoryIDMap[datastore]; !ok {
+			if canonicalVolumePath == volumePath {
+				uuid, err := dc.GetVirtualDiskPage83Data(ctx, volumePath)
+				if err != nil {
+					glog.Warningf("Unable to find virtual disk UUID for volumePath: %s", volumePath)
+					return "", err
+				}
+				if uuid != "" {
+					deleteDummyVirtualDisk(ctx, ds)
+				}
+				canonicalVolumePath, err = createDummyVirtualDisk(ctx, ds)
+				if err != nil {
+					return "", err
+				}
+				deleteDummyVirtualDisk(ctx, ds)
+			}
+			diskPath := vclib.GetPathFromVMDiskPath(canonicalVolumePath)
+			if diskPath == "" {
+				return "", fmt.Errorf("Failed to parse canonicalVolumePath: %s", canonicalVolumePath)
+			}
+			datastoreDirectoryIDMap[datastore] = strings.Split(strings.TrimSpace(diskPath), "/")[0]
+		}
+		canonicalVolumePath = strings.Replace(canonicalVolumePath, VolDir, datastoreDirectoryIDMap[datastore], 1)
 		if filepath.Base(datastore) != datastore {
 			// If datastore is within cluster, add cluster path to the volumePath
 			canonicalVolumePath = strings.Replace(canonicalVolumePath, filepath.Base(datastore), datastore, 1)
@@ -693,6 +749,38 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 	vclib.RecordCreateVolumeMetric(volumeOptions, requestTime, err)
 	glog.V(1).Infof("The canonical volume path for the newly created vSphere volume is %q", canonicalVolumePath)
 	return canonicalVolumePath, err
+}
+
+func getcanonicalVolumePath(volumePath string) (string, error) {
+	dsPathObj, err := vclib.GetDatastorePathObjFromVMDiskPath(volumePath)
+	if err != nil {
+		return "", err
+	}
+	datastore := dsPathObj.Datastore
+	// If the datastore doesn't exist in datastoreDirectoryMap
+	if _, ok := datastoreDirectoryIDMap[datastore]; !ok {
+		if canonicalVolumePath == volumePath {
+			uuid, err := dc.GetVirtualDiskPage83Data(ctx, volumePath)
+			if err != nil {
+				glog.Warningf("Unable to find virtual disk UUID for volumePath: %s", volumePath)
+				return "", err
+			}
+			if uuid != "" {
+				deleteDummyVirtualDisk(ctx, ds)
+			}
+			canonicalVolumePath, err = createDummyVirtualDisk(ctx, ds)
+			if err != nil {
+				return "", err
+			}
+			deleteDummyVirtualDisk(ctx, ds)
+		}
+		diskPath := vclib.GetPathFromVMDiskPath(canonicalVolumePath)
+		if diskPath == "" {
+			return "", fmt.Errorf("Failed to parse canonicalVolumePath: %s", canonicalVolumePath)
+		}
+		datastoreDirectoryIDMap[datastore] = strings.Split(strings.TrimSpace(diskPath), "/")[0]
+	}
+	canonicalVolumePath = strings.Replace(canonicalVolumePath, VolDir, datastoreDirectoryIDMap[datastore], 1)
 }
 
 // DeleteVolume deletes a volume given volume name.

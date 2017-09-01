@@ -19,6 +19,7 @@ package vclib
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/golang/glog"
@@ -140,6 +141,23 @@ func (dc *Datacenter) GetVMMoList(ctx context.Context, vmObjList []*VirtualMachi
 		return nil, err
 	}
 	return vmMoList, nil
+}
+
+// GetVirtualDiskPage83Data gets the virtual disk UUID by diskPath
+func (dc *Datacenter) GetVirtualDiskPage83Data(ctx context.Context, diskPath string) (string, error) {
+	if len(diskPath) > 0 && filepath.Ext(diskPath) != ".vmdk" {
+		diskPath += ".vmdk"
+	}
+	vdm := object.NewVirtualDiskManager(dc.Client())
+	// Returns uuid of vmdk virtual disk
+	diskUUID, err := vdm.QueryVirtualDiskUuid(ctx, diskPath, dc.Datacenter)
+
+	if err != nil {
+		glog.Errorf("QueryVirtualDiskUuid failed for diskPath: %q. err: %+v", diskPath, err)
+		return "", ErrNoDiskUUIDFound
+	}
+	diskUUID = formatVirtualDiskUUID(diskUUID)
+	return diskUUID, nil
 }
 
 // GetDatastoreMoList gets the Datastore Managed Objects with the given properties from the datastore objects

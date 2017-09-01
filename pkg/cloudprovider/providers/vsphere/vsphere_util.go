@@ -21,6 +21,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -308,4 +309,41 @@ func setNodeDisk(
 		nodeVolumeMap[nodeName] = volumeMap
 	}
 	volumeMap[volumePath] = check
+}
+
+func createDummyVirtualDisk(ctx context.Context, ds *vclib.Datastore) (string, error) {
+	kubeVolsPath := filepath.Clean(ds.Path(VolDir)) + "/"
+	dummyDiskVolPath := kubeVolsPath + "kube-dummyDisk.vmdk"
+	dummyDiskVolOptions := vclib.VolumeOptions{
+		SCSIControllerType: vclib.LSILogicControllerType,
+		DiskFormat:         "thin",
+		CapacityKB:         20480,
+	}
+	dummyDisk := diskmanagers.VirtualDisk{
+		DiskPath:      dummyDiskVolPath,
+		VolumeOptions: &dummyDiskVolOptions,
+		VMOptions:     &vclib.VMOptions{},
+	}
+	dummyDiskCanonicalVolPath, err := dummyDisk.Create(ctx, ds)
+	if err != nil {
+		glog.Warningf("Failed to create a dummy vsphere volume with volumeOptions: %+v on datastore: %+v. err: %+v", dummyDiskVolOptions, ds, err)
+		return "", err
+	}
+	return dummyDiskCanonicalVolPath, nil
+}
+
+func deleteDummyVirtualDisk(ctx context.Context, ds *vclib.Datastore) error {
+	kubeVolsPath := filepath.Clean(ds.Path(VolDir)) + "/"
+	dummyDiskVolPath := kubeVolsPath + "kube-dummyDisk.vmdk"
+	disk := diskmanagers.VirtualDisk{
+		DiskPath:      dummyDiskVolPath,
+		VolumeOptions: &vclib.VolumeOptions{},
+		VMOptions:     &vclib.VMOptions{},
+	}
+	err := disk.Delete(ctx, ds)
+	if err != nil {
+		glog.Errorf("Failed to delete dummy vsphere volume with dummyDiskVolPath: %s. err: %+v", dummyDiskVolPath, err)
+		return err
+	}
+	return nil
 }

@@ -138,12 +138,6 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datasto
 			return "", err
 		}
 	}
-	// Get canonical disk path from dummy VM
-	canonicalDiskPath, err = dummyVM.GetVirtualDiskPath(ctx)
-	if err != nil {
-		glog.Errorf("Failed to get virtual disk device path from VM: %q with err: %+v", dummyVMFullName, err)
-		return "", err
-	}
 	// Detach the disk from the dummy VM.
 	err = dummyVM.DetachDisk(ctx, vmdisk.diskPath)
 	if err != nil {
@@ -160,7 +154,7 @@ func (vmdisk vmDiskManager) Create(ctx context.Context, datastore *vclib.Datasto
 	if err != nil {
 		glog.Errorf("Failed to destroy the vm: %q with err: %+v", dummyVMFullName, err)
 	}
-	return canonicalDiskPath, nil
+	return vmdisk.diskPath, nil
 }
 
 func (vmdisk vmDiskManager) Delete(ctx context.Context, datastore *vclib.Datastore) error {
