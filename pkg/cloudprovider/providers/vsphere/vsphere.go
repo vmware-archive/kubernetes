@@ -56,9 +56,11 @@ const (
 )
 
 var cleanUpRoutineInitialized = false
+var datastoreFolderIDMap = make(map[string]map[string]string)
 
 var clientLock sync.Mutex
 var cleanUpRoutineInitLock sync.Mutex
+var datastoreFolderIDMapLock sync.Mutex
 var cleanUpDummyVMLock sync.RWMutex
 
 // VSphere is an implementation of cloud provider Interface for VSphere.
@@ -591,6 +593,42 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 
 		vmVolumes := make(map[string][]string)
 		for nodeName, volPaths := range nodeVolumes {
+			for i, volPath := range volPaths {
+				// datastorePathObj := new(object.DatastorePath)
+				// isSuccess := datastorePathObj.FromString(volPath)
+				// if !isSuccess {
+				// 	glog.Errorf("Failed to parse volPath: %s", volPath)
+				// 	return nil, fmt.Errorf("Failed to parse volPath: %s", volPath)
+				// }
+				// vmDiskFolder := strings.Split(strings.TrimSpace(datastorePathObj.Path), "/")[0]
+				// if !vclib.IsValidUUID(vmDiskFolder) {
+				// 	ds, err := dc.GetDatastoreByName(ctx, datastorePathObj.Datastore)
+				// 	if err != nil {
+				// 		glog.Errorf("Unable to get datastore by Name in DisksAreAttached for datastore: %s", datastorePathObj.Datastore)
+				// 		return nil, err
+				// 	}
+				// 	if _, ok := datastoreDirectoryIDMap[datastorePathObj.Datastore]; !ok {
+				// 		canonicalVolPath, err := createDummyVirtualDisk(ctx, ds)
+				// 		if err != nil {
+				// 			return nil, err
+				// 		}
+				// 		deleteDummyVirtualDisk(ctx, ds)
+				// 		diskPath := vclib.GetPathFromVMDiskPath(canonicalVolPath)
+				// 		if diskPath == "" {
+				// 			return nil, fmt.Errorf("Failed to parse canonicalVolPath: %s", canonicalVolPath)
+				// 		}
+				// 		datastoreDirectoryIDMap[datastorePathObj.Datastore] = strings.Split(strings.TrimSpace(diskPath), "/")[0]
+				// 	}
+				// 	volPaths[i] = strings.Replace(volPath, vmDiskFolder, datastoreDirectoryIDMap[datastorePathObj.Datastore], 1)
+				// }
+				canonicalVolumePath, err := getcanonicalVolumePath(ctx, dc, volPath)
+				if err != nil {
+					glog.Errorf("Failed to get canonical vsphere volume path for volume: %s. err: %+v", volPath, err)
+					return nil, err
+				}
+				glog.V(1).Infof("balu - DisksAreAttached canonicalVolumePath for volPath: %s is %s", volPath, canonicalVolumePath)
+				volPaths[i] = canonicalVolumePath
+			}
 			vmVolumes[nodeNameToVMName(nodeName)] = volPaths
 		}
 		glog.V(1).Infof("balu - DisksAreAttached vmVolumes is %+v", vmVolumes)
@@ -627,6 +665,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 		} else {
 			datastore = volumeOptions.Datastore
 		}
+		datastore = strings.TrimSpace(datastore)
 		// Create context
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -683,9 +722,14 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 			VolumeOptions: volumeOptions,
 			VMOptions:     vmOptions,
 		}
-		canonicalVolumePath, err = disk.Create(ctx, ds)
+		volumePath, err = disk.Create(ctx, ds)
 		if err != nil {
 			glog.Errorf("Failed to create a vsphere volume with volumeOptions: %+v on datastore: %s. err: %+v", volumeOptions, datastore, err)
+			return "", err
+		}
+		canonicalVolumePath, err = getcanonicalVolumePath(ctx, dc, volumePath)
+		if err != nil {
+			glog.Errorf("Failed to get canonical vsphere volume path for volume: %s with volumeOptions: %+v on datastore: %s. err: %+v", volumePath, volumeOptions, datastore, err)
 			return "", err
 		}
 		if filepath.Base(datastore) != datastore {

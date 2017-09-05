@@ -21,6 +21,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -43,6 +44,7 @@ const (
 	DatastoreInfoProperty = "info"
 	Folder                = "Folder"
 	VirtualMachine        = "VirtualMachine"
+	DummyDiskName         = "kube-dummyDisk.vmdk"
 )
 
 // GetVSphere reads vSphere configuration from system environment and construct vSphere object
@@ -308,4 +310,108 @@ func setNodeDisk(
 		nodeVolumeMap[nodeName] = volumeMap
 	}
 	volumeMap[volumePath] = check
+}
+
+func createDummyVirtualDisk(ctx context.Context, ds *vclib.Datastore, dsFolder string) (string, error) {
+	dsFolderPath := filepath.Clean(ds.Path(dsFolder)) + "/"
+	dummyDiskVolPath := dsFolderPath + DummyDiskName
+	dummyDiskVolOptions := vclib.VolumeOptions{
+		SCSIControllerType: vclib.LSILogicControllerType,
+		DiskFormat:         "thin",
+		CapacityKB:         20480,
+	}
+	dummyDisk := diskmanagers.VirtualDisk{
+		DiskPath:      dummyDiskVolPath,
+		VolumeOptions: &dummyDiskVolOptions,
+		VMOptions:     &vclib.VMOptions{},
+	}
+	dummyDiskCanonicalVolPath, err := dummyDisk.Create(ctx, ds)
+	if err != nil {
+		glog.Warningf("Failed to create a dummy vsphere volume with volumeOptions: %+v on datastore: %+v. err: %+v", dummyDiskVolOptions, ds, err)
+		return "", err
+	}
+	return dummyDiskCanonicalVolPath, nil
+}
+
+func deleteDummyVirtualDisk(ctx context.Context, ds *vclib.Datastore) error {
+	kubeVolsPath := filepath.Clean(ds.Path(VolDir)) + "/"
+	dummyDiskVolPath := kubeVolsPath + "kube-dummyDisk.vmdk"
+	disk := diskmanagers.VirtualDisk{
+		DiskPath:      dummyDiskVolPath,
+		VolumeOptions: &vclib.VolumeOptions{},
+		VMOptions:     &vclib.VMOptions{},
+	}
+	err := disk.Delete(ctx, ds)
+	if err != nil {
+		glog.Errorf("Failed to delete dummy vsphere volume with dummyDiskVolPath: %s. err: %+v", dummyDiskVolPath, err)
+		return err
+	}
+	return nil
+}
+
+func getcanonicalVolumePath(ctx context.Context, dc *vclib.Datacenter, volumePath string) (string, error) {
+	var folderID string
+	var folderExists bool
+	canonicalVolumePath := volumePath
+	dsPathObj, err := vclib.GetDatastorePathObjFromVMDiskPath(volumePath)
+	if err != nil {
+		return "", err
+	}
+	dsPath := strings.Split(strings.TrimSpace(dsPathObj.Path), "/")
+	if len(dsPath) <= 1 {
+		return canonicalVolumePath, nil
+	}
+	datastore := dsPathObj.Datastore
+	dsFolder := dsPath[0]
+	datastoreFolderIDMapLock.Lock()
+	folderNameIDMap, datastoreExists := datastoreFolderIDMap[datastore]
+	if datastoreExists {
+		folderID, folderExists = folderNameIDMap[dsFolder]
+	}
+	// Create a dummy disk in datastore folder if datastore or folder doesn't exist in datastoreFolderIDMap
+	if !datastoreExists || !folderExists {
+		glog.V(1).Infof("balu - getcanonicalVolumePath datastoreExists:%t and folderExists: %t", datastoreExists, folderExists)
+		if !vclib.IsValidUUID(dsFolder) {
+			glog.V(1).Infof("balu - getcanonicalVolumePath dsFolder: %s not a valid UUID. Creating dummy disk", dsFolder)
+			diskUUID, err := dc.GetVirtualDiskPage83Data(ctx, volumePath)
+			if err != nil {
+				glog.Warningf("Unable to find virtual disk UUID for volumePath: %s", volumePath)
+				return "", err
+			}
+			ds, err := dc.GetDatastoreByName(ctx, datastore)
+			if err != nil {
+				return "", err
+			}
+			if diskUUID != "" {
+				deleteDummyVirtualDisk(ctx, ds)
+			}
+			canonicalVolumePath, err = createDummyVirtualDisk(ctx, ds, dsFolder)
+			if err != nil {
+				return "", err
+			}
+			deleteDummyVirtualDisk(ctx, ds)
+		}
+		diskPath := vclib.GetPathFromVMDiskPath(canonicalVolumePath)
+		if diskPath == "" {
+			return "", fmt.Errorf("Failed to parse canonicalVolumePath: %s in getcanonicalVolumePath method", canonicalVolumePath)
+		}
+		folderID = strings.Split(strings.TrimSpace(diskPath), "/")[0]
+		setdatastoreFolderIDMap(datastoreFolderIDMap, datastore, dsFolder, folderID)
+	}
+	canonicalVolumePath = strings.Replace(canonicalVolumePath, dsFolder, folderID, 1)
+	datastoreFolderIDMapLock.Unlock()
+	return canonicalVolumePath, nil
+}
+
+func setdatastoreFolderIDMap(
+	datastoreFolderIDMap map[string]map[string]string,
+	datastore string,
+	folderName string,
+	folderID string) {
+	folderNameIDMap := datastoreFolderIDMap[datastore]
+	if folderNameIDMap == nil {
+		folderNameIDMap = make(map[string]string)
+		datastoreFolderIDMap[datastore] = folderNameIDMap
+	}
+	folderNameIDMap[folderName] = folderID
 }

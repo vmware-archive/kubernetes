@@ -19,7 +19,6 @@ package vclib
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/golang/glog"
@@ -44,23 +43,6 @@ func (vm *VirtualMachine) IsDiskAttached(ctx context.Context, diskPath string) (
 		return true, nil
 	}
 	return false, nil
-}
-
-// GetVirtualDiskPage83Data gets the virtual disk UUID by diskPath
-func (vm *VirtualMachine) GetVirtualDiskPage83Data(ctx context.Context, diskPath string) (string, error) {
-	if len(diskPath) > 0 && filepath.Ext(diskPath) != ".vmdk" {
-		diskPath += ".vmdk"
-	}
-	vdm := object.NewVirtualDiskManager(vm.Client())
-	// Returns uuid of vmdk virtual disk
-	diskUUID, err := vdm.QueryVirtualDiskUuid(ctx, diskPath, vm.Datacenter.Datacenter)
-
-	if err != nil {
-		glog.Errorf("QueryVirtualDiskUuid failed for diskPath: %q on VM: %q. err: %+v", diskPath, vm.InventoryPath, err)
-		return "", ErrNoDiskUUIDFound
-	}
-	diskUUID = formatVirtualDiskUUID(diskUUID)
-	return diskUUID, nil
 }
 
 // DeleteVM deletes the VM.
@@ -89,7 +71,7 @@ func (vm *VirtualMachine) AttachDisk(ctx context.Context, vmDiskPath string, vol
 	}
 	// If disk is already attached, return the disk UUID
 	if attached {
-		diskUUID, _ := vm.GetVirtualDiskPage83Data(ctx, vmDiskPath)
+		diskUUID, _ := vm.Datacenter.GetVirtualDiskPage83Data(ctx, vmDiskPath)
 		return diskUUID, nil
 	}
 
@@ -143,7 +125,7 @@ func (vm *VirtualMachine) AttachDisk(ctx context.Context, vmDiskPath string, vol
 	}
 
 	// Once disk is attached, get the disk UUID.
-	diskUUID, err := vm.GetVirtualDiskPage83Data(ctx, vmDiskPath)
+	diskUUID, err := vm.Datacenter.GetVirtualDiskPage83Data(ctx, vmDiskPath)
 	if err != nil {
 		glog.Errorf("Error occurred while getting Disk Info from VM: %q. err: %v", vm.InventoryPath, err)
 		vm.DetachDisk(ctx, vmDiskPath)
