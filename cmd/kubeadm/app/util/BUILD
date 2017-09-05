@@ -9,20 +9,13 @@ load(
 go_library(
     name = "go_default_library",
     srcs = [
-        "apiclient.go",
         "error.go",
         "template.go",
         "version.go",
     ],
     deps = [
-        "//cmd/kubeadm/app/constants:go_default_library",
         "//cmd/kubeadm/app/preflight:go_default_library",
-        "//cmd/kubeadm/app/util/kubeconfig:go_default_library",
-        "//vendor/k8s.io/api/core/v1:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/util/errors:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/util/wait:go_default_library",
-        "//vendor/k8s.io/client-go/kubernetes:go_default_library",
     ],
 )
 
@@ -52,6 +45,7 @@ filegroup(
         "//cmd/kubeadm/app/util/config:all-srcs",
         "//cmd/kubeadm/app/util/kubeconfig:all-srcs",
         "//cmd/kubeadm/app/util/pubkeypin:all-srcs",
+        "//cmd/kubeadm/app/util/staticpod:all-srcs",
         "//cmd/kubeadm/app/util/token:all-srcs",
     ],
     tags = ["automanaged"],

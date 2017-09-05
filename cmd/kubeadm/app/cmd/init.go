@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"path/filepath"
 	"strconv"
 	"text/template"
 
@@ -34,19 +33,23 @@ import (
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/features"
 	cmdphases "k8s.io/kubernetes/cmd/kubeadm/app/cmd/phases"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
-	addonsphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/addons"
+	dnsaddonphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/addons/dns"
+	proxyaddonphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/addons/proxy"
 	apiconfigphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/apiconfig"
 	clusterinfophase "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/clusterinfo"
 	nodebootstraptokenphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/bootstraptoken/node"
 	"k8s.io/kubernetes/cmd/kubeadm/app/phases/certs/pkiutil"
 	controlplanephase "k8s.io/kubernetes/cmd/kubeadm/app/phases/controlplane"
+	etcdphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/etcd"
 	kubeconfigphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/kubeconfig"
 	markmasterphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/markmaster"
 	selfhostingphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/selfhosting"
 	uploadconfigphase "k8s.io/kubernetes/cmd/kubeadm/app/phases/uploadconfig"
 	"k8s.io/kubernetes/cmd/kubeadm/app/preflight"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
+	"k8s.io/kubernetes/cmd/kubeadm/app/util/apiclient"
 	configutil "k8s.io/kubernetes/cmd/kubeadm/app/util/config"
+	kubeconfigutil "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig"
 	"k8s.io/kubernetes/cmd/kubeadm/app/util/pubkeypin"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/util/version"
@@ -241,14 +244,25 @@ func (i *Init) Run(out io.Writer) error {
 	}
 
 	// PHASE 3: Bootstrap the control plane
-	if err := controlplanephase.WriteStaticPodManifests(i.cfg, k8sVersion, kubeadmconstants.GetStaticPodDirectory()); err != nil {
+	manifestPath := kubeadmconstants.GetStaticPodDirectory()
+	if err := controlplanephase.CreateInitStaticPodManifestFiles(manifestPath, i.cfg); err != nil {
 		return err
 	}
+	// Add etcd static pod spec only if external etcd is not configured
+	if len(i.cfg.Etcd.Endpoints) == 0 {
+		if err := etcdphase.CreateLocalEtcdStaticPodManifestFile(manifestPath, i.cfg); err != nil {
+			return err
+		}
+	}
 
-	client, err := kubeadmutil.CreateClientAndWaitForAPI(kubeadmconstants.GetAdminKubeConfigPath())
+	client, err := kubeconfigutil.ClientSetFromFile(kubeadmconstants.GetAdminKubeConfigPath())
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("[init] Waiting for the kubelet to boot up the control plane as Static Pods from directory %q\n", kubeadmconstants.GetStaticPodDirectory())
+	// TODO: Don't wait forever here
+	apiclient.WaitForAPI(client)
 
 	// PHASE 4: Mark the master with the right label/taint
 	if err := markmasterphase.MarkMaster(client, i.cfg.NodeName); err != nil {
@@ -289,16 +303,15 @@ func (i *Init) Run(out io.Writer) error {
 		return err
 	}
 
-	// Create the necessary ServiceAccounts
-	if err := apiconfigphase.CreateServiceAccounts(client); err != nil {
-		return err
-	}
-
 	if err := apiconfigphase.CreateRBACRules(client, k8sVersion); err != nil {
 		return err
 	}
 
-	if err := addonsphase.CreateEssentialAddons(i.cfg, client); err != nil {
+	if err := dnsaddonphase.EnsureDNSAddon(i.cfg, client); err != nil {
+		return err
+	}
+
+	if err := proxyaddonphase.EnsureProxyAddon(i.cfg, client); err != nil {
 		return err
 	}
 
@@ -319,7 +332,7 @@ func (i *Init) Run(out io.Writer) error {
 	}
 
 	ctx := map[string]string{
-		"KubeConfigPath": filepath.Join(kubeadmconstants.KubernetesDir, kubeadmconstants.AdminKubeConfigFileName),
+		"KubeConfigPath": kubeadmconstants.GetAdminKubeConfigPath(),
 		"KubeConfigName": kubeadmconstants.AdminKubeConfigFileName,
 		"Token":          i.cfg.Token,
 		"CAPubKeyPin":    pubkeypin.Hash(caCert),

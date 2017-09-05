@@ -412,9 +412,12 @@ var ephemeralWhiteList = createEphemeralWhiteList(
 	// --
 
 	// k8s.io/kubernetes/pkg/apis/componentconfig/v1alpha1
-	gvr("componentconfig", "v1alpha1", "kubeletconfigurations"),       // not stored in etcd
 	gvr("componentconfig", "v1alpha1", "kubeschedulerconfigurations"), // not stored in etcd
 	gvr("componentconfig", "v1alpha1", "kubeproxyconfigurations"),     // not stored in etcd
+	// --
+
+	// k8s.io/kubernetes/pkg/kubelet/apis/kubeletconfig/v1alpha1
+	gvr("kubeletconfig", "v1alpha1", "kubeletconfigurations"), // not stored in etcd
 	// --
 
 	// k8s.io/kubernetes/pkg/apis/extensions/v1beta1
@@ -438,7 +441,7 @@ var ephemeralWhiteList = createEphemeralWhiteList(
 	// --
 )
 
-// Only add kinds to this list when there is no mapping from GVK to GVR (and thus there is no way to create the object)
+// Only add kinds to this list when there is no way to create the object
 var kindWhiteList = sets.NewString(
 	// k8s.io/kubernetes/pkg/api/v1
 	"DeleteOptions",
@@ -496,14 +499,14 @@ func TestEtcdStoragePath(t *testing.T) {
 		kind := gvk.Kind
 		pkgPath := apiType.PkgPath()
 
+		if kindWhiteList.Has(kind) {
+			kindSeen.Insert(kind)
+			continue
+		}
+
 		mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 		if err != nil {
-			kindSeen.Insert(kind)
-			if kindWhiteList.Has(kind) {
-				// t.Logf("skipping test for %s from %s because its GVK %s is whitelisted and has no mapping", kind, pkgPath, gvk)
-			} else {
-				t.Errorf("no mapping found for %s from %s but its GVK %s is not whitelisted", kind, pkgPath, gvk)
-			}
+			t.Errorf("unexpected error getting mapping for %s from %s with GVK %s: %v", kind, pkgPath, gvk, err)
 			continue
 		}
 
