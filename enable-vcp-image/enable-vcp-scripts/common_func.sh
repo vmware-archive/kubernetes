@@ -14,6 +14,7 @@ DAEMONSET_PHASE_FAILED="FAILED"
 DAEMONSET_PHASE_COMPLETE="COMPLETE"
 
 read_secret_keys() {
+    export k8s_secret_roll_back_switch=`cat /secret-volume/enable_roll_back_switch; echo;`
     export k8s_secret_config_backup=`cat /secret-volume/configuration_backup_directory; echo;`
     export k8s_secret_vc_admin_username=`cat /secret-volume/vc_admin_username; echo;`
     export k8s_secret_vc_admin_password=`cat /secret-volume/vc_admin_password; echo;`
@@ -30,6 +31,14 @@ read_secret_keys() {
     export k8s_secret_kubernetes_controller_manager_manifest=`cat /secret-volume/kubernetes_controller_manager_manifest; echo;`
     export k8s_secret_kubernetes_kubelet_service_name=`cat /secret-volume/kubernetes_kubelet_service_name; echo;`
     export k8s_secret_kubernetes_kubelet_service_configuration_file=`cat /secret-volume/kubernetes_kubelet_service_configuration_file; echo;`
+}
+
+create_script_for_restarting_kubelet() {
+echo '#!/bin/sh
+systemctl daemon-reload
+systemctl restart ${k8s_secret_kubernetes_kubelet_service_name}
+' > /host/tmp/restart_kubelet.sh
+    chmod +x /host/tmp/restart_kubelet.sh
 }
 
 create_role() {
@@ -309,4 +318,57 @@ until kubectl apply -f /tmp/enablevcpstatussummary.yaml &> /dev/null || [ $retry
     $(( retry_attempt++ ))
 done
 
+}
+
+perform_rollback() {
+    k8s_secret_config_backup="$1"
+    k8s_secret_kubernetes_api_server_manifest="$2"
+    k8s_secret_kubernetes_controller_manager_manifest="$3"
+    k8s_secret_kubernetes_kubelet_service_configuration_file="$4"
+
+    echo "[INFO - ROLLBACK] Starting Rollback"
+    backupdir=/host${k8s_secret_config_backup}
+    ls $backupdir &> /dev/null
+    if [ $? -eq 0 ]; then
+        echo "[INFO - ROLLBACK] Copying manifest and service configuration files to their original location"
+        api_server_manifest_file_name="${k8s_secret_kubernetes_api_server_manifest##*/}"
+        controller_manager_manifest_file_name="${k8s_secret_kubernetes_controller_manager_manifest##*/}"
+        kubelet_service_configuration_file_name="${k8s_secret_kubernetes_kubelet_service_configuration_file##*/}"
+
+        ls ${backupdir}/${api_server_manifest_file_name} &> /dev/null
+        if [ $? -eq 0 ]; then
+            cp ${backupdir}/${api_server_manifest_file_name} /host/${k8s_secret_kubernetes_api_server_manifest}
+            echo "[INFO - ROLLBACK] Roll backed API Server manifest file: ${k8s_secret_kubernetes_api_server_manifest}"
+        fi
+
+        ls ${backupdir}/${controller_manager_manifest_file_name} &> /dev/null
+        if [ $? -eq 0 ]; then
+            cp ${backupdir}/${controller_manager_manifest_file_name} /host/${k8s_secret_kubernetes_controller_manager_manifest}
+            echo "[INFO - ROLLBACK] Roll backed controller-manager manifest file: ${k8s_secret_kubernetes_controller_manager_manifest}"
+        fi
+
+        ls ${backupdir}/${kubelet_service_configuration_file_name} &> /dev/null
+        if [ $? -eq 0 ]; then
+            cp ${backupdir}/${kubelet_service_configuration_file_name} /host/${k8s_secret_kubernetes_kubelet_service_configuration_file}
+            echo "[INFO - ROLLBACK] Roll backed kubelet service configuration file: ${k8s_secret_kubernetes_kubelet_service_configuration_file}"
+        fi
+
+        echo "[INFO - ROLLBACK] backed up files are rolled back. Restarting Kubelet"
+        
+        ls /host/tmp/$backupdir &> /dev/null
+        if [ $? -eq 0 ]; then
+            # rename old backup directory
+            timestamp=$(date +%s)
+            mv /host/tmp/$backupdir /host/tmp/${backupdir}-${timestamp}
+        fi
+        mv $backupdir /host/tmp/
+        create_script_for_restarting_kubelet
+        echo "[INFO] Reloading systemd manager configuration and restarting kubelet service"
+        chroot /host /tmp/restart_kubelet.sh
+        if [ $? -eq 0 ]; then
+            echo "[INFO - ROLLBACK] kubelet service restarted sucessfully"
+        else
+            echo "[ERROR - ROLLBACK] failed to restart kubelet after roll back"
+        fi
+    fi
 }
