@@ -60,7 +60,6 @@ var datastoreFolderIDMap = make(map[string]map[string]string)
 
 var clientLock sync.Mutex
 var cleanUpRoutineInitLock sync.Mutex
-var datastoreFolderIDMapLock sync.Mutex
 var cleanUpDummyVMLock sync.RWMutex
 
 // VSphere is an implementation of cloud provider Interface for VSphere.

@@ -154,7 +154,7 @@ func (dc *Datacenter) GetVirtualDiskPage83Data(ctx context.Context, diskPath str
 
 	if err != nil {
 		glog.Errorf("QueryVirtualDiskUuid failed for diskPath: %q. err: %+v", diskPath, err)
-		return "", ErrNoDiskUUIDFound
+		return "", err
 	}
 	diskUUID = formatVirtualDiskUUID(diskUUID)
 	return diskUUID, nil

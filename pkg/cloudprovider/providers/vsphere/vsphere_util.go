@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -363,7 +364,6 @@ func getcanonicalVolumePath(ctx context.Context, dc *vclib.Datacenter, volumePat
 	}
 	datastore := dsPathObj.Datastore
 	dsFolder := dsPath[0]
-	datastoreFolderIDMapLock.Lock()
 	folderNameIDMap, datastoreExists := datastoreFolderIDMap[datastore]
 	if datastoreExists {
 		folderID, folderExists = folderNameIDMap[dsFolder]
@@ -372,24 +372,15 @@ func getcanonicalVolumePath(ctx context.Context, dc *vclib.Datacenter, volumePat
 	if !datastoreExists || !folderExists {
 		glog.V(1).Infof("balu - getcanonicalVolumePath datastoreExists:%t and folderExists: %t", datastoreExists, folderExists)
 		if !vclib.IsValidUUID(dsFolder) {
-			glog.V(1).Infof("balu - getcanonicalVolumePath dsFolder: %s not a valid UUID. Creating dummy disk", dsFolder)
-			diskUUID, err := dc.GetVirtualDiskPage83Data(ctx, volumePath)
+			glog.V(1).Infof("balu - getcanonicalVolumePath dsFolder: %s not a valid UUID.", dsFolder)
+			dummyDiskVolPath := "[" + datastore + "] " + dsFolder + "/" + DummyDiskName
+			_, err := dc.GetVirtualDiskPage83Data(ctx, dummyDiskVolPath)
 			if err != nil {
-				glog.Warningf("Unable to find virtual disk UUID for volumePath: %s", volumePath)
-				return "", err
+				re := regexp.MustCompile("File (.*?) was not found")
+				match := re.FindStringSubmatch(err.Error())
+				canonicalVolumePath = match[1]
+				glog.V(1).Infof("balu - getcanonicalVolumePath canonicalVolumePath: %s, dummyDiskVolPath: %s", canonicalVolumePath, dummyDiskVolPath)
 			}
-			ds, err := dc.GetDatastoreByName(ctx, datastore)
-			if err != nil {
-				return "", err
-			}
-			if diskUUID != "" {
-				deleteDummyVirtualDisk(ctx, ds)
-			}
-			canonicalVolumePath, err = createDummyVirtualDisk(ctx, ds, dsFolder)
-			if err != nil {
-				return "", err
-			}
-			deleteDummyVirtualDisk(ctx, ds)
 		}
 		diskPath := vclib.GetPathFromVMDiskPath(canonicalVolumePath)
 		if diskPath == "" {
@@ -399,7 +390,6 @@ func getcanonicalVolumePath(ctx context.Context, dc *vclib.Datacenter, volumePat
 		setdatastoreFolderIDMap(datastoreFolderIDMap, datastore, dsFolder, folderID)
 	}
 	canonicalVolumePath = strings.Replace(volumePath, dsFolder, folderID, 1)
-	datastoreFolderIDMapLock.Unlock()
 	return canonicalVolumePath, nil
 }
 
