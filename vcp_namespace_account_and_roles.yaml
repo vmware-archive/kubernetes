@@ -1,0 +1,40 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: vmware
+  labels:
+    name: vmware
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: vmware
+  name: vcpsa
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: sa-vmware-default-binding
+  namespace: vmware
+subjects:
+- kind: User
+  name: system:serviceaccount:vmware:default
+  namespace: vmware
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: sa-vmware-vcpsa-binding
+  namespace: vmware
+subjects:
+- kind: User
+  name: system:serviceaccount:vmware:vcpsa
+  namespace: vmware
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
