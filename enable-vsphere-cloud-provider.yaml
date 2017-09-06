@@ -33,6 +33,7 @@ spec:
         mountPath: /secret-volume
         readOnly: true
     restartPolicy: Never
+    hostNetwork: true
     volumes:
     - name: secret-volume
       secret:

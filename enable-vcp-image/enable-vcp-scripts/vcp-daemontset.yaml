@@ -55,6 +55,7 @@ spec:
         - name: secret-volume
           mountPath: /secret-volume
           readOnly: true
+      hostNetwork: true
       volumes:
         - name: rootpath
           hostPath:

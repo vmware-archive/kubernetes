@@ -12,7 +12,7 @@ read_secret_keys
 
 if [ "$POD_ROLE" == "MANAGER" ]; then
     echo "Running Manager Role"
-    /opt/enable-vcp-scripts/manager_pod.sh
+    bash /opt/enable-vcp-scripts/manager_pod.sh
 elif [ "$POD_ROLE" == "DAEMON" ]; then
     ls /host/tmp/vcp-configuration-complete &> /dev/null
     if [ $? -eq 0 ]; then

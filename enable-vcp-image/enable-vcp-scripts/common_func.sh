@@ -254,7 +254,7 @@ spec:
 retry_attempt=1
 until kubectl apply -f /tmp/${POD_NAME}_daemonset_status_update.yaml &> /dev/null || [ $retry_attempt -eq 12 ]; do
     sleep 5
-    $(( retry_attempt++ ))
+    ((retry_attempt++))
 done
 }
 
