@@ -398,7 +398,7 @@ func getcanonicalVolumePath(ctx context.Context, dc *vclib.Datacenter, volumePat
 		folderID = strings.Split(strings.TrimSpace(diskPath), "/")[0]
 		setdatastoreFolderIDMap(datastoreFolderIDMap, datastore, dsFolder, folderID)
 	}
-	canonicalVolumePath = strings.Replace(canonicalVolumePath, dsFolder, folderID, 1)
+	canonicalVolumePath = strings.Replace(volumePath, dsFolder, folderID, 1)
 	datastoreFolderIDMapLock.Unlock()
 	return canonicalVolumePath, nil
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -16,7 +17,7 @@ import (
 const (
 	Username       = "Administrator@vsphere.local"
 	Password       = "Admin!23"
-	VCenterIP      = "10.162.26.135"
+	VCenterIP      = "10.160.135.171"
 	Port           = "443"
 	Insecure       = true
 	DatacenterName = "vcqaDC"
@@ -44,7 +45,7 @@ func main() {
 	if err != nil {
 		glog.Errorf("Failed to connect to VC with err: %v", err)
 	}
-	fmt.Printf("Successfully connected to VC\n")
+	fmt.Printf("Successfully connected to VC with IP: %s\n", vSphereConnection.Hostname)
 	fmt.Printf("===============================================\n")
 	if vSphereConnection.GoVmomiClient == nil {
 		glog.Errorf("vSphereConnection.GoVmomiClient is not set after a successful connect to VC")
@@ -55,6 +56,14 @@ func main() {
 		glog.Errorf("Failed to connect to Datacenter: %+v", err)
 		return
 	}
+
+	diskUUID, err := dc.GetVirtualDiskPage83Data(ctx, "[vsanDatastore] kubevols32/hello.vmdk")
+	if err != nil {
+		glog.Errorf("Failed to get GetVirtualDiskPage83Data with err: %+v", err)
+	}
+	fmt.Printf("diskUUID: %s, err: %+v", diskUUID, err)
+	os.Exit(1)
+
 	volSizeBytes := int64(1073741824)
 	// vSphere works with kilobytes, convert to KiB with rounding up
 	volSizeKB := int(volume.RoundUpSize(volSizeBytes, 1024))
