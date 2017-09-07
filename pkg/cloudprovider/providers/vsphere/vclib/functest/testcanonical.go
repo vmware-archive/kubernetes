@@ -58,14 +58,14 @@ func main() {
 		return
 	}
 
-	diskUUID, err := dc.GetVirtualDiskPage83Data(ctx, "[vsanDatastore] kubevols32/hello.vmdk")
+	diskUUID, err := dc.GetVirtualDiskPage83Data(ctx, "[sharedVmfs-0] kubevols/hello.vmdk")
 	if err != nil {
 		glog.Errorf("Failed to get GetVirtualDiskPage83Data with err: %+v", err)
 	}
 	fmt.Printf("diskUUID: %s, err: %+v\n", diskUUID, err)
 	re := regexp.MustCompile("File (.*?) was not found")
 	match := re.FindStringSubmatch(err.Error())
-	fmt.Println("Mtach is %s", match[1])
+	fmt.Printf("Mtach is %s\n", match[1])
 	os.Exit(1)
 
 	volSizeBytes := int64(1073741824)

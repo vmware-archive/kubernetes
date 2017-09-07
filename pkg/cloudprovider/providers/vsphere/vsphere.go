@@ -625,6 +625,9 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 					glog.Errorf("Failed to get canonical vsphere volume path for volume: %s. err: %+v", volPath, err)
 					return nil, err
 				}
+				if len(canonicalVolumePath) > 0 && filepath.Ext(canonicalVolumePath) != ".vmdk" {
+					canonicalVolumePath += ".vmdk"
+				}
 				glog.V(1).Infof("balu - DisksAreAttached canonicalVolumePath for volPath: %s is %s", volPath, canonicalVolumePath)
 				volPaths[i] = canonicalVolumePath
 			}
