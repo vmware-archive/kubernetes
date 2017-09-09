@@ -120,16 +120,18 @@ locate_validate_and_backup_files() {
                         echo "[INFO] Verified " $CONFIG_FILE " is a Valid JSON file"
                     else
                         ERROR_MSG="Failed to Validate JSON for file:" $CONFIG_FILE
-                        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+                        update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
                         exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
                     fi
                 elif [ "${CONFIG_FILE##*.}" == "yaml" ]; then
-                    j2y -r $CONFIG_FILE &> /dev/null
+                    cp $CONFIG_FILE /tmp/config.yaml
+                    chmod 777 /tmp/config.yaml
+                    j2y -r /tmp/config.yaml &> /dev/null
                     if [ $? -eq 0 ]; then
                         echo "[INFO] Verified " $CONFIG_FILE " is a Valid YAML file"
                     else
                         ERROR_MSG="Failed to Validate YAML for file:" $CONFIG_FILE
-                        update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+                        update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
                         exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
                     fi
                 fi
@@ -138,7 +140,7 @@ locate_validate_and_backup_files() {
                     echo "[INFO] Successfully backed up " $CONFIG_FILE at $BACKUP_DIR
                 else
                     ERROR_MSG="Failed to back up " $CONFIG_FILE at $BACKUP_DIR
-                    update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+                    update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
                     exit $ERROR_FAIL_TO_BACKUP_FILE
                 fi
             fi
@@ -161,7 +163,7 @@ add_flags_to_manifest_file() {
             echo "[INFO] Sucessfully added --cloud-provider=vsphere flag to ${MANIFEST_FILE}"
         else
             ERROR_MSG="Failed to add --cloud-provider=vsphere flag to ${MANIFEST_FILE}"
-            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+            update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
             exit $ERROR_FAIL_TO_ADD_CONFIG_PARAMETER
         fi
     else
@@ -177,7 +179,7 @@ add_flags_to_manifest_file() {
             echo "[INFO] Sucessfully added --cloud-config='${k8s_secret_vcp_configuration_file_location}/vsphere.conf' flag to ${MANIFEST_FILE}"
         else
             ERROR_MSG="Failed to add --cloud-config='${k8s_secret_vcp_configuration_file_location}'/vsphere.conf flag to ${MANIFEST_FILE}"
-            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+            update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
             exit $ERROR_FAIL_TO_ADD_CONFIG_PARAMETER
         fi
     else
@@ -193,7 +195,7 @@ add_flags_to_manifest_file() {
             echo "[INFO] Suceessfully added volume: ${k8s_secret_vcp_configuration_file_location} in the manifest file: ${MANIFEST_FILE}"
         else
             ERROR_MSG="Failed to add volume: ${k8s_secret_vcp_configuration_file_location} in the manifest file: ${MANIFEST_FILE}"
-            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+            update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
         fi
     else
         echo "[INFO] volume: ${k8s_secret_vcp_configuration_file_location} is already available in the manifest file: ${MANIFEST_FILE}"
@@ -207,7 +209,7 @@ add_flags_to_manifest_file() {
             echo "[INFO] Suceessfully added mount path: ${k8s_secret_vcp_configuration_file_location} in the manifest file: ${MANIFEST_FILE}"
         else
             ERROR_MSG="Failed to add mount path: ${k8s_secret_vcp_configuration_file_location} in the manifest file: ${MANIFEST_FILE}"
-            update_VcpConigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+            update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
         fi
     else
         echo "[INFO] Path: ${k8s_secret_vcp_configuration_file_location} is already mounted in the manifest file: ${MANIFEST_FILE}"
@@ -229,10 +231,18 @@ spec:
     status: "\"${INIT_STATUS}\""
     error: "\"${ERROR}\""" > /tmp/${POD_NAME}_daemonset_status_create.yaml
 
-    kubectl create --save-config -f /tmp/${POD_NAME}_daemonset_status_create.yaml
+retry_attempt=1
+until kubectl create --save-config -f /tmp/${POD_NAME}_daemonset_status_create.yaml &> /dev/null; do
+    ((retry_attempt++))
+    if [ $retry_attempt -eq 12 ]; then
+        echo "[ERROR] Failed to Create TPR for POD Status Update. Completed 12 attempt."
+        exit $ERROR_FAILED_TO_CREATE_TPR
+    fi
+    sleep 5
+done
 }
 
-update_VcpConigStatus() {
+update_VcpConfigStatus() {
     POD_NAME="$1"
     PHASE="$2"
     STATUS="$3"
@@ -252,32 +262,44 @@ spec:
     error: "\"${ERROR}\""" > /tmp/${POD_NAME}_daemonset_status_update.yaml
 
 retry_attempt=1
-until kubectl apply -f /tmp/${POD_NAME}_daemonset_status_update.yaml &> /dev/null || [ $retry_attempt -eq 12 ]; do
-    sleep 5
+until kubectl apply -f /tmp/${POD_NAME}_daemonset_status_update.yaml &> /dev/null; do
     ((retry_attempt++))
+    if [ $retry_attempt -eq 12 ]; then
+        echo "[ERROR] Failed to Create TPR for POD Status Update. Completed 12 attempt."
+        exit $ERROR_FAILED_TO_CREATE_TPR
+    fi
+    sleep 5
 done
 }
 
 init_VcpConfigSummaryStatus() {
     TOTAL_NUMBER_OF_NODES="$1"
-    cat <<EOF | kubectl create --save-config -f -
-    apiVersion: "vmware.com/v1"
-    kind: VcpSummary
-    metadata:
-        name: vcpinstallstatus
-    spec:
-        nodes_in_phase1: 0
-        nodes_in_phase2: 0
-        nodes_in_phase3: 0
-        nodes_in_phase4: 0
-        nodes_in_phase5: 0
-        nodes_in_phase6: 0
-        nodes_in_phase7: 0
-        nodes_being_configured: 0
-        nodes_failed_to_configure: 0
-        nodes_sucessfully_configured: 0
-        total_number_of_nodes: "$TOTAL_NUMBER_OF_NODES"
-EOF
+echo "apiVersion: \"vmware.com/v1\"
+kind: VcpSummary
+metadata:
+    name: vcpinstallstatus
+spec:
+    nodes_in_phase1: 0
+    nodes_in_phase2: 0
+    nodes_in_phase3: 0
+    nodes_in_phase4: 0
+    nodes_in_phase5: 0
+    nodes_in_phase6: 0
+    nodes_in_phase7: 0
+    nodes_being_configured: 0
+    nodes_failed_to_configure: 0
+    nodes_sucessfully_configured: 0
+    total_number_of_nodes: "\"${TOTAL_NUMBER_OF_NODES}\""" > /tmp/enablevcpstatussummary.yaml
+
+retry_attempt=1
+until kubectl create --save-config -f /tmp/enablevcpstatussummary.yaml &> /dev/null; do
+    ((retry_attempt++))
+    if [ $retry_attempt -eq 12 ]; then
+        echo "[ERROR] init_VcpConfigSummaryStatus failed. Completed 12 attempt."
+        exit $ERROR_FAILED_TO_CREATE_TPR
+    fi
+    sleep 5
+done
 }
 
 update_VcpConfigSummaryStatus() {
@@ -313,11 +335,14 @@ spec:
     total_number_of_nodes: "\"${TOTAL_NUMBER_OF_NODES}\""" > /tmp/enablevcpstatussummary.yaml
 
 retry_attempt=1
-until kubectl apply -f /tmp/enablevcpstatussummary.yaml &> /dev/null || [ $retry_attempt -eq 12 ]; do
+until kubectl apply -f /tmp/enablevcpstatussummary.yaml &> /dev/null; do
+    ((retry_attempt++))
+    if [ $retry_attempt -eq 12 ]; then
+        echo "[ERROR] update_VcpConfigSummaryStatus failed. Completed 12 attempt."
+        exit $ERROR_FAILED_TO_UPDATE_TPR
+    fi
     sleep 5
-    $(( retry_attempt++ ))
 done
-
 }
 
 perform_rollback() {
@@ -370,5 +395,6 @@ perform_rollback() {
         else
             echo "[ERROR - ROLLBACK] failed to restart kubelet after roll back"
         fi
+        rm -rf /host/tmp/vcp-configuration-complete
     fi
 }

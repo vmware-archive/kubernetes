@@ -24,7 +24,7 @@ elif [ "$POD_ROLE" == "DAEMON" ]; then
         python -c 'while 1: import ctypes; ctypes.CDLL(None).pause()'
     fi
     echo "Running Daemon Role"
-    bash /opt/enable-vcp-scripts/daemonset_pod.sh
+    bash -x /opt/enable-vcp-scripts/daemonset_pod.sh "$POD_NAME" "$NODE_NAME"
 else
     echo "[ERROR] Invalid Role"; 
     exit $ERROR_INVALID_POD_ROLE;
