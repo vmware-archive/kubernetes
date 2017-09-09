@@ -169,7 +169,7 @@ if [ $? -eq 0 ]; then
             exit $ERROR_FAILED_TO_COPY_FILE
         fi
         # Convert YAML to JSON format
-        j2y -r $YAML_MANIFEST_FILE > $JSON_MANIFEST_FILE
+        yaml2json $YAML_MANIFEST_FILE > $JSON_MANIFEST_FILE
         if [ $? -ne 0 ]; then
             ERROR_MSG="Failed to convert file from YAML to JSON format"
             update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
@@ -177,7 +177,7 @@ if [ $? -eq 0 ]; then
         fi
         add_flags_to_manifest_file $JSON_MANIFEST_FILE $POD_NAME
         # Convert JSON to YAML foramt
-        j2y $JSON_MANIFEST_FILE > $YAML_MANIFEST_FILE
+        json2yaml $JSON_MANIFEST_FILE > $YAML_MANIFEST_FILE
         if [ $? -ne 0 ]; then
             ERROR_MSG="Failed to convert file from JSON to YAML format"
             update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
@@ -213,7 +213,7 @@ if [ $? -eq 0 ]; then
             exit $ERROR_FAILED_TO_COPY_FILE
         fi
         # Convert YAML to JSON format
-        j2y -r $YAML_MANIFEST_FILE > $JSON_MANIFEST_FILE
+        yaml2json $YAML_MANIFEST_FILE > $JSON_MANIFEST_FILE
         if [ $? -ne 0 ]; then
             ERROR_MSG="Failed to convert file from YAML to JSON format"
             update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
@@ -221,7 +221,7 @@ if [ $? -eq 0 ]; then
         fi
         add_flags_to_manifest_file $JSON_MANIFEST_FILE $POD_NAME
         # Convert JSON to YAML foramt
-        j2y $JSON_MANIFEST_FILE > $YAML_MANIFEST_FILE
+        json2yaml $JSON_MANIFEST_FILE > $YAML_MANIFEST_FILE
         if [ $? -ne 0 ]; then
             ERROR_MSG="Failed to convert file from JSON to YAML format"
             update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"

@@ -124,7 +124,7 @@ locate_validate_and_backup_files() {
                         exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
                     fi
                 elif [ "${CONFIG_FILE##*.}" == "yaml" ]; then
-                    j2y -o /tmp/tmp.json -r $CONFIG_FILE
+                    yaml2json $CONFIG_FILE
                     if [ $? -eq 0 ]; then
                         echo "[INFO] Verified " $CONFIG_FILE " is a Valid YAML file"
                     else
