@@ -53,7 +53,6 @@ else
     exit $ERROR_MOVE_NODE_TO_WORKING_DIR
 fi
 
-
 PHASE=$DAEMONSET_SCRIPT_PHASE4
 update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
@@ -75,7 +74,7 @@ fi
 # Verify that the directory for the vSphere Cloud Provider configuration file is accessible.
 ls /host/$k8s_secret_vcp_configuration_file_location &> /dev/null
 if [ $? -eq 0 ]; then
-    echo "[INFO] Verified that the directory for the vSphere Cloud Provider configuration file is accessible. Path: ("/host/$k8s_secret_vcp_configuration_file_location ")"
+    echo "[INFO] Verified that the directory for the vSphere Cloud Provider configuration file is accessible. Path: /host/${k8s_secret_vcp_configuration_file_location}"
 else
     mkdir -p /host/$k8s_secret_vcp_configuration_file_location
     if [ $? -ne 0 ]; then
@@ -92,30 +91,27 @@ else
     fi
 fi
 
-ls /host/tmp/$POD_NAME/vsphere.conf &> /dev/null
-if [ $? -ne 0 ]; then
-    ls /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf &> /dev/null
+ls /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf &> /dev/null
+if [ $? -eq 0 ]; then
+    echo "[INFO] vsphere.conf file is already available at /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf"
+    cp /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf $backupdir/vsphere.conf
     if [ $? -eq 0 ]; then
-        echo "[INFO] vsphere.conf file is already available at /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf"
-        cp /host/$k8s_secret_vcp_configuration_file_location/vsphere.conf /host/tmp/$POD_NAME/vsphere.conf
-        if [ $? -eq 0 ]; then
-            echo "[INFO] Existing vsphere.conf file is copied to" /host/tmp/$POD_NAME/vsphere.conf
-        else
-            ERROR_MSG="Failed to back up vsphere.conf file at " /host/tmp/${POD_NAME}/vsphere.conf
-            update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
-            exit $ERROR_FAIL_TO_BACKUP_FILE
-        fi
+        echo "[INFO] Existing vsphere.conf file is copied to ${backupdir}/vsphere.conf"
+    else
+        ERROR_MSG="Failed to back up vsphere.conf file at " $backupdir/vsphere.conf
+        update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+        exit $ERROR_FAIL_TO_BACKUP_FILE
     fi
 fi
 
 # locate and back up manifest files and kubelet service configuration file.
-file=/host/$k8s_secret_kubernetes_api_server_manifest
+file=/host$k8s_secret_kubernetes_api_server_manifest
 locate_validate_and_backup_files $file $backupdir $POD_NAME
 
-file=/host/$k8s_secret_kubernetes_controller_manager_manifest
+file=/host$k8s_secret_kubernetes_controller_manager_manifest
 locate_validate_and_backup_files $file $backupdir $POD_NAME
 
-file=/host/$k8s_secret_kubernetes_kubelet_service_configuration_file
+file=/host$k8s_secret_kubernetes_kubelet_service_configuration_file
 locate_validate_and_backup_files $file $backupdir $POD_NAME
 
 PHASE=$DAEMONSET_SCRIPT_PHASE5
@@ -139,7 +135,7 @@ if [ $? -ne 0 ]; then
         scsicontrollertype = pvscsi" > /host/tmp/vsphere.conf
 
     if [ $? -eq 0 ]; then
-        echo "[INFO] successfully created vSphere.conf file at :" /host/tmp/vsphere.conf
+        echo "[INFO] successfully created vSphere.conf file at : /host/tmp/vsphere.conf"
     else
         ERROR_MSG="Failed to create vsphere.conf file at : /host/tmp/vsphere.conf"
         update_VcpConfigStatus "$POD_NAME" "$PHASE" "FAILED" "$ERROR_MSG"
@@ -153,7 +149,7 @@ update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 # update manifest files
 ls /host/$k8s_secret_kubernetes_api_server_manifest &> /dev/null
 if [ $? -eq 0 ]; then
-    echo "[INFO] Found file:" /host/$k8s_secret_kubernetes_api_server_manifest
+    echo "[INFO] Found file: /host/${k8s_secret_kubernetes_api_server_manifest}"
     if [ "${k8s_secret_kubernetes_api_server_manifest##*.}" == "json" ]; then
         MANIFEST_FILE="/host/tmp/kube-apiserver.json"
         cp /host/${k8s_secret_kubernetes_api_server_manifest} ${MANIFEST_FILE}
@@ -197,7 +193,7 @@ fi
 
 ls /host/$k8s_secret_kubernetes_controller_manager_manifest &> /dev/null
 if [ $? -eq 0 ]; then
-    echo "[INFO] Found file:" /host/$k8s_secret_kubernetes_controller_manager_manifest
+    echo "[INFO] Found file: /host/${k8s_secret_kubernetes_controller_manager_manifest}"
     if [ "${k8s_secret_kubernetes_controller_manager_manifest##*.}" == "json" ]; then
         MANIFEST_FILE="/host/tmp/kube-controller-manager.json"
         cp /host/$k8s_secret_kubernetes_controller_manager_manifest $MANIFEST_FILE
@@ -241,7 +237,7 @@ fi
 
 ls /host/$k8s_secret_kubernetes_kubelet_service_configuration_file &> /dev/null
 if [ $? -eq 0 ]; then
-    echo "[INFO] Found file:" /host/$k8s_secret_kubernetes_kubelet_service_configuration_file
+    echo "[INFO] Found file: /host/${k8s_secret_kubernetes_kubelet_service_configuration_file}"
     cp /host/$k8s_secret_kubernetes_kubelet_service_configuration_file /host/tmp/kubelet-service-configuration
     if [ $? -ne 0 ]; then
         ERROR_MSG="Failed execute command: cp /host/$k8s_secret_kubernetes_kubelet_service_configuration_file /host/tmp/kubelet-service-configuration"

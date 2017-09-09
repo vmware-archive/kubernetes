@@ -119,18 +119,16 @@ locate_validate_and_backup_files() {
                     if [ $? -eq 0 ]; then
                         echo "[INFO] Verified " $CONFIG_FILE " is a Valid JSON file"
                     else
-                        ERROR_MSG="Failed to Validate JSON for file:" $CONFIG_FILE
+                        ERROR_MSG="Failed to Validate JSON for file: ${CONFIG_FILE}"
                         update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
                         exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
                     fi
                 elif [ "${CONFIG_FILE##*.}" == "yaml" ]; then
-                    cp $CONFIG_FILE /tmp/config.yaml
-                    chmod 777 /tmp/config.yaml
-                    j2y -r /tmp/config.yaml &> /dev/null
+                    j2y -o /tmp/tmp.json -r $CONFIG_FILE
                     if [ $? -eq 0 ]; then
                         echo "[INFO] Verified " $CONFIG_FILE " is a Valid YAML file"
                     else
-                        ERROR_MSG="Failed to Validate YAML for file:" $CONFIG_FILE
+                        ERROR_MSG="Failed to Validate YAML for file: ${CONFIG_FILE}"
                         update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
                         exit $ERROR_FAIL_TO_PARSE_CONFIG_FILE
                     fi
