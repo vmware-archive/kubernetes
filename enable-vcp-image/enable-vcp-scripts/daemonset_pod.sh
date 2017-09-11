@@ -18,6 +18,24 @@ update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 echo "Running script in the Pod:" $POD_NAME "deployed on the Node:" $NODE_NAME
 # read secret keys from volume /secret-volume/ and set values in an environment
 read_secret_keys
+backupdir=/host/${K8S_SECRET_CONFIG_BACKUP}
+
+if [ "$K8S_SECRET_ROLL_BACK_SWITCH" == "on" ]; then
+      ls /host/tmp/vcp-rollback-complete &> /dev/null
+      if [ $? -eq 0 ]; then
+          echo "[INFO] Found flag file: '/host/tmp/vcp-rollback-complete' Observed that VCP Configuration Rollback is complete"
+      else
+        perform_rollback "$K8S_SECRET_CONFIG_BACKUP" "$K8S_SECRET_KUBERNETES_API_SERVER_MANIFEST" "$K8S_SECRET_KUBERNETES_CONTROLLER_MANAGER_MANIFEST" "$K8S_SECRET_KUBERNETES_KUBELET_SERVICE_CONFIGURATION_FILE"
+        echo "[INFO] Rollback complete"
+      fi
+      python -c 'while 1: import ctypes; ctypes.CDLL(None).pause()'
+fi
+
+ls /host/tmp/vcp-configuration-complete &> /dev/null
+if [ $? -eq 0 ]; then
+    echo "[INFO] Found flag file: '/host/tmp/vcp-configuration-complete'. Observed that VCP Configuration is complete"
+    python -c 'while 1: import ctypes; ctypes.CDLL(None).pause()'
+fi
 
 PHASE=$DAEMONSET_SCRIPT_PHASE2
 update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
@@ -59,7 +77,6 @@ PHASE=$DAEMONSET_SCRIPT_PHASE4
 update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # Creating back up directory for manifest files and kubelet service configuration file.
-backupdir=/host/${K8S_SECRET_CONFIG_BACKUP}
 ls $backupdir &> /dev/null
 if [ $? -ne 0 ]; then
     echo "[INFO] Creating directory: '${backupdir}' for back up of manifest files and kubelet service configuration file"
@@ -353,4 +370,5 @@ else
     ERROR_MSG="Failed to restart kubelet service"
     update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
 fi
+rm -rf /host/tmp/vcp-rollback-complete
 touch /host/tmp/vcp-configuration-complete

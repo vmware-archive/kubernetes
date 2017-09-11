@@ -423,10 +423,11 @@ perform_rollback() {
         echo "[INFO] Reloading systemd manager configuration and restarting kubelet service"
         chroot /host /tmp/restart_kubelet.sh
         if [ $? -eq 0 ]; then
+            touch /host/tmp/vcp-rollback-complete
+            rm -rf /host/tmp/vcp-configuration-complete
             echo "[INFO - ROLLBACK] kubelet service restarted sucessfully"
         else
             echo "[ERROR - ROLLBACK] failed to restart kubelet after roll back"
         fi
-        rm -rf /host/tmp/vcp-configuration-complete
     fi
 }

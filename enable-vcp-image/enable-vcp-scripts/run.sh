@@ -16,15 +16,6 @@ if [ "$POD_ROLE" == "MANAGER" ]; then
     echo "Running Manager Role"
     bash /opt/enable-vcp-scripts/manager_pod.sh
 elif [ "$POD_ROLE" == "DAEMON" ]; then
-    ls /host/tmp/vcp-configuration-complete &> /dev/null
-    if [ $? -eq 0 ]; then
-        if [ "$K8S_SECRET_ROLL_BACK_SWITCH" == "on" ]; then
-            perform_rollback "$K8S_SECRET_CONFIG_BACKUP" "$K8S_SECRET_KUBERNETES_API_SERVER_MANIFEST" "$K8S_SECRET_KUBERNETES_CONTROLLER_MANAGER_MANIFEST" "$K8S_SECRET_KUBERNETES_KUBELET_SERVICE_CONFIGURATION_FILE"
-        fi
-        # Daemon Pod has already completed VCP Configuration, So Pause infinity
-        echo "[INFO] Done with all tasks. Sleeping Infinity."
-        python -c 'while 1: import ctypes; ctypes.CDLL(None).pause()'
-    fi
     echo "Running Daemon Role"
     bash -x /opt/enable-vcp-scripts/daemonset_pod.sh "$POD_NAME" "$NODE_NAME"
 else
