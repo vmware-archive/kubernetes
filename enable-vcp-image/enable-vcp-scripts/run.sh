@@ -1,6 +1,8 @@
 #!/bin/bash
-source $(dirname "$0")/exit_codes.sh
-source $(dirname "$0")/common_func.sh
+# shellcheck source=./exit_codes.sh
+source "$(dirname "$0")"/exit_codes.sh
+# shellcheck source=./common_func.sh
+source "$(dirname "$0")"/common_func.sh
 
 [ -z "$POD_NAME" ] && { echo "[ERROR] POD_NAME is not set"; exit $ERROR_POD_ENV_VALIDATION; }
 [ -z "$NODE_NAME" ] && { echo "[ERROR] NODE_NAME is not set"; exit $ERROR_POD_ENV_VALIDATION; }
@@ -16,8 +18,8 @@ if [ "$POD_ROLE" == "MANAGER" ]; then
 elif [ "$POD_ROLE" == "DAEMON" ]; then
     ls /host/tmp/vcp-configuration-complete &> /dev/null
     if [ $? -eq 0 ]; then
-        if [ "$k8s_secret_roll_back_switch" == "on" ]; then
-            perform_rollback "$k8s_secret_config_backup" "$k8s_secret_kubernetes_api_server_manifest" "$k8s_secret_kubernetes_controller_manager_manifest" "$k8s_secret_kubernetes_kubelet_service_configuration_file"
+        if [ "$K8S_SECRET_ROLL_BACK_SWITCH" == "on" ]; then
+            perform_rollback "$K8S_SECRET_CONFIG_BACKUP" "$K8S_SECRET_KUBERNETES_API_SERVER_MANIFEST" "$K8S_SECRET_KUBERNETES_CONTROLLER_MANAGER_MANIFEST" "$K8S_SECRET_KUBERNETES_KUBELET_SERVICE_CONFIGURATION_FILE"
         fi
         # Daemon Pod has already completed VCP Configuration, So Pause infinity
         echo "[INFO] Done with all tasks. Sleeping Infinity."
@@ -26,7 +28,7 @@ elif [ "$POD_ROLE" == "DAEMON" ]; then
     echo "Running Daemon Role"
     bash -x /opt/enable-vcp-scripts/daemonset_pod.sh "$POD_NAME" "$NODE_NAME"
 else
-    echo "[ERROR] Invalid Role"; 
+    echo "[ERROR] Invalid Role";
     exit $ERROR_INVALID_POD_ROLE;
 fi
 
