@@ -150,9 +150,9 @@ Here is the description about the phases mentioned in the above JSON.
 * Phase 7 - Reload systemd unit files and Restart Kubelet Service
 * Phase 8 - Complete
 
-## How to clean up configuration resources.
+## How to clean up configuration resources
 
-After the enabling vSphere Cloud Provider using this deployment, if you wish to keep configuration pods, secret volumes service account and role bindings, there is no harm. When new Kubernetes node joins the cluster, a new Daemon Pod will be created on that node and configuration will be applied to that node.
+After enabling the vSphere Cloud Provider using this deployment, if you wish to keep configuration pods, secret volumes service account and role bindings, there is no harm. When new Kubernetes node joins the cluster, a new Daemon Pod will be created on that node and configuration will be applied to that node.
 
 if you want to perform the cleanup, execute following commands in sequence.
 
@@ -177,13 +177,13 @@ kubectl delete namespace vmware
 
 ## How to roll back the node VM configuration
 
-In case if the script fails to configure some of the nodes, and you want to revert back the original configuration on the nodes which are successfully configured, we have saved existing node configurations and that can be roll backed.
+In case if the script fails to configure some of the nodes, and you want to revert back the original configuration on the successfully configured nodes, we have backed up existing node configurations and that can be roll backed.
 
 Pre-requisites
  * All nodes must be up and running.
  * Configuration should be either finished or failed, and should not be in the progress.
 
-To perform roll back execute following commands.
+To perform roll back perform following steps.
 
 Open `vcp_secret.yaml` file locate the switch for roll back and switch it on and make sure to save the file.
 
@@ -212,4 +212,4 @@ Roll back progress can be monitored from the logs on the Daemon Pods. Once roll 
 
 For quick support please join VMware Code Slack ([#kubernetes](https://vmwarecode.slack.com/messages/kubernetes/)) and post your question.
 
-If you identify any issues/problems using this script, you can create an issue in our repository - [VMware Kubernetes] (https://github.com/vmware/kubernetes).
+If you identify any issues/problems using this script, you can create an issue in our repository - [VMware Kubernetes](https://github.com/vmware/kubernetes).
