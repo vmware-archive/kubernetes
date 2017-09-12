@@ -7,6 +7,17 @@ source "$(dirname "$0")"/exit_codes.sh
 # read secret keys from volume /secret-volume/ and set values in an environment
 read_secret_keys
 
+if [ "$K8S_SECRET_ROLL_BACK_SWITCH" == "on" ]; then
+  echo "[INFO] POD-MANAGER operations are skipped as K8S_SECRET_ROLL_BACK_SWITCH is set to on"
+  kubectl create -f /opt/enable-vcp-scripts/vcp-daemontset.yaml
+  if [ $? -eq 0 ]; then
+      echo "[INFO] Executed kubectl create command to create vcp-daemontset."
+  else
+      echo "[ERROR] 'kubectl create' failed to create vcp-daemonset."
+  fi
+  python -c 'while 1: import ctypes; ctypes.CDLL(None).pause()'
+fi
+
 # connect to vCenter using VCP username and password
 export GOVC_INSECURE=1
 export GOVC_URL='https://'$K8S_SECRET_VCP_USERNAME':'$K8S_SECRET_VCP_PASSWORD'@'$K8S_SECRET_VC_IP':'$K8S_SECRET_VC_PORT'/sdk'

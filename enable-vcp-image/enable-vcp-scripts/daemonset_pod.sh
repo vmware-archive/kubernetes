@@ -141,7 +141,7 @@ update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 ls /host/tmp/vsphere.conf &> /dev/null
 if [ $? -ne 0 ]; then
     echo "[INFO] Creating vSphere Cloud Provider configuration file at /host/tmp/vsphere.conf"
-    echo '[Global]
+    echo "[Global]
         user = ""\"${K8S_SECRET_VCP_USERNAME}"\""
         password = ""\"${K8S_SECRET_VCP_PASSWORD}"\""
         server = ""\"${K8S_SECRET_VC_IP}"\""
@@ -151,7 +151,7 @@ if [ $? -ne 0 ]; then
         datastore = ""\"${K8S_SECRET_DEFAULT_DATASTORE}"\""
         working-dir = ""\"${K8S_SECRET_NODE_VMS_FOLDER}"\""
     [Disk]
-        scsicontrollertype = pvscsi' > /host/tmp/vsphere.conf
+        scsicontrollertype = pvscsi" > /host/tmp/vsphere.conf
 
     if [ $? -eq 0 ]; then
         echo "[INFO] successfully created vSphere.conf file at : /host/tmp/vsphere.conf"
@@ -168,7 +168,7 @@ update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 # update manifest files
 ls /host/$K8S_SECRET_KUBERNETES_API_SERVER_MANIFEST &> /dev/null
 if [ $? -eq 0 ]; then
-    echo "[INFO] Found file: /host/${K8S_SECRET_KUBERNETES_API_SERVER_MANIFEST}"
+    echo "[INFO] Found file: /host/$K8S_SECRET_KUBERNETES_API_SERVER_MANIFEST"
     if [ "${K8S_SECRET_KUBERNETES_API_SERVER_MANIFEST##*.}" == "json" ]; then
         MANIFEST_FILE="/host/tmp/kube-apiserver.json"
         cp /host/${K8S_SECRET_KUBERNETES_API_SERVER_MANIFEST} ${MANIFEST_FILE}

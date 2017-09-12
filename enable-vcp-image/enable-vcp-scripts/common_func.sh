@@ -412,13 +412,13 @@ perform_rollback() {
 
         echo "[INFO - ROLLBACK] backed up files are rolled back. Restarting Kubelet"
 
-        ls /host/tmp/$backupdir &> /dev/null
+        ls /host/tmp/${K8S_SECRET_CONFIG_BACKUP} &> /dev/null
         if [ $? -eq 0 ]; then
             # rename old backup directory
             timestamp=$(date +%s)
-            mv /host/tmp/$backupdir /host/tmp/${backupdir}-${timestamp}
+            mv /host/tmp/${K8S_SECRET_CONFIG_BACKUP} /host/tmp/${K8S_SECRET_CONFIG_BACKUP}-${timestamp}
         fi
-        mv $backupdir /host/tmp/
+        mv $backupdir /host/tmp/${K8S_SECRET_CONFIG_BACKUP}
         create_script_for_restarting_kubelet
         echo "[INFO] Reloading systemd manager configuration and restarting kubelet service"
         chroot /host /tmp/restart_kubelet.sh
