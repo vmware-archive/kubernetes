@@ -53,11 +53,23 @@ vmpath=$(govc vm.info -dc="${K8S_SECRET_DATACENTER}" -vm.uuid=$vmuuid | grep "Pa
 
 govc vm.change -e="disk.enableUUID=1" -vm="$vmpath" &> /dev/null
 if [ $? -eq 0 ]; then
-    echo "[INFO] Successfully enabled disk.enableUUID flag on the Node Virtual Machine".
+    echo "[INFO] Successfully enabled disk.enableUUID flag on the Node Virtual Machine"
 else
     ERROR_MSG="Failed to enable disk.enableUUID flag on the Node Virtual Machine"
     update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
     exit $ERROR_ENABLE_DISK_UUID
+fi
+
+vmname=$(govc vm.info -dc="${K8S_SECRET_DATACENTER}" -vm.uuid=$vmuuid | grep "Name" | awk 'BEGIN {FS=":"};{print $2}' | tr -d ' ')
+if [ "$vmname" != "$NODE_NAME" ]; then
+    govc object.rename $vmpath $NODE_NAME
+    if [ $? -eq 0 ]; then
+    echo "[INFO] Successfully renamed node vm name from $vmname to $NODE_NAME"
+    else
+        ERROR_MSG="Failed to rename Node Virtual Machine from name: $vmname to $NODE_NAME"
+        update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_FAILED" "$ERROR_MSG"
+        exit $ERROR_RENAME_NODE_VM
+    fi
 fi
 
 PHASE=$DAEMONSET_SCRIPT_PHASE3
