@@ -12,7 +12,7 @@ ENV GOROOT /opt/go
 ENV GOPATH /root/.go
 
 RUN apt-get update
-RUN apt-get install -y openssh-server git make curl uuid-runtime genisoimage net-tools binfmt-support vim
+RUN apt-get install -y openssh-server git make curl uuid-runtime genisoimage net-tools binfmt-support vim expect ssh
 RUN apt-get clean
 
 RUN cd /opt && wget https://get.docker.com/builds/Linux/x86_64/docker-1.12.6.tgz && \
@@ -27,3 +27,8 @@ RUN cd /opt && wget https://storage.googleapis.com/golang/go${GOVERSION}.linux-a
 
 RUN go get github.com/vmware/govmomi/govc && \
     ln -s /root/.go/bin/govc /usr/bin
+
+RUN mkdir -p /root/scripts
+ADD configre_passwordless_login.sh /root/scripts/configure_passwordless_login.sh
+ADD copy_pub_key.exp /root/scripts/copy_pub_key.exp
+

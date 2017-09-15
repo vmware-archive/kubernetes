@@ -1,0 +1,24 @@
+#!/usr/bin/expect
+set timeout 5
+set hostname [lindex $argv 0]
+set username [lindex $argv 1]
+set password [lindex $argv 2]
+
+spawn ssh-copy-id ${username}@${hostname}
+expect {
+  timeout { send_user "\nFailed to get password prompt\n"; exit 1}
+  eof { send_user "\nSSH failure for $hostname\n"; exit 1 }
+
+  "keys were skipped because they already exist on the remote system"   {
+    exit 0
+  }
+  "*re you sure you want to continue connecting" {
+      send "yes\r"
+      exp_continue
+  }
+  "*assword*" {
+      send  "${password}\r"
+      interact
+      exit 0
+  }
+}
