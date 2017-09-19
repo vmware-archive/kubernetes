@@ -130,6 +130,20 @@ cat /mnt/gitsource/kubernetes-anywhere-config/kubeconfig.json
 kubectl cluster-info
 kubectl get nodes
 
+# configuring password less login from container to all kubernetes nodes
+cd /root/scripts/ || exit
+./configure_passwordless_login.sh
+
+# Get Node Addresses
+addresses=`kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}'`
+IFS=' ' read -a addressArray <<< "${addresses}"
+
+# Installing sudo in all nodes. This is required for restarting kubelet.
+for address in "${addressArray[@]}"
+do
+	ssh root@$address "tdnf -y install sudo"
+done
+
 # Buding E2E binary
 cd /opt/kubernetes || exit
 make quick-release
@@ -149,6 +163,7 @@ export VSPHERE_SECOND_SHARED_DATASTORE=sharedVmfs-0
 export VSPHERE_SPBM_TAG_POLICY=tagbased
 export VSPHERE_SPBM_GOLD_POLICY=gold
 export VSPHERE_VM_NAME="dummy"
+export KUBE_SSH_USER="root"
 
 export TEST_BEGIN="-------------------------------[ Starting the Test ]-------------------------------"
 export TEST_END="-------------------------------[ End of the Test ]-------------------------------"
