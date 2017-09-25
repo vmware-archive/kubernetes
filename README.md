@@ -24,6 +24,10 @@ Following are the Prerequisites for this automation.
  
  * We need a vCenter admin username and password.
  * Separate user for vSphere Cloud Provider needs to be pre-created on the vCenter. This Step is optional but recommended.
+ * Daemonset Pods should be allowed to be scheduled on all nodes. If Kubernetes is deployed using kubeadm, we see the taint ```node-role.kubernetes.io/master``` on the master node. Make sure to remove this taint. Taint can be removed using the following command.
+
+    ```kubectl taint nodes --all node-role.kubernetes.io/master-```
+ 
  
 Let's get started with how to use these automation scripts.
 
@@ -39,6 +43,35 @@ wget https://raw.githubusercontent.com/vmware/kubernetes/enable-vcp-uxi/vcp_secr
 
 **The second step** is to fill in the details in the `vcp_secret.yaml` file.  All fields in the `vcp_secret.yaml` file are mandatory and cannot be empty. Most of them are self-explanatory.
 
+Following is the quick summary of keys user need to feed in the `vcp_secret.yaml`
+<table>
+<thead>
+<tr><th>Key</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>vc_admin_username</td>
+<td>This is the base 64 encoded vCenter Administrator username.</td>
+</tr>
+<tr>
+<td>vc_admin_password</td>
+<td>This is the base 64 encoded vCenter Administrator password.</td>
+</tr>
+<tr>
+<td>vcp_username</td>
+<td>This is the base 64 encoded vCenter username for vSphere Cloud Provider. This user must be created by the VC Admin. The script cannot create this user.</td>
+</tr>
+<tr>
+<td>vcp_password</td>
+<td>This is the base 64 encoded vCenter Password for VCP user.</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+
 For usernames and passwords in the secret file make sure you encode them with base64 as mentioned below.
 
 ```bash
@@ -52,9 +85,84 @@ cGFzc3dvcmQ=
 
 Fields mentioned under the `stringData` section should not be encoded.
 
+vCenter Inventroy Details
+<table>
+<thead>
+<tr><th>Key</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>vc_ip</td>
+<td>IP Address of the vCenter Server on which Kubernetes node VMs are registered.</td>
+</tr>
+<tr>
+<td>vc_port</td>
+<td>Default is 443, If vCenter Port is configured to non-default port, specify that port.</td>
+</tr>
+<tr>
+<td>datacenter</td>
+<td>Name of the Datacenter on which Node VMs are present.</td>
+</tr>
+<tr>
+<td>default_datastore</td>
+<td>Name of the Datastore accessible to all Node VMs. This is the shared Datastore, where Persistent Volumes will be provisioned.</td>
+</tr>
+<tr>
+<td>node_vms_folder</td>
+<td>This is the name of the VM Folder, where Kubernetes Node VMs will be moved. If VM Folder is not present, It will be created by the script.</td>
+</tr>
+<tr>
+<td>node_vms_cluster_or_host</td>
+<td>This is the name of the Host or Cluster where Kubernetes Node VMs are present.</td>
+</tr>
+</tbody>
+</table>
+
+**Note:** All of the vCenter Entities mentioned above will be assigned roles, privileges to ensure limited access to the vSphere Cloud Provider user.
+
+Node Configuration Details
+<table>
+<thead>
+<tr><th>Key</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>vcp_configuration_file_location</td>
+<td>This directory path where `vsphere.conf` file will be created. if the directory is not present, it will be created. This directory will be mounted as the volume in the API server, Kubelet, and controller-manager Pods.</td>
+</tr>
+<tr>
+<td>kubernetes_api_server_manifest
+</td>
+<td>This is the file path of the API server pod manifest. Generally available at `/etc/kubernetes/manifests/` on the master node.</td>
+</tr>
+<tr>
+<td>kubernetes_controller_manager_manifest</td>
+<td>This is the path of the controller manager pod manifest. Generally available at `/etc/kubernetes/manifests/` on the master node.</td>
+</tr>
+<tr>
+<td>kubernetes_kubelet_service_name</td>
+<td>This is the systemd service name for the kubelet. Generally `kubelet.service`.</td>
+</tr>
+<tr>
+<td>kubernetes_kubelet_service_configuration_file</td>
+<td>This is the location of the service configuration. You can retrieve the location of the kubelet configuration file issuing `systemctl status kubelet.service` command on any node. If the cluster is deployed using `kubeadm` default location is  `/etc/systemd/system/kubelet.service.d/10-kubeadm.conf` else default location should be `/etc/systemd/system/kubelet.service`</td>
+</tr>
+<tr>
+<td>configuration_backup_directory</td>
+<td>This is the configuration backup directory where existing configuration will be saved. Make sure to specify a dedicated directory for the backup. This directory will be created if not present on the node VMs.</td>
+</tr>
+<tr>
+<td>enable_roll_back_switch</td>
+<td>Default Value for this switch is "off". if you want to roll back the configuration changes turn it "on" and follow instructions mentioned in the how to roll back section.</td>
+</tr>
+</tbody>
+</table>
+
 **The third step** is to deploy secret volume, manager Pod and daemon sets.
 
 Deploy them in the following sequence.
+
+**Note:** Make sure kubectl is configured to use `kubernetes-admin` user. When Kubebernetes cluster is deployed using kubeadm, we see couple of config files (`admin.conf`, `kubelet.conf`) at /etc/kubernetes on the master node. Make sure to configure kubectl to use `admin.conf` We need `kubernetes-admin` user to create `serviceaccount` and `clusterrolebinding`.
 
 ```bash
 $ kubectl create -f vcp_namespace_account_and_roles.yaml 
