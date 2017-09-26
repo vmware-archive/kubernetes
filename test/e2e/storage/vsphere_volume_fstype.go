@@ -135,7 +135,7 @@ func invokeTestForInvalidFstype(f *framework.Framework, client clientset.Interfa
 			isFound = true
 		}
 	}
-	framework.Logf("errorMsg: %s", errorMsg)
+	framework.Logf("errorMsg: %s, pvclaim: %+v, persistentvolumes[0]: %+v", errorMsg, pvclaim, persistentvolumes[0])
 	Expect(isFound).To(BeTrue(), "Unable to verify MountVolume.MountDevice failure")
 }
 

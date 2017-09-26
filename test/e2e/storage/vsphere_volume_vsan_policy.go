@@ -208,6 +208,15 @@ var _ = SIGDescribe("vSphere Storage policy support for dynamic provisioning", f
 		invokeValidPolicyTest(f, client, namespace, scParameters)
 	})
 
+	It("verify clean up of state dummy VM's for dynamically provisioned pvc using SPBM policy", func() {
+		By(fmt.Sprintf("Invoking Test for SPBM policy: %s", os.Getenv("VSPHERE_SPBM_GOLD_POLICY")))
+		scParameters[Policy_DiskStripes] = DiskStripesCapabilityVal
+		scParameters[Policy_ObjectSpaceReservation] = ObjectSpaceReservationCapabilityVal
+		scParameters[Datastore] = VsanDatastore
+		framework.Logf("Invoking Test for SPBM storage policy: %+v", scParameters)
+		invokeStaleDummyVMTestWithStoragePolicy(f, client, namespace, scParameters)
+	})
+
 	It("verify if a SPBM policy is not honored on a non-compatible datastore for dynamically provisioned pvc using storageclass", func() {
 		By(fmt.Sprintf("Invoking Test for SPBM policy: %s and datastore: %s", os.Getenv("VSPHERE_SPBM_TAG_POLICY"), VsanDatastore))
 		tagPolicy := os.Getenv("VSPHERE_SPBM_TAG_POLICY")
@@ -306,4 +315,21 @@ func invokeInvalidPolicyTestNeg(client clientset.Interface, namespace string, sc
 
 	eventList, err := client.CoreV1().Events(pvclaim.Namespace).List(metav1.ListOptions{})
 	return fmt.Errorf("Failure message: %+q", eventList.Items[0].Message)
+}
+
+func invokeStaleDummyVMTestWithStoragePolicy(client clientset.Interface, namespace string, scParameters map[string]string) error {
+	By("Creating Storage Class With storage policy params")
+	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("storagepolicysc", scParameters))
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
+	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
+
+	By("Creating PVC using the Storage Class")
+	pvclaim, err := framework.CreatePVC(client, namespace, getVSphereClaimSpecWithStorageClassAnnotation(namespace, "2Gi", storageclass))
+	Expect(err).NotTo(HaveOccurred())
+	defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
+
+	By("Waiting for claim to be in bound phase")
+	err = framework.WaitForPersistentVolumeClaimPhase(v1.ClaimBound, client, pvclaim.Namespace, pvclaim.Name, framework.Poll, 2*time.Minute)
+	Expect(err).To(HaveOccurred())
+
 }
