@@ -128,7 +128,7 @@ func invokeTestForInvalidFstype(f *framework.Framework, client clientset.Interfa
 	deleteVolume(client, pvclaim.Name, namespace)
 
 	Expect(eventList.Items).NotTo(BeEmpty())
-	errorMsg := `MountVolume.MountDevice failed for volume "` + pvclaim.Name + `" : executable file not found`
+	errorMsg := `MountVolume.MountDevice failed for volume"` + pvclaim.Name + `" : executable file not found`
 	isFound := false
 	for _, item := range eventList.Items {
 		if strings.Contains(item.Message, errorMsg) {
