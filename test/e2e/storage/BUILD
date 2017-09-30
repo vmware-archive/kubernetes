@@ -23,6 +23,7 @@ go_library(
         "volume_metrics.go",
         "volume_provisioning.go",
         "volumes.go",
+        "vsphere_stress.go",
         "vsphere_utils.go",
         "vsphere_volume_diskformat.go",
         "vsphere_volume_fstype.go",
