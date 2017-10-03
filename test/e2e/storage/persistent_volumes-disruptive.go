@@ -27,8 +27,10 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	clientset "k8s.io/client-go/kubernetes"
+	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -296,6 +298,50 @@ func testVolumeUnmountsFromDeletedPod(c clientset.Interface, f *framework.Framew
 	Expect(err).NotTo(HaveOccurred(), "Encountered SSH error.")
 	Expect(result.Stdout).To(BeEmpty(), "Expected grep stdout to be empty (i.e. no mount found).")
 	framework.Logf("Volume unmounted on node %s", clientPod.Spec.NodeName)
+}
+
+// testKubeletStopAndVerifyVolumeMounts tests that a volume unmounts if the client pod was deleted while the kubelet was down.
+func testKubeletStopAndVerifyVolumeMounts(c clientset.Interface, f *framework.Framework, clientPod *v1.Pod, pvc *v1.PersistentVolumeClaim, pv *v1.PersistentVolume, *vsphere.VSphere) {
+	nodeIP, err := framework.GetHostExternalAddress(c, clientPod)
+	Expect(err).NotTo(HaveOccurred())
+	nodeIP = nodeIP + ":22"
+
+	By("Expecting the volume mount to be found.")
+	result, err := framework.SSH(fmt.Sprintf("mount | grep %s", clientPod.UID), nodeIP, framework.TestContext.Provider)
+	framework.LogSSHResult(result)
+	Expect(err).NotTo(HaveOccurred(), "Encountered SSH error.")
+	Expect(result.Code).To(BeZero(), fmt.Sprintf("Expected grep exit code of 0, got %d", result.Code))
+
+	By("Stopping the kubelet.")
+	kubeletCommand(kStop, c, clientPod)
+	defer func() {
+		if err != nil {
+			kubeletCommand(kStart, c, clientPod)
+		}
+	}()
+	time.Sleep(1 * time.Minute)
+	newPod, err := c.Core().Pods(clientPod.Namespace).Get(clientPod.Name, &metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	framework.Logf("newPod: %+v, newPod.Name: %s, newPod.Namespace: %s", newPod, newPod.Name, newPod.Namespace)
+	// Waiting for pod to be running
+	err = WaitForPodNameRunningInNamespace(client, newPod.Name, newPod.Namespace)
+	if err != nil {
+		return pod, fmt.Errorf("pod %q is not Running: %v", clientPod.Name, err)
+	}
+	Expect(err).NotTo(HaveOccurred())
+	By("Verify disk should be attached to the new available node")
+	framework.Logf("newPod.Spec.NodeName: %s, pv.Spec.VsphereVolume.VolumePath: %s", newPod.Spec.NodeName, pv.Spec.VsphereVolume.VolumePath)
+	newNode := types.NodeName(newPod.Spec.NodeName)
+	isAttached, err := verifyVSphereDiskAttached(vsp, pv.Spec.VsphereVolume.VolumePath, newNode)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(isAttached).To(BeTrue(), "disk is not attached with the new node")
+	// Sleep for 7 minutes to make sure volumes are detached automatically from the node
+	time.Sleep(7 * time.Minute)
+	By("Verify disk should be detached from the node where kubelet is stopped")
+	oldNode = types.NodeName(clientPod.Spec.NodeName)
+	isAttached, err := verifyVSphereDiskAttached(vsp, pv.Spec.VsphereVolume.VolumePath, oldNode)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(isAttached).NotTo(BeTrue(), "disk is still attached with the old node")
 }
 
 // initTestCase initializes spec resources (pv, pvc, and pod) and returns pointers to be consumed

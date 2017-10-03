@@ -27,7 +27,9 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	. "github.com/onsi/ginkgo"
 	"google.golang.org/api/googleapi"
+	"k8s.io/api/apps/v1beta1"
 	"k8s.io/api/core/v1"
+	extensions "k8s.io/api/extensions/v1beta1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +41,9 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1/helper"
 	awscloud "k8s.io/kubernetes/pkg/cloudprovider/providers/aws"
 	gcecloud "k8s.io/kubernetes/pkg/cloudprovider/providers/gce"
+	deploymentutil "k8s.io/kubernetes/pkg/controller/deployment/util"
 	"k8s.io/kubernetes/pkg/volume/util/volumehelper"
+	"k8s.io/kubernetes/test/e2e/framework"
 )
 
 const (
@@ -889,6 +893,54 @@ func MakeSecPod(ns string, pvclaims []*v1.PersistentVolumeClaim, isPrivileged bo
 	return podSpec
 }
 
+// MakeDeployment creates a deployment definition based on the namespace. The deployment references the PVC's
+// name.  A slice of BASH commands can be supplied as args to be run by the pod
+func MakeDeployment(replicas int32, podLabels map[string]string, namespace string, pvclaims []*v1.PersistentVolumeClaim, isPrivileged bool, command string) *v1.Pod {
+	if len(command) == 0 {
+		command = "while true; do sleep 1; done"
+	}
+	deploymentName := "deployment-" + string(uuid.NewUUID())
+	deploymentSpec := &extensions.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: namespace,
+		},
+		Spec: extensions.DeploymentSpec{
+			Replicas: &replicas,
+			Template: v1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: podLabels,
+				},
+				Spec: v1.PodSpec{
+					TerminationGracePeriodSeconds: &zero,
+					Containers: []v1.Container{
+						{
+							Name:    "write-pod",
+							Image:   BusyBoxImage,
+							Command: []string{"/bin/sh"},
+							Args:    []string{"-c", command},
+							SecurityContext: &v1.SecurityContext{
+								Privileged: &isPrivileged,
+							},
+						},
+					},
+					RestartPolicy: v1.RestartPolicyOnFailure,
+				},
+			},
+		},
+	}
+	var volumeMounts = make([]v1.VolumeMount, len(pvclaims))
+	var volumes = make([]v1.Volume, len(pvclaims))
+	for index, pvclaim := range pvclaims {
+		volumename := fmt.Sprintf("volume%v", index+1)
+		volumeMounts[index] = v1.VolumeMount{Name: volumename, MountPath: "/mnt/" + volumename}
+		volumes[index] = v1.Volume{Name: volumename, VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvclaim.Name, ReadOnly: false}}}
+	}
+	deploymentSpec.Spec.Template.Spec.Containers[0].VolumeMounts = volumeMounts
+	deploymentSpec.Spec.Template.Spec.Volumes = volumes
+	return deploymentSpec
+}
+
 // create pod with given claims
 func CreatePod(client clientset.Interface, namespace string, pvclaims []*v1.PersistentVolumeClaim, isPrivileged bool, command string) (*v1.Pod, error) {
 	pod := MakePod(namespace, pvclaims, isPrivileged, command)
@@ -927,6 +979,54 @@ func CreateSecPod(client clientset.Interface, namespace string, pvclaims []*v1.P
 		return pod, fmt.Errorf("pod Get API error: %v", err)
 	}
 	return pod, nil
+}
+
+// GetPodsForDeployment gets pods for the given deployment
+func GetPodsForDeployment(client clientset.Interface, deployment *v1beta1.Deployment) (*v1.PodList, error) {
+	replicaSet, err := deploymentutil.GetNewReplicaSet(deployment, c.ExtensionsV1beta1())
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get new replica set for deployment %q: %v", deployment.Name, err)
+	}
+	if rs == nil {
+		return nil, fmt.Errorf("expected a new replica set for deployment %q, found none", deployment.Name)
+	}
+	podListFunc := func(namespace string, options metav1.ListOptions) (*v1.PodList, error) {
+		return client.Core().Pods(namespace).List(options)
+	}
+	podList, err := deploymentutil.ListPods(deployment, rsList, podListFunc)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to list Pods of Deployment %q: %v", deployment.Name, err)
+	}
+	return podList, nil
+}
+
+// CreateDeployment deployment with given claims
+func CreateDeployment(client clientset.Interface, replicas int32, podLabels map[string]string, namespace string, pvclaims []*v1.PersistentVolumeClaim, command string) (*v1beta1.Deployment, error) {
+	deploymentSpec := MakeDeployment(replicas, podLabels, namespace, pvclaims, isPrivileged, command)
+	deployment, err := client.Extensions().Deployments(namespace).Create(deploymentSpec)
+	if err != nil {
+		return nil, fmt.Errorf("deployment %q Create API error: %v", deploymentSpec.Name, err)
+	}
+	By(fmt.Sprintf("Waiting deployment %q to complete", deploymentSpec.Name))
+	err = framework.WaitForDeploymentStatusValid(c, deployment)
+	if err != nil {
+		return nil, fmt.Errorf("deployment %q failed to complete: %v", deploymentSpec.Name, err)
+	}
+	// pod, err := client.CoreV1().Pods(namespace).Create(pod)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("pod Create API error: %v", err)
+	// }
+	// // Waiting for pod to be running
+	// err = WaitForPodNameRunningInNamespace(client, pod.Name, namespace)
+	// if err != nil {
+	// 	return pod, fmt.Errorf("pod %q is not Running: %v", pod.Name, err)
+	// }
+	// // get fresh pod info
+	// pod, err = client.CoreV1().Pods(namespace).Get(pod.Name, metav1.GetOptions{})
+	// if err != nil {
+	// 	return pod, fmt.Errorf("pod Get API error: %v", err)
+	// }
+	return deployment, nil
 }
 
 // Define and create a pod with a mounted PV.  Pod runs infinite loop until killed.
