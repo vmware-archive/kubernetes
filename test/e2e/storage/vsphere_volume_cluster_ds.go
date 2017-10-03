@@ -30,15 +30,16 @@ var _ = SIGDescribe("Volume Provision On Clustered Datastore", func() {
 
 	var client clientset.Interface
 	var namespace string
-	clusterDatastore := os.Getenv("CLUSTER_DATASTORE")
-	Expect(clusterDatastore).NotTo(BeEmpty())
 	var scParameters map[string]string
-
+	var clusterDatastore string
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
 		client = f.ClientSet
 		namespace = f.Namespace.Name
 		scParameters = make(map[string]string)
+
+		clusterDatastore = os.Getenv("CLUSTER_DATASTORE")
+		Expect(clusterDatastore).NotTo(BeEmpty(), "Please set CLUSTER_DATASTORE system environment")
 	})
 
 	/*
@@ -48,6 +49,7 @@ var _ = SIGDescribe("Volume Provision On Clustered Datastore", func() {
 		3. Create podspec with volume path. Create a corresponding pod
 		4. Verify disk is attached
 		5. Delete the pod and wait for the disk to be detached
+		6. Delete the volume
 	*/
 
 	It("verify static provision", func() {
@@ -63,6 +65,10 @@ var _ = SIGDescribe("Volume Provision On Clustered Datastore", func() {
 
 		volumePath, err = createVSphereVolume(vsp, volumeOptions)
 		Expect(err).NotTo(HaveOccurred())
+
+		defer func() {
+			vsp.DeleteVolume(volumePath)
+		}()
 
 		podspec := getVSpherePodSpecWithVolumePaths([]string{volumePath}, nil, nil)
 
@@ -103,9 +109,9 @@ var _ = SIGDescribe("Volume Provision On Clustered Datastore", func() {
 		2. invokeValidPolicyTest - util to do e2e dynamic provision test
 	*/
 	It("verify dynamic provision with spbm policy", func() {
-		goldPolicy := os.Getenv("VSPHERE_SPBM_POLICY_DS_CLUSTER")
-		Expect(goldPolicy).NotTo(BeEmpty())
-		scParameters[SpbmStoragePolicy] = goldPolicy
+		storagePolicy := os.Getenv("VSPHERE_SPBM_POLICY_DS_CLUSTER")
+		Expect(storagePolicy).NotTo(BeEmpty(), "Please set VSPHERE_SPBM_POLICY_DS_CLUSTER system environment")
+		scParameters[SpbmStoragePolicy] = storagePolicy
 		invokeValidPolicyTest(f, client, namespace, scParameters)
 	})
 })
