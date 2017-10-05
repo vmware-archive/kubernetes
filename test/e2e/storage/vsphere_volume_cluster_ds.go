@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -52,7 +53,7 @@ var _ = SIGDescribe("Volume Provision On Clustered Datastore", func() {
 		6. Delete the volume
 	*/
 
-	It("verify static provision", func() {
+	It("verify static provisioning on clustered datastore", func() {
 		var volumePath string
 		vsp, err := vsphere.GetVSphere()
 		Expect(err).NotTo(HaveOccurred())
@@ -67,11 +68,13 @@ var _ = SIGDescribe("Volume Provision On Clustered Datastore", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {
+			By("Deleting the vsphere volume")
 			vsp.DeleteVolume(volumePath)
 		}()
 
 		podspec := getVSpherePodSpecWithVolumePaths([]string{volumePath}, nil, nil)
 
+		By("Creating pod")
 		pod, err := client.CoreV1().Pods(namespace).Create(podspec)
 		Expect(err).NotTo(HaveOccurred())
 		By("Waiting for pod to be ready")
@@ -82,9 +85,10 @@ var _ = SIGDescribe("Volume Provision On Clustered Datastore", func() {
 		Expect(err).NotTo(HaveOccurred())
 		nodeName := types.NodeName(pod.Spec.NodeName)
 
+		By("Verifying volume is attached")
 		isAttached, err := verifyVSphereDiskAttached(vsp, volumePath, types.NodeName(nodeName))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(isAttached).To(BeTrue(), "disk:"+volumePath+" is not attached with the node")
+		Expect(isAttached).To(BeTrue(), fmt.Sprintf("disk: %s is not attached with the node", volumePath))
 
 		By("Deleting pod")
 		framework.DeletePodWithWait(f, client, pod)
@@ -98,7 +102,7 @@ var _ = SIGDescribe("Volume Provision On Clustered Datastore", func() {
 		1. Create storage class parameter and specify datastore to be a clustered datastore name
 		2. invokeValidPolicyTest - util to do e2e dynamic provision test
 	*/
-	It("verify dynamic provision with default parameter", func() {
+	It("verify dynamic provision with default parameter on clustered datastore", func() {
 		scParameters[Datastore] = clusterDatastore
 		invokeValidPolicyTest(f, client, namespace, scParameters)
 	})
@@ -108,7 +112,7 @@ var _ = SIGDescribe("Volume Provision On Clustered Datastore", func() {
 		1. Create storage class parameter and specify storage policy to be a tag based spbm policy
 		2. invokeValidPolicyTest - util to do e2e dynamic provision test
 	*/
-	It("verify dynamic provision with spbm policy", func() {
+	It("verify dynamic provision with spbm policy on clustered datastore", func() {
 		storagePolicy := os.Getenv("VSPHERE_SPBM_POLICY_DS_CLUSTER")
 		Expect(storagePolicy).NotTo(BeEmpty(), "Please set VSPHERE_SPBM_POLICY_DS_CLUSTER system environment")
 		scParameters[SpbmStoragePolicy] = storagePolicy
