@@ -21,7 +21,7 @@ import (
 	3. Launch goroutine for creating volumes n times. Here n is the value specified by the user in the system env VCP_STRESS_INSTANCES env variable.
 	4. Each instance of routine creates m number of volumes using the storage classes created in step-1. Here m is value specified by the user in the system env VCP_STRESS_VOLUMES_PER_INSTANCE.
 */
-var _ = SIGDescribe("vcp-stress", func() {
+var _ = SIGDescribe("vcp-stress [Feature:vsphere]", func() {
 	f := framework.NewDefaultFramework("vcp-stress")
 	var (
 		client    clientset.Interface
@@ -34,7 +34,7 @@ var _ = SIGDescribe("vcp-stress", func() {
 		namespace = f.Namespace.Name
 		Expect(os.Getenv("VCP_STRESS_INSTANCES")).NotTo(BeEmpty(), "ENV VCP_STRESS_INSTANCES is not set")
 		Expect(os.Getenv("VCP_STRESS_VOLUMES_PER_INSTANCE")).NotTo(BeEmpty(), "ENV VCP_STRESS_VOLUMES_PER_INSTANCE is not set")
-		Expect(os.Getenv("VSPHERE_SPBM_GOLD_POLICY")).NotTo(BeEmpty(), "ENV VSPHERE_SPBM_GOLD_POLICY is not set")
+		Expect(os.Getenv("VSPHERE_SPBM_POLICY_NAME")).NotTo(BeEmpty(), "ENV VSPHERE_SPBM_POLICY_NAME is not set")
 		Expect(os.Getenv("VSPHERE_DATASTORE")).NotTo(BeEmpty(), "ENV VSPHERE_DATASTORE is not set")
 	})
 
@@ -46,8 +46,7 @@ var _ = SIGDescribe("vcp-stress", func() {
 		scArrays := make([]*storageV1.StorageClass, 4)
 		// Create default vSphere Storage Class
 		By("Creating Storage Class : sc-default")
-		scDefaultSpec := getVSphereStorageClassSpec("sc-default", nil)
-		scDefault, err := client.StorageV1().StorageClasses().Create(scDefaultSpec)
+		scDefault, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("sc-default", nil))
 		Expect(err).NotTo(HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(scDefault.Name, nil)
 		scArrays[0] = scDefault
@@ -57,8 +56,7 @@ var _ = SIGDescribe("vcp-stress", func() {
 		var scVSanParameters map[string]string
 		scVSanParameters = make(map[string]string)
 		scVSanParameters[Policy_HostFailuresToTolerate] = "1"
-		scVSanSpec := getVSphereStorageClassSpec("sc-vsan", scVSanParameters)
-		scVSan, err := client.StorageV1().StorageClasses().Create(scVSanSpec)
+		scVSan, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("sc-vsan", scVSanParameters))
 		Expect(err).NotTo(HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(scVSan.Name, nil)
 		scArrays[1] = scVSan
@@ -67,11 +65,10 @@ var _ = SIGDescribe("vcp-stress", func() {
 		By("Creating Storage Class : sc-spbm")
 		var scSPBMPolicyParameters map[string]string
 		scSPBMPolicyParameters = make(map[string]string)
-		goldPolicy := os.Getenv("VSPHERE_SPBM_GOLD_POLICY")
-		Expect(goldPolicy).NotTo(BeEmpty())
-		scSPBMPolicyParameters[SpbmStoragePolicy] = goldPolicy
-		scSPBMPolicySpec := getVSphereStorageClassSpec("sc-spbm", scSPBMPolicyParameters)
-		scSPBMPolicy, err := client.StorageV1().StorageClasses().Create(scSPBMPolicySpec)
+		spbmpolicy := os.Getenv("VSPHERE_SPBM_POLICY_NAME")
+		Expect(spbmpolicy).NotTo(BeEmpty())
+		scSPBMPolicyParameters[SpbmStoragePolicy] = spbmpolicy
+		scSPBMPolicy, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("sc-spbm", scSPBMPolicyParameters))
 		Expect(err).NotTo(HaveOccurred())
 		defer client.StorageV1().StorageClasses().Delete(scSPBMPolicy.Name, nil)
 		scArrays[2] = scSPBMPolicy
@@ -81,7 +78,7 @@ var _ = SIGDescribe("vcp-stress", func() {
 		var scWithDSParameters map[string]string
 		scWithDSParameters = make(map[string]string)
 		datastore := os.Getenv("VSPHERE_DATASTORE")
-		Expect(goldPolicy).NotTo(BeEmpty())
+		Expect(datastore).NotTo(BeEmpty())
 		scWithDSParameters[Datastore] = datastore
 		scWithDatastoreSpec := getVSphereStorageClassSpec("sc-user-specified-ds", scWithDSParameters)
 		scWithDatastore, err := client.StorageV1().StorageClasses().Create(scWithDatastoreSpec)
@@ -98,25 +95,22 @@ var _ = SIGDescribe("vcp-stress", func() {
 		var wg sync.WaitGroup
 		wg.Add(instances)
 		for instanceCount := 0; instanceCount < instances; instanceCount++ {
-			go CreateVolumesInParallel(client, namespace, scArrays, volumesPerInstance, &wg)
+			go PerformVolumeLifeCycleInParallel(client, namespace, scArrays, volumesPerInstance, &wg)
 		}
 		wg.Wait()
 	})
 
 })
 
-func CreateVolumesInParallel(client clientset.Interface, namespace string, sc []*storageV1.StorageClass, volumesPerInstance int, wg *sync.WaitGroup) {
+func PerformVolumeLifeCycleInParallel(client clientset.Interface, namespace string, sc []*storageV1.StorageClass, volumesPerInstance int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	pvclaims := make([]*v1.PersistentVolumeClaim, volumesPerInstance)
 	for index := 0; index < volumesPerInstance; index++ {
 		By("Creating PVC using the Storage Class")
-		pvclaimSpec := getVSphereClaimSpecWithStorageClassAnnotation(namespace, sc[index%len(sc)])
-		pvclaim, err := client.CoreV1().PersistentVolumeClaims(namespace).Create(pvclaimSpec)
+		pvclaim, err := framework.CreatePVC(client, namespace, getVSphereClaimSpecWithStorageClassAnnotation(namespace, sc[index%len(sc)]))
 		Expect(err).NotTo(HaveOccurred())
 		pvclaims[index] = pvclaim
-		defer func() {
-			client.CoreV1().PersistentVolumeClaims(namespace).Delete(pvclaimSpec.Name, nil)
-		}()
+		defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
 	}
 	By("Waiting for claims status in this thread to become Bound")
 	for _, claim := range pvclaims {
