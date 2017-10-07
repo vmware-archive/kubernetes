@@ -151,7 +151,7 @@ var _ = SIGDescribe("PersistentVolumes[Disruptive][Flaky]", func() {
 			framework.ExpectNoError(framework.WaitOnPVandPVC(c, ns, pv2, pvc2))
 
 			By("Attaching both PVC's to a single pod")
-			clientPod, err = framework.CreatePod(c, ns, []*v1.PersistentVolumeClaim{pvc1, pvc2}, true, "")
+			clientPod, err = framework.CreatePod(c, ns, nil, []*v1.PersistentVolumeClaim{pvc1, pvc2}, true, "")
 			Expect(err).NotTo(HaveOccurred())
 		})
 

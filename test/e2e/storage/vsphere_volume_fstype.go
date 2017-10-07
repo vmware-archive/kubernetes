@@ -91,7 +91,7 @@ func invokeTestForFstype(f *framework.Framework, client clientset.Interface, nam
 
 	By("Creating pod to attach PV to the node")
 	// Create pod to attach Volume to Node
-	pod, err := framework.CreatePod(client, namespace, pvclaims, false, "")
+	pod, err := framework.CreatePod(client, namespace, nil, pvclaims, false, "")
 	Expect(err).NotTo(HaveOccurred())
 
 	// Asserts: Right disk is attached to the pod
