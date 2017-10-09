@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/golang/glog"
 	. "github.com/onsi/gomega"
 	"k8s.io/api/core/v1"
 	storage "k8s.io/api/storage/v1"
@@ -52,6 +53,48 @@ func verifyVSphereDiskAttached(vsp *vsphere.VSphere, volumePath string, nodeName
 	isAttached, err = vsp.DiskIsAttached(volumePath, nodeName)
 	Expect(err).NotTo(HaveOccurred())
 	return isAttached, err
+}
+
+// Wait until vsphere volumes are detached from the list of nodes or time out after 5 minutes
+func waitForVSphereDisksToDetach(vsp *vsphere.VSphere, nodeVolumes map[k8stypes.NodeName][]string) error {
+	var (
+		err            error
+		diskAttached   = true
+		detachTimeout  = 5 * time.Minute
+		detachPollTime = 10 * time.Second
+	)
+	if vsp == nil {
+		vsp, err = vsphere.GetVSphere()
+		if err != nil {
+			return err
+		}
+	}
+	err = wait.Poll(detachPollTime, detachTimeout, func() (bool, error) {
+		attachedResult, err := vsp.DisksAreAttached(nodeVolumes)
+		if err != nil {
+			glog.Errorf("Error checking if volumes are attached to nodes: %+v. err: %v", volumePathsByNode, err)
+			return volumesAttachedCheck, err
+		}
+		vsp.DisksAreAttached(volumePath, nodeName)
+		diskAttached, err = verifyVSphereDiskAttached(vsp, volumePath, nodeName)
+		if err != nil {
+			return true, err
+		}
+		if !diskAttached {
+			framework.Logf("Volume %q appears to have successfully detached from %q.",
+				volumePath, nodeName)
+			return true, nil
+		}
+		framework.Logf("Waiting for Volume %q to detach from %q.", volumePath, nodeName)
+		return false, nil
+	})
+	if err != nil {
+		return err
+	}
+	if diskAttached {
+		return fmt.Errorf("Gave up waiting for Volume %q to detach from %q after %v", volumePath, nodeName, detachTimeout)
+	}
+	return nil
 }
 
 // Wait until vsphere vmdk is deteched from the given node or time out after 5 minutes

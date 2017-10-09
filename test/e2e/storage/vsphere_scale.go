@@ -30,41 +30,31 @@ const (
 	SCSIUnitsAvailablePerNode = 55
 )
 
-// NodeSelector stores info about node and the node selector
 type NodeSelector struct {
-	nodeName  string
-	nodeLabel map[string]string
+	labelKey string
+	labelValue string
 }
 
-type Channels struct {
-	podListChan chan []*v1.Pod
-	nodeVolumeMapChan chan map[string][]string
-	pvClaimNameChan chan []string
-}
-
-var _ = SIGDescribe("vcp-at-scale", func() {
+var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 	f := framework.NewDefaultFramework("vcp-at-scale")
 
 	var (
 		client            clientset.Interface
 		namespace         string
 		areNodesLabeled   bool
-		nodeSelectorList  []*NodeSelector
+		nodeSelectorList []*NodeSelector
 		volumeCount       int
 		numberOfInstances int
 		volumesPerPod     int
-		channels Channels
+		nodeVolumeMapChan chan map[string][]string
 	)
 
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
 		client = f.ClientSet
 		namespace = f.Namespace.Name
-		channels = Channels {
-			podListChan : make(chan []*v1.Pod),
-			volPathNodeName : make(chan map[string]string),
-			pvClaimName : make(chan []string),
-		}
+		nodeLabelMap = make(map[string]string)
+		nodeVolumeMapChan = make(chan map[string][]string)
 		Expect(os.Getenv("VCP_SCALE_VOLUME_COUNT")).NotTo(BeEmpty(), "ENV VCP_SCALE_VOLUME_COUNT is not set")
 		Expect(os.Getenv("VSPHERE_SPBM_GOLD_POLICY")).NotTo(BeEmpty(), "ENV VSPHERE_SPBM_GOLD_POLICY is not set")
 		Expect(os.Getenv("VSPHERE_DATASTORE")).NotTo(BeEmpty(), "ENV VSPHERE_DATASTORE is not set")
@@ -87,12 +77,13 @@ var _ = SIGDescribe("vcp-at-scale", func() {
 		}
 		if !areNodesLabeled {
 			createNodeLabels(client, namespace, nodeSelectorList)
-			isNodeLabeled = true
+			areNodesLabeled = true
 		}
 	})
 
 	It("vsphere scale tests", func() {
-		podList []*v1.Pod
+		pvcClaimList := make([]string)
+		nodeVolumeMap := make(map[string][]string)
 		// Volumes will be provisioned with each different types of Storage Class
 		scArrays := make([]*storageV1.StorageClass, 4)
 		// Create default vSphere Storage Class
@@ -146,28 +137,53 @@ var _ = SIGDescribe("vcp-at-scale", func() {
 				volumeCountPerInstance = volumeCount
 			}
 			volumeCount = volumeCount - volumeCountPerInstance
-			go PerformVolumeLifeCycleAtScale(client, namespace, scArrays, volumeCountPerInstance, volumesPerPod, nodeSelectorList, &channels)
+			go VolumeCreateAndAttach(client, namespace, scArrays, volumeCountPerInstance, volumesPerPod, nodeSelectorList, nodeVolumeMapChan)
 		}
-		for instanceCount := 0; instanceCount < numberOfInstances; instanceCount++ {
-			podList = append(podList, <-podListChan...)
+
+		// Get the list of all volumes attached to each node from the go routines by reading the data from the channel
+		for instanceCount := 0; instanceCount < 3; instanceCount++ {
+			for node, volumeList := range <-nodeVolumeMapChan {
+				nodeVolumeMap[node] = append(nodeVolumeMap[node], volumeList...)
+			}
+		}
+		podList, err := client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
+		for _, pod : range podList {
+			pvcClaimList = append(pvcClaimList, getClaimsForPod(pod)...)
+			By("Deleting pod")
+			framework.DeletePodWithWait(f, client, pod)
+		}
+		vsp, err := vsphere.GetVSphere()
+		Expect(err).NotTo(HaveOccurred())
+		By("Waiting for volumes to be detached from the node")
+		waitForVSphereDiskToDetach(vsp, persistentvolumes[0].Spec.VsphereVolume.VolumePath, k8stype.NodeName(pod.Spec.NodeName))
+
+		for _, pvcClaim := range pvcClaimList{
+			framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
 		}
 	})
 })
 
-// PerformVolumeLifeCycleAtScale peforms full volume life cycle management at scale
-func PerformVolumeLifeCycleAtScale(client clientset.Interface, namespace string, sc []*storageV1.StorageClass, volumeCountPerInstance int, volumesPerPod int, nodeSelectorList []*NodeSelector, channels *Channels) {
-	podList := make([]*v1.Pod, (volumeCountPerInstance/volumesPerPod)+1)
-	pvClaimNameList := make([]string, volumeCountPerInstance)
-	nodeVolumeMap map[string][]string
+// Get PVC claims for the pod
+func getClaimsForPod(pod *v1.Pod) []string{
+	pvcClaimList := make([]string)
+	for _, volumespec := range pod.Spec.Volumes {
+		if volumespec.PersistentVolumeClaim != nil {
+			pvcClaimList = append(pvcClaimList, volumespec.PersistentVolumeClaim.ClaimName)
+		}
+	}
+	return pvcClaimList
+}
+
+// VolumeCreateAndAttach peforms create and attach operations of vSphere persistent volumes at scale
+func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*storageV1.StorageClass, volumeCountPerInstance int, volumesPerPod int, nodeSelectorList []*NodeSelector, nodeVolumeMapChan chan map[string][]string) {)
+	nodeVolumeMap := make(map[string][]string)
 	for index := 0; index < volumeCountPerInstance; index = index + volumesPerPod {
 		pvclaims := make([]*v1.PersistentVolumeClaim, volumesPerPod)
 		for i = 0; i < volumesPerPod; i++ {
 			By(fmt.Sprintf("Creating PVC%q using the Storage Class", index+1))
 			pvclaim, err := framework.CreatePVC(client, namespace, getVSphereClaimSpecWithStorageClassAnnotation(namespace, sc[index%len(sc)]))
 			Expect(err).NotTo(HaveOccurred())
-			pvClaimNameList = append(pvClaimNameList, pvclaim.Name)
 			pvclaims = append(pvclaims, pvclaim)
-			// defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
 		}
 
 		By("Waiting for claim to be in bound phase")
@@ -175,8 +191,9 @@ func PerformVolumeLifeCycleAtScale(client clientset.Interface, namespace string,
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Creating pod to attach PV to the node")
+		nodeSelector := nodeSelectorList[index%len(nodeSelectorList)]
 		// Create pod to attach Volume to Node
-		pod, err := framework.CreatePod(client, namespace, nodeSelectorList[index%len(nodeSelectorList)].nodeLabel, pvclaims, false, "")
+		pod, err := framework.CreatePod(client, namespace, map[string]string{nodeSelector.labelKey:nodeSelector.labelValue}, pvclaims, false, "")
 		Expect(err).NotTo(HaveOccurred())
 
 		for _, pv := range persistentvolumes {
@@ -187,22 +204,19 @@ func PerformVolumeLifeCycleAtScale(client clientset.Interface, namespace string,
 		By("Verify the volume is accessible and available in the pod")
 		verifyVSphereVolumesAccessible(pod, persistentvolumes, vsp)
 	}
-	channels.podListChan <- podList
-	channels.volPathNodeNameChan <- pvClaimNameList
-	channels.pvClaimNameChan <- nodeVolumeMap
+	nodeVolumeMapChan <- nodeVolumeMap
 }
 
-func createNodeLabels(client clientset.Interface, namespace string, nodeSelectorList []*NodeSelector) (node1Name string, node1KeyValueLabel map[string]string, node2Name string, node2KeyValueLabel map[string]string) {
+func createNodeLabels(client clientset.Interface, namespace string, nodeSelectorList []*NodeSelector) {
 	nodes := framework.GetReadySchedulableNodesOrDie(client)
 	for _, node := range nodes.Items {
 		labelVal := "vsphere_e2e_" + string(uuid.NewUUID())
-		nodeLabelMap := make(map[string]string)
-		nodeLabelMap[NodeLabelKey] = labelVal
 		nodeSelector := &NodeSelector{
-			nodeName:  node.Name,
-			nodeLabel: nodeLabelMap,
+			labelKey:  NodeLabelKey,
+			labelValue: labelVal,
 		}
 		nodeSelectorList = append(nodeSelectorList, nodeSelector)
+		framework.Logf("balu - nodelabelkey: %q, nodelabelvalue: %q and nodeName: %q, nodeSelectorList: %+v", NodeLabelKey, labelVal, node.Name, nodeSelectorList)
 		framework.AddOrUpdateLabelOnNode(client, node.Name, NodeLabelKey, labelVal)
 	}
 }
