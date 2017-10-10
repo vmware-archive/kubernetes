@@ -150,6 +150,20 @@ var _ = SIGDescribe("PersistentVolumes:vsphere", func() {
 		framework.ExpectNoError(framework.DeletePersistentVolumeClaim(c, pvc.Name, ns), "Failed to delete PVC ", pvc.Name)
 		pvc = nil
 
+		By("Verify the Volume is attached to the Node")
+		// Get the copy of the Pod to know the assigned node name.
+		pod, err := c.CoreV1().Pods(ns).Get(clientPod.Name, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		isVolumeAttached, verifyDiskAttachedError := verifyVSphereDiskAttached(vsp, pv.Spec.VsphereVolume.VolumePath, types.NodeName(pod.Spec.NodeName))
+		Expect(verifyDiskAttachedError).NotTo(HaveOccurred())
+		Expect(isVolumeAttached).To(BeTrue())
+
+		pvs := make([]*v1.PersistentVolume, 1)
+		pvs[0] = pv
+		By("Verify the volume is accessible and available in the pod")
+		verifyVSphereVolumesAccessible(pod, pvs, vsp)
+		framework.Logf("Verified that Volume is accessible in the POD after deleting PV claim")
+
 		By("Deleting the Pod")
 		framework.ExpectNoError(framework.DeletePodWithWait(f, c, clientPod), "Failed to delete pod ", clientPod.Name)
 	})
