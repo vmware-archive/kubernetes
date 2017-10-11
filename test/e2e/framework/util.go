@@ -3825,19 +3825,38 @@ func RestartKubeProxy(host string) error {
 
 func RestartKubelet(host string) error {
 	// TODO: Make it work for all providers and distros.
-	if !ProviderIs("gce", "aws") {
+	if !ProviderIs("gce", "aws", "vsphere") {
 		return fmt.Errorf("unsupported provider: %s", TestContext.Provider)
 	}
 	if ProviderIs("gce") && !NodeOSDistroIs("debian", "gci") {
 		return fmt.Errorf("unsupported node OS distro: %s", TestContext.NodeOSDistro)
 	}
 	var cmd string
+	var sudoPresent bool
+
 	if ProviderIs("gce") && NodeOSDistroIs("debian") {
 		cmd = "sudo /etc/init.d/kubelet restart"
+	} else if ProviderIs("vsphere") {
+		sshResult, err := SSH("sudo --version", host, TestContext.Provider)
+		if err != nil {
+			return fmt.Errorf("Unable to ssh to host %s with error %s", host, err.Error())
+		}
+		if !strings.Contains(sshResult.Stderr, "command not found") {
+			sudoPresent = true
+		}
+		sshResult, err = SSH("systemctl --version", host, TestContext.Provider)
+		if !strings.Contains(sshResult.Stderr, "command not found") {
+			cmd = fmt.Sprintf("systemctl %s kubelet", "restart")
+		} else {
+			cmd = fmt.Sprintf("service kubelet %s", "restart")
+		}
+		if sudoPresent {
+			cmd = fmt.Sprintf("sudo %s", cmd)
+		}
 	} else {
 		cmd = "sudo systemctl restart kubelet"
 	}
-	Logf("Restarting kubelet via ssh, running: %v", cmd)
+	Logf("Restarting kubelet via ssh on host %s with command %s", host, cmd)
 	result, err := SSH(cmd, host, TestContext.Provider)
 	if err != nil || result.Code != 0 {
 		LogSSHResult(result)
