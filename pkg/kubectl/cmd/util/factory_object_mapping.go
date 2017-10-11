@@ -26,14 +26,11 @@ import (
 	"sync"
 	"time"
 
-	swagger "github.com/emicklei/go-restful-swagger12"
-
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	restclient "k8s.io/client-go/rest"
@@ -294,7 +291,7 @@ func (f *ring1Factory) LogsForObject(object, options runtime.Object, timeout tim
 	}
 
 	sortBy := func(pods []*v1.Pod) sort.Interface { return controller.ByLogging(pods) }
-	pod, numPods, err := GetFirstPod(clientset.Core(), namespace, selector, timeout, sortBy)
+	pod, numPods, err := GetFirstPod(clientset.Core(), namespace, selector.String(), timeout, sortBy)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +400,7 @@ func (f *ring1Factory) AttachablePodForObject(object runtime.Object, timeout tim
 	}
 
 	sortBy := func(pods []*v1.Pod) sort.Interface { return sort.Reverse(controller.ActivePods(pods)) }
-	pod, _, err := GetFirstPod(clientset.Core(), namespace, selector, timeout, sortBy)
+	pod, _, err := GetFirstPod(clientset.Core(), namespace, selector.String(), timeout, sortBy)
 	return pod, err
 }
 
@@ -421,15 +418,6 @@ func (f *ring1Factory) Validator(validate bool) (validation.Schema, error) {
 		openapivalidation.NewSchemaValidation(resources),
 		validation.NoDoubleKeySchema{},
 	}, nil
-}
-
-func (f *ring1Factory) SwaggerSchema(gvk schema.GroupVersionKind) (*swagger.ApiDeclaration, error) {
-	version := gvk.GroupVersion()
-	discovery, err := f.clientAccessFactory.DiscoveryClient()
-	if err != nil {
-		return nil, err
-	}
-	return discovery.SwaggerSchema(version)
 }
 
 // OpenAPISchema returns metadata and structural information about Kubernetes object definitions.

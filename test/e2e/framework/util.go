@@ -825,7 +825,7 @@ func WaitForPodCondition(c clientset.Interface, ns, podName, desc string, timeou
 		}
 		// log now so that current pod info is reported before calling `condition()`
 		Logf("Pod %q: Phase=%q, Reason=%q, readiness=%t. Elapsed: %v",
-			podName, pod.Status.Phase, pod.Status.Reason, testutil.PodReady(pod), time.Since(start))
+			podName, pod.Status.Phase, pod.Status.Reason, podutil.IsPodReady(pod), time.Since(start))
 		if done, err := condition(pod); done {
 			if err == nil {
 				Logf("Pod %q satisfied condition %q", podName, desc)
@@ -1440,6 +1440,23 @@ func waitForPodTerminatedInNamespace(c clientset.Interface, podName, reason, nam
 			} else {
 				return true, fmt.Errorf("Expected pod %q in namespace %q to be terminated with reason %q, got reason: %q", podName, namespace, reason, pod.Status.Reason)
 			}
+		}
+		return false, nil
+	})
+}
+
+// waitForPodNotFoundInNamespace returns an error if it takes too long for the pod to fully terminate.
+// Unlike `waitForPodTerminatedInNamespace`, the pod's Phase and Reason are ignored. If the pod Get
+// api returns IsNotFound then the wait stops and nil is returned. If the Get api returns an error other
+// than "not found" then that error is returned and the wait stops.
+func waitForPodNotFoundInNamespace(c clientset.Interface, podName, ns string, timeout time.Duration) error {
+	return wait.PollImmediate(Poll, timeout, func() (bool, error) {
+		_, err := c.CoreV1().Pods(ns).Get(podName, metav1.GetOptions{})
+		if apierrs.IsNotFound(err) {
+			return true, nil // done
+		}
+		if err != nil {
+			return true, err // stop wait with error
 		}
 		return false, nil
 	})
@@ -3808,19 +3825,38 @@ func RestartKubeProxy(host string) error {
 
 func RestartKubelet(host string) error {
 	// TODO: Make it work for all providers and distros.
-	if !ProviderIs("gce", "aws") {
+	if !ProviderIs("gce", "aws", "vsphere") {
 		return fmt.Errorf("unsupported provider: %s", TestContext.Provider)
 	}
 	if ProviderIs("gce") && !NodeOSDistroIs("debian", "gci") {
 		return fmt.Errorf("unsupported node OS distro: %s", TestContext.NodeOSDistro)
 	}
 	var cmd string
+	var sudoPresent bool
+
 	if ProviderIs("gce") && NodeOSDistroIs("debian") {
 		cmd = "sudo /etc/init.d/kubelet restart"
+	} else if ProviderIs("vsphere") {
+		sshResult, err := SSH("sudo --version", host, TestContext.Provider)
+		if err != nil {
+			return fmt.Errorf("Unable to ssh to host %s with error %s", host, err.Error())
+		}
+		if !strings.Contains(sshResult.Stderr, "command not found") {
+			sudoPresent = true
+		}
+		sshResult, err = SSH("systemctl --version", host, TestContext.Provider)
+		if !strings.Contains(sshResult.Stderr, "command not found") {
+			cmd = fmt.Sprintf("systemctl %s kubelet", "restart")
+		} else {
+			cmd = fmt.Sprintf("service kubelet %s", "restart")
+		}
+		if sudoPresent {
+			cmd = fmt.Sprintf("sudo %s", cmd)
+		}
 	} else {
 		cmd = "sudo systemctl restart kubelet"
 	}
-	Logf("Restarting kubelet via ssh, running: %v", cmd)
+	Logf("Restarting kubelet via ssh on host %s with command %s", host, cmd)
 	result, err := SSH(cmd, host, TestContext.Provider)
 	if err != nil || result.Code != 0 {
 		LogSSHResult(result)

@@ -1,5 +1,3 @@
-// +build linux darwin
-
 /*
 Copyright 2017 The Kubernetes Authors.
 
@@ -16,25 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package host_path
+package multicluster
 
-import (
-	"fmt"
-	"os"
-	"syscall"
+import "github.com/onsi/ginkgo"
 
-	"k8s.io/api/core/v1"
-)
-
-func (dftc *defaultFileTypeChecker) getFileType(info os.FileInfo) (v1.HostPathType, error) {
-	mode := info.Sys().(*syscall.Stat_t).Mode
-	switch mode & syscall.S_IFMT {
-	case syscall.S_IFSOCK:
-		return v1.HostPathSocket, nil
-	case syscall.S_IFBLK:
-		return v1.HostPathBlockDev, nil
-	case syscall.S_IFCHR:
-		return v1.HostPathCharDev, nil
-	}
-	return "", fmt.Errorf("only recognise socket, block device and character device")
+func SIGDescribe(text string, body func()) bool {
+	return ginkgo.Describe("[sig-multicluster] "+text, body)
 }
