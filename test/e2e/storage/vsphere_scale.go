@@ -151,7 +151,7 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		podList, err := client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 		framework.Logf("balu - podList: %+v", podList)
 		for _, pod := range podList.Items {
-			pvcClaimList = append(pvcClaimList, getClaimsForPod(pod, volumesPerPod)...)
+			pvcClaimList = append(pvcClaimList, getClaimsForPod(&pod, volumesPerPod)...)
 			By("Deleting pod")
 			framework.DeletePodWithWait(f, client, &pod)
 		}
