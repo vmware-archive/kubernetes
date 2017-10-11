@@ -32,7 +32,7 @@ const (
 )
 
 type NodeSelector struct {
-	labelKey string
+	labelKey   string
 	labelValue string
 }
 
@@ -43,7 +43,7 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		client            clientset.Interface
 		namespace         string
 		areNodesLabeled   bool
-		nodeSelectorList []*NodeSelector
+		nodeSelectorList  []*NodeSelector
 		volumeCount       int
 		numberOfInstances int
 		volumesPerPod     int
@@ -150,7 +150,7 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		framework.Logf("balu - nodeVolumeMap: %+v", nodeVolumeMap)
 		podList, err := client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 		framework.Logf("balu - podList: %+v", podList)
-		for _, pod : range podList {
+		for _, pod := range podList {
 			pvcClaimList = append(pvcClaimList, getClaimsForPod(pod)...)
 			By("Deleting pod")
 			framework.DeletePodWithWait(f, client, pod)
@@ -161,14 +161,14 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		err = waitForVSphereDisksToDetach(vsp, nodeVolumeMap)
 		Expect(err).NotTo(HaveOccurred())
 
-		for _, pvcClaim := range pvcClaimList{
+		for _, pvcClaim := range pvcClaimList {
 			framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
 		}
 	})
 })
 
 // Get PVC claims for the pod
-func getClaimsForPod(pod *v1.Pod) []string{
+func getClaimsForPod(pod *v1.Pod) []string {
 	pvcClaimList := make([]string)
 	for _, volumespec := range pod.Spec.Volumes {
 		if volumespec.PersistentVolumeClaim != nil {
@@ -179,7 +179,7 @@ func getClaimsForPod(pod *v1.Pod) []string{
 }
 
 // VolumeCreateAndAttach peforms create and attach operations of vSphere persistent volumes at scale
-func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*storageV1.StorageClass, volumeCountPerInstance int, volumesPerPod int, nodeSelectorList []*NodeSelector, nodeVolumeMapChan chan map[string][]string) {)
+func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*storageV1.StorageClass, volumeCountPerInstance int, volumesPerPod int, nodeSelectorList []*NodeSelector, nodeVolumeMapChan chan map[string][]string) {
 	nodeVolumeMap := make(map[string][]string)
 	for index := 0; index < volumeCountPerInstance; index = index + volumesPerPod {
 		pvclaims := make([]*v1.PersistentVolumeClaim, volumesPerPod)
@@ -197,7 +197,7 @@ func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*s
 		By("Creating pod to attach PV to the node")
 		nodeSelector := nodeSelectorList[index%len(nodeSelectorList)]
 		// Create pod to attach Volume to Node
-		pod, err := framework.CreatePod(client, namespace, map[string]string{nodeSelector.labelKey:nodeSelector.labelValue}, pvclaims, false, "")
+		pod, err := framework.CreatePod(client, namespace, map[string]string{nodeSelector.labelKey: nodeSelector.labelValue}, pvclaims, false, "")
 		Expect(err).NotTo(HaveOccurred())
 
 		for _, pv := range persistentvolumes {
@@ -216,7 +216,7 @@ func createNodeLabels(client clientset.Interface, namespace string, nodeSelector
 	for _, node := range nodes.Items {
 		labelVal := "vsphere_e2e_" + string(uuid.NewUUID())
 		nodeSelector := &NodeSelector{
-			labelKey:  NodeLabelKey,
+			labelKey:   NodeLabelKey,
 			labelValue: labelVal,
 		}
 		nodeSelectorList = append(nodeSelectorList, nodeSelector)
