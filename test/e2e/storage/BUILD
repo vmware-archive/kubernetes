@@ -24,6 +24,7 @@ go_library(
         "volume_provisioning.go",
         "volumes.go",
         "vsphere_utils.go",
+        "vsphere_volume_cluster_ds.go",
         "vsphere_volume_datastore.go",
         "vsphere_volume_diskformat.go",
         "vsphere_volume_disksize.go",
