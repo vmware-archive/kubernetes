@@ -55,7 +55,7 @@ func verifyVSphereDiskAttached(vsp *vsphere.VSphere, volumePath string, nodeName
 }
 
 // Wait until vsphere volumes are detached from the list of nodes or time out after 5 minutes
-func waitForVSphereDisksToDetach(vsp *vsphere.VSphere, nodeVolumes map[k8stypes.NodeName][]string) error {
+func waitForVSphereDisksToDetach(vsp *vsphere.VSphere, nodeVolumes map[k8stype.NodeName][]string) error {
 	var (
 		err            error
 		disksAttached  = true

@@ -10,6 +10,7 @@ import (
 	"github.com/pborman/uuid"
 	"k8s.io/api/core/v1"
 	storageV1 "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
@@ -54,7 +55,6 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		framework.SkipUnlessProviderIs("vsphere")
 		client = f.ClientSet
 		namespace = f.Namespace.Name
-		nodeLabelMap = make(map[string]string)
 		nodeVolumeMapChan = make(chan map[string][]string)
 		Expect(os.Getenv("VCP_SCALE_VOLUME_COUNT")).NotTo(BeEmpty(), "ENV VCP_SCALE_VOLUME_COUNT is not set")
 		Expect(os.Getenv("VSPHERE_SPBM_GOLD_POLICY")).NotTo(BeEmpty(), "ENV VSPHERE_SPBM_GOLD_POLICY is not set")
@@ -83,7 +83,7 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 	})
 
 	It("vsphere scale tests", func() {
-		pvcClaimList := make([]string)
+		pvcClaimList := make([]string, volumeCount)
 		nodeVolumeMap := make(map[k8stypes.NodeName][]string)
 		// Volumes will be provisioned with each different types of Storage Class
 		scArrays := make([]*storageV1.StorageClass, 4)
@@ -150,8 +150,8 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		framework.Logf("balu - nodeVolumeMap: %+v", nodeVolumeMap)
 		podList, err := client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 		framework.Logf("balu - podList: %+v", podList)
-		for _, pod := range podList {
-			pvcClaimList = append(pvcClaimList, getClaimsForPod(pod)...)
+		for _, pod := range podList.Items {
+			pvcClaimList = append(pvcClaimList, getClaimsForPod(pod, volumesPerPod)...)
 			By("Deleting pod")
 			framework.DeletePodWithWait(f, client, pod)
 		}
@@ -162,14 +162,14 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		for _, pvcClaim := range pvcClaimList {
-			framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
+			framework.DeletePersistentVolumeClaim(client, pvcClaim.Name, namespace)
 		}
 	})
 })
 
 // Get PVC claims for the pod
-func getClaimsForPod(pod *v1.Pod) []string {
-	pvcClaimList := make([]string)
+func getClaimsForPod(pod *v1.Pod, int volumesPerPod) []string {
+	pvcClaimList := make([]string, volumesPerPod)
 	for _, volumespec := range pod.Spec.Volumes {
 		if volumespec.PersistentVolumeClaim != nil {
 			pvcClaimList = append(pvcClaimList, volumespec.PersistentVolumeClaim.ClaimName)
@@ -183,7 +183,7 @@ func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*s
 	nodeVolumeMap := make(map[string][]string)
 	for index := 0; index < volumeCountPerInstance; index = index + volumesPerPod {
 		pvclaims := make([]*v1.PersistentVolumeClaim, volumesPerPod)
-		for i = 0; i < volumesPerPod; i++ {
+		for i := 0; i < volumesPerPod; i++ {
 			By(fmt.Sprintf("Creating PVC%q using the Storage Class", index+1))
 			pvclaim, err := framework.CreatePVC(client, namespace, getVSphereClaimSpecWithStorageClassAnnotation(namespace, sc[index%len(sc)]))
 			Expect(err).NotTo(HaveOccurred())
