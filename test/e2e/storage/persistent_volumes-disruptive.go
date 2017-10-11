@@ -309,7 +309,7 @@ func initTestCase(f *framework.Framework, c clientset.Interface, pvConfig framew
 		}
 	}()
 	Expect(err).NotTo(HaveOccurred())
-	pod := framework.MakePod(ns, []*v1.PersistentVolumeClaim{pvc}, true, "")
+	pod := framework.MakePod(ns, nil, []*v1.PersistentVolumeClaim{pvc}, true, "")
 	pod.Spec.NodeName = nodeName
 	framework.Logf("Creating NFS client pod.")
 	pod, err = c.CoreV1().Pods(ns).Create(pod)
