@@ -153,7 +153,7 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		for _, pod := range podList.Items {
 			pvcClaimList = append(pvcClaimList, getClaimsForPod(pod, volumesPerPod)...)
 			By("Deleting pod")
-			framework.DeletePodWithWait(f, client, pod)
+			framework.DeletePodWithWait(f, client, &pod)
 		}
 		vsp, err := vsphere.GetVSphere()
 		Expect(err).NotTo(HaveOccurred())
@@ -162,13 +162,13 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		for _, pvcClaim := range pvcClaimList {
-			framework.DeletePersistentVolumeClaim(client, pvcClaim.Name, namespace)
+			framework.DeletePersistentVolumeClaim(client, pvcClaim, namespace)
 		}
 	})
 })
 
 // Get PVC claims for the pod
-func getClaimsForPod(pod *v1.Pod, int volumesPerPod) []string {
+func getClaimsForPod(pod *v1.Pod, volumesPerPod int) []string {
 	pvcClaimList := make([]string, volumesPerPod)
 	for _, volumespec := range pod.Spec.Volumes {
 		if volumespec.PersistentVolumeClaim != nil {
