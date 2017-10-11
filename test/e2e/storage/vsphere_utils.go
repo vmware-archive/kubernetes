@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golang/glog"
 	. "github.com/onsi/gomega"
 	"k8s.io/api/core/v1"
 	storage "k8s.io/api/storage/v1"
@@ -59,7 +58,7 @@ func verifyVSphereDiskAttached(vsp *vsphere.VSphere, volumePath string, nodeName
 func waitForVSphereDisksToDetach(vsp *vsphere.VSphere, nodeVolumes map[k8stypes.NodeName][]string) error {
 	var (
 		err            error
-		diskAttached   = true
+		disksAttached  = true
 		detachTimeout  = 5 * time.Minute
 		detachPollTime = 10 * time.Second
 	)
@@ -72,27 +71,25 @@ func waitForVSphereDisksToDetach(vsp *vsphere.VSphere, nodeVolumes map[k8stypes.
 	err = wait.Poll(detachPollTime, detachTimeout, func() (bool, error) {
 		attachedResult, err := vsp.DisksAreAttached(nodeVolumes)
 		if err != nil {
-			glog.Errorf("Error checking if volumes are attached to nodes: %+v. err: %v", volumePathsByNode, err)
-			return volumesAttachedCheck, err
+			return false, err
 		}
-		vsp.DisksAreAttached(volumePath, nodeName)
-		diskAttached, err = verifyVSphereDiskAttached(vsp, volumePath, nodeName)
-		if err != nil {
-			return true, err
+		for nodeName, nodeVolumes := range attachedResult {
+			for volumePath, attached := range nodeVolumes {
+				if attached {
+					framework.Logf("Waiting for volumes %q to detach from %q.", volumePath, string(nodeName))
+					return false, nil
+				}
+			}
 		}
-		if !diskAttached {
-			framework.Logf("Volume %q appears to have successfully detached from %q.",
-				volumePath, nodeName)
-			return true, nil
-		}
-		framework.Logf("Waiting for Volume %q to detach from %q.", volumePath, nodeName)
-		return false, nil
+		disksAttached = false
+		framework.Logf("Volume are successfully detached from all the nodes: %+v", nodeVolumes)
+		return true, nil
 	})
 	if err != nil {
 		return err
 	}
-	if diskAttached {
-		return fmt.Errorf("Gave up waiting for Volume %q to detach from %q after %v", volumePath, nodeName, detachTimeout)
+	if disksAttached {
+		return fmt.Errorf("Gave up waiting for volumes to detach after %v", detachTimeout)
 	}
 	return nil
 }

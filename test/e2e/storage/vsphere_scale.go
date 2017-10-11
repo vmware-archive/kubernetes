@@ -10,6 +10,7 @@ import (
 	"github.com/pborman/uuid"
 	"k8s.io/api/core/v1"
 	storageV1 "k8s.io/api/storage/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -83,7 +84,7 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 
 	It("vsphere scale tests", func() {
 		pvcClaimList := make([]string)
-		nodeVolumeMap := make(map[string][]string)
+		nodeVolumeMap := make(map[k8stypes.NodeName][]string)
 		// Volumes will be provisioned with each different types of Storage Class
 		scArrays := make([]*storageV1.StorageClass, 4)
 		// Create default vSphere Storage Class
@@ -143,10 +144,12 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		// Get the list of all volumes attached to each node from the go routines by reading the data from the channel
 		for instanceCount := 0; instanceCount < 3; instanceCount++ {
 			for node, volumeList := range <-nodeVolumeMapChan {
-				nodeVolumeMap[node] = append(nodeVolumeMap[node], volumeList...)
+				nodeVolumeMap[k8stypes.NodeName(node)] = append(nodeVolumeMap[k8stypes.NodeName(node)], volumeList...)
 			}
 		}
+		framework.Logf("balu - nodeVolumeMap: %+v", nodeVolumeMap)
 		podList, err := client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
+		framework.Logf("balu - podList: %+v", podList)
 		for _, pod : range podList {
 			pvcClaimList = append(pvcClaimList, getClaimsForPod(pod)...)
 			By("Deleting pod")
@@ -155,7 +158,8 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		vsp, err := vsphere.GetVSphere()
 		Expect(err).NotTo(HaveOccurred())
 		By("Waiting for volumes to be detached from the node")
-		waitForVSphereDiskToDetach(vsp, persistentvolumes[0].Spec.VsphereVolume.VolumePath, k8stype.NodeName(pod.Spec.NodeName))
+		err = waitForVSphereDisksToDetach(vsp, nodeVolumeMap)
+		Expect(err).NotTo(HaveOccurred())
 
 		for _, pvcClaim := range pvcClaimList{
 			framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
