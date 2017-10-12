@@ -32,6 +32,7 @@ const (
 	SCSIUnitsAvailablePerNode = 55
 )
 
+// NodeSelector holds
 type NodeSelector struct {
 	labelKey   string
 	labelValue string
@@ -49,9 +50,11 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		numberOfInstances int
 		volumesPerPod     int
 		nodeVolumeMapChan chan map[string][]string
+		nodes             *v1.NodeList
 	)
 
 	BeforeEach(func() {
+		var err error
 		framework.SkipUnlessProviderIs("vsphere")
 		client = f.ClientSet
 		namespace = f.Namespace.Name
@@ -60,7 +63,7 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		Expect(os.Getenv("VSPHERE_SPBM_GOLD_POLICY")).NotTo(BeEmpty(), "ENV VSPHERE_SPBM_GOLD_POLICY is not set")
 		Expect(os.Getenv("VSPHERE_DATASTORE")).NotTo(BeEmpty(), "ENV VSPHERE_DATASTORE is not set")
 
-		volumesPerPod, err := strconv.Atoi(os.Getenv("VCP_SCALE_VOLUME_PER_POD"))
+		volumesPerPod, err = strconv.Atoi(os.Getenv("VCP_SCALE_VOLUME_PER_POD"))
 		Expect(err).NotTo(HaveOccurred(), "Error Parsing VCP_SCALE_VOLUME_PER_POD")
 
 		numberOfInstances, err = strconv.Atoi(os.Getenv("VCP_SCALE_INSTANCES"))
@@ -69,7 +72,8 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		// Verify volume count specified by the user can be satisfied
 		volumeCount, err = strconv.Atoi(os.Getenv("VCP_SCALE_VOLUME_COUNT"))
 		Expect(err).NotTo(HaveOccurred(), "Error Parsing VCP_SCALE_VOLUME_COUNT")
-		nodes := framework.GetReadySchedulableNodesOrDie(client)
+		framework.Logf("balu - volumesPerPod: %d, numberOfInstances: %d, volumeCount: %d", volumesPerPod, numberOfInstances, volumeCount)
+		nodes = framework.GetReadySchedulableNodesOrDie(client)
 		if len(nodes.Items) < 2 {
 			framework.Skipf("Requires at least %d nodes (not %d)", 2, len(nodes.Items))
 		}
@@ -77,8 +81,19 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 			framework.Skipf("Cannot attach %d volumes to %d nodes. Maximum volumes that can be attached on %d nodes is %d", volumeCount, len(nodes.Items), len(nodes.Items), SCSIUnitsAvailablePerNode*len(nodes.Items))
 		}
 		if !areNodesLabeled {
-			createNodeLabels(client, namespace, nodeSelectorList)
+			framework.Logf("balu - creating node labels on all nodes for first time")
+			createNodeLabels(client, namespace, nodes, nodeSelectorList)
 			areNodesLabeled = true
+		}
+	})
+
+	/*
+		Remove labels from all the nodes
+	*/
+	framework.AddCleanupAction(func() {
+		framework.Logf("balu - deleting node labels on all nodes")
+		for _, node := range nodes.Items {
+			framework.RemoveLabelOffNode(c, node.Name, NodeLabelKey)
 		}
 	})
 
@@ -180,6 +195,8 @@ func getClaimsForPod(pod *v1.Pod, volumesPerPod int) []string {
 
 // VolumeCreateAndAttach peforms create and attach operations of vSphere persistent volumes at scale
 func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*storageV1.StorageClass, volumeCountPerInstance int, volumesPerPod int, nodeSelectorList []*NodeSelector, nodeVolumeMapChan chan map[string][]string) {
+	defer GinkgoRecover()
+	framework.Logf("balu - volumeCountPerInstance: %d, volumesPerPod: %d", volumeCountPerInstance, volumesPerPod)
 	nodeVolumeMap := make(map[string][]string)
 	for index := 0; index < volumeCountPerInstance; index = index + volumesPerPod {
 		pvclaims := make([]*v1.PersistentVolumeClaim, volumesPerPod)
@@ -196,6 +213,7 @@ func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*s
 
 		By("Creating pod to attach PV to the node")
 		nodeSelector := nodeSelectorList[index%len(nodeSelectorList)]
+		framework.Logf("balu - using nodeSelector: %+v", nodeSelector)
 		// Create pod to attach Volume to Node
 		pod, err := framework.CreatePod(client, namespace, map[string]string{nodeSelector.labelKey: nodeSelector.labelValue}, pvclaims, false, "")
 		Expect(err).NotTo(HaveOccurred())
@@ -208,11 +226,11 @@ func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*s
 		By("Verify the volume is accessible and available in the pod")
 		verifyVSphereVolumesAccessible(pod, persistentvolumes, vsp)
 	}
+	framework.Logf("balu - nodeVolumeMap: %+v for channel", nodeVolumeMap)
 	nodeVolumeMapChan <- nodeVolumeMap
 }
 
-func createNodeLabels(client clientset.Interface, namespace string, nodeSelectorList []*NodeSelector) {
-	nodes := framework.GetReadySchedulableNodesOrDie(client)
+func createNodeLabels(client clientset.Interface, nodes *v1.NodeList, namespace string, nodeSelectorList []*NodeSelector) {
 	for _, node := range nodes.Items {
 		labelVal := "vsphere_e2e_" + string(uuid.NewUUID())
 		nodeSelector := &NodeSelector{
