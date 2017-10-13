@@ -19,6 +19,7 @@ package storage
 import (
 	"time"
 
+	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/api/core/v1"
@@ -164,8 +165,20 @@ var _ = SIGDescribe("PersistentVolumes:vsphere", func() {
 		verifyVSphereVolumesAccessible(pod, pvs, vsp)
 		framework.Logf("Verified that Volume is accessible in the POD after deleting PV claim")
 
+		// Verify PV is Present, after PVC is deleted and PV status should be Failed.
+		pv, err := c.CoreV1().PersistentVolumes().Get(pvc.Spec.VolumeName, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pv.Status.Phase == v1.VolumeFailed).To(BeTrue())
+
 		By("Deleting the Pod")
 		framework.ExpectNoError(framework.DeletePodWithWait(f, c, clientPod), "Failed to delete pod ", clientPod.Name)
+
+		By("Verify PV is detached from the node after Pod is deleted")
+		Expect(waitForVSphereDiskToDetach(vsp, pv.Spec.VsphereVolume.VolumePath, types.NodeName(pod.Spec.NodeName))).NotTo(HaveOccurred())
+
+		By("Verify PV is deleted after the Pod is deleted")
+		framework.ExpectNoError(framework.WaitForPersistentVolumeDeleted(c, pv.Name, 1*time.Second, 30*time.Second))
+
 	})
 
 	/*
