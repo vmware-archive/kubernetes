@@ -54,6 +54,46 @@ func verifyVSphereDiskAttached(vsp *vsphere.VSphere, volumePath string, nodeName
 	return isAttached, err
 }
 
+// Wait until vsphere volumes are detached from the list of nodes or time out after 5 minutes
+func waitForVSphereDisksToDetach(vsp *vsphere.VSphere, nodeVolumes map[k8stype.NodeName][]string) error {
+	var (
+		err            error
+		disksAttached  = true
+		detachTimeout  = 5 * time.Minute
+		detachPollTime = 10 * time.Second
+	)
+	if vsp == nil {
+		vsp, err = vsphere.GetVSphere()
+		if err != nil {
+			return err
+		}
+	}
+	err = wait.Poll(detachPollTime, detachTimeout, func() (bool, error) {
+		attachedResult, err := vsp.DisksAreAttached(nodeVolumes)
+		if err != nil {
+			return false, err
+		}
+		for nodeName, nodeVolumes := range attachedResult {
+			for volumePath, attached := range nodeVolumes {
+				if attached {
+					framework.Logf("Waiting for volumes %q to detach from %q.", volumePath, string(nodeName))
+					return false, nil
+				}
+			}
+		}
+		disksAttached = false
+		framework.Logf("Volume are successfully detached from all the nodes: %+v", nodeVolumes)
+		return true, nil
+	})
+	if err != nil {
+		return err
+	}
+	if disksAttached {
+		return fmt.Errorf("Gave up waiting for volumes to detach after %v", detachTimeout)
+	}
+	return nil
+}
+
 // Wait until vsphere vmdk is deteched from the given node or time out after 5 minutes
 func waitForVSphereDiskToDetach(vsp *vsphere.VSphere, volumePath string, nodeName types.NodeName) error {
 	var (
