@@ -44,7 +44,7 @@ import (
 const (
 	NodeLabelKey              = "vsphere_e2e_label"
 	SCSIUnitsAvailablePerNode = 55
-	NumOps                    = 4
+	NumOps                    = 4 //Number of volume operations whose latency is to be calculated
 )
 
 // NodeSelector holds
@@ -61,6 +61,8 @@ var _ = SIGDescribe("vcp-performance", func() {
 		namespace        string
 		nodeSelectorList []*NodeSelector
 		volumeCount      int
+		volumesPerPod    int
+		iterations       int
 	)
 
 	BeforeEach(func() {
@@ -78,6 +80,10 @@ var _ = SIGDescribe("vcp-performance", func() {
 		// Verify volume count specified by the user can be satisfied
 		volumeCount, err = strconv.Atoi(os.Getenv("VCP_PERF_VOLUME_COUNT"))
 		Expect(err).NotTo(HaveOccurred(), "Error Parsing VCP_PERF_VOLUME_COUNT")
+		volumesPerPod, err = strconv.Atoi(os.Getenv("VCP_PERF_VOLUME_PER_POD"))
+		Expect(err).NotTo(HaveOccurred(), "Error Parsing VCP_PERF_VOLUME_PER_POD")
+		iterations, err = strconv.Atoi(os.Getenv("VCP_PERF_ITERATIONS"))
+		Expect(err).NotTo(HaveOccurred(), "Error Parsing VCP_PERF_ITERATIONS")
 
 		nodes := framework.GetReadySchedulableNodesOrDie(client)
 		if len(nodes.Items) < 2 {
@@ -93,11 +99,6 @@ var _ = SIGDescribe("vcp-performance", func() {
 	It("vcp performance tests", func() {
 		scList := getTestStorageClasses(client)
 
-		volumesPerPod, err := strconv.Atoi(os.Getenv("VCP_PERF_VOLUME_PER_POD"))
-		Expect(err).NotTo(HaveOccurred(), "Error Parsing VCP_PERF_VOLUME_PER_POD")
-		iterations, err := strconv.Atoi(os.Getenv("VCP_PERF_ITERATIONS"))
-		Expect(err).NotTo(HaveOccurred(), "Error Parsing VCP_PERF_ITERATIONS")
-
 		var sumLatency [NumOps]int64
 		for i := 0; i < iterations; i++ {
 			latency := invokeVolumeLifeCyclePerformance(f, client, namespace, scList, volumesPerPod, volumeCount, nodeSelectorList)
@@ -106,11 +107,12 @@ var _ = SIGDescribe("vcp-performance", func() {
 			}
 		}
 
+		iterations64 := int64(iterations)
 		framework.Logf("Average latency for below operations")
-		framework.Logf("Creating PVCs and waiting for bound phase: %v microseconds", sumLatency[0]/NumOps)
-		framework.Logf("Creating Pod: %v microseconds", sumLatency[1]/NumOps)
-		framework.Logf("Deleting Pod and waiting for disk to be detached: %v microseconds", sumLatency[2]/NumOps)
-		framework.Logf("Deleting the PVCs: %v microseconds", sumLatency[3]/NumOps)
+		framework.Logf("Creating %v PVCs and waiting for bound phase: %v microseconds", volumeCount, sumLatency[0]/iterations64)
+		framework.Logf("Creating %v Pod: %v microseconds", volumeCount/volumesPerPod, sumLatency[1]/iterations64)
+		framework.Logf("Deleting %v Pod and waiting for disk to be detached: %v microseconds", volumeCount/volumesPerPod, sumLatency[2]/iterations64)
+		framework.Logf("Deleting %v PVCs: %v microseconds", volumeCount, sumLatency[3]/iterations64)
 
 		for _, sc := range scList {
 			client.StorageV1().StorageClasses().Delete(sc.Name, nil)
@@ -119,47 +121,48 @@ var _ = SIGDescribe("vcp-performance", func() {
 })
 
 func getTestStorageClasses(client clientset.Interface) []*storageV1.StorageClass {
-	// Volumes will be provisioned with each different types of Storage Class
-	var scParamsList []*storageV1.StorageClass
-	var scList []*storageV1.StorageClass
-
-	// Create default vSphere Storage Class
-	By("Creating Storage Class : sc-default")
-	scDefaultSpec := getVSphereStorageClassSpec("sc-default", nil)
-	scParamsList = append(scParamsList, scDefaultSpec)
-
-	// Create Storage Class with vsan storage capabilities
-	By("Creating Storage Class : sc-vsan")
-	scvsanParameters := make(map[string]string)
-	scvsanParameters[Policy_HostFailuresToTolerate] = "1"
-	scvsanSpec := getVSphereStorageClassSpec("sc-vsan", scvsanParameters)
-	scParamsList = append(scParamsList, scvsanSpec)
-
-	// Create Storage Class with SPBM Policy
-	By("Creating Storage Class : sc-spbm")
-	scSpbmPolicyParameters := make(map[string]string)
-	goldPolicy := os.Getenv("VSPHERE_SPBM_GOLD_POLICY")
-	Expect(goldPolicy).NotTo(BeEmpty())
-	scSpbmPolicyParameters[SpbmStoragePolicy] = goldPolicy
-	scSpbmPolicySpec := getVSphereStorageClassSpec("sc-spbm", scSpbmPolicyParameters)
-	scParamsList = append(scParamsList, scSpbmPolicySpec)
-
-	// Create Storage Class with User Specified Datastore.
-	By("Creating Storage Class : sc-user-specified-datastore")
-	scWithDatastoreParameters := make(map[string]string)
-	datastore := os.Getenv("VSPHERE_DATASTORE")
-	Expect(goldPolicy).NotTo(BeEmpty())
-	scWithDatastoreParameters[Datastore] = datastore
-	scWithDatastoreSpec := getVSphereStorageClassSpec("sc-user-specified-ds", scWithDatastoreParameters)
-	scParamsList = append(scParamsList, scWithDatastoreSpec)
-
-	for _, params := range scParamsList {
-		storageClass, err := client.StorageV1().StorageClasses().Create(params)
+	const (
+		storageclass1 = "sc-default"
+		storageclass2 = "sc-vsan"
+		storageclass3 = "sc-spbm"
+		storageclass4 = "sc-user-specified-ds"
+	)
+	scNames := []string{storageclass1, storageclass2, storageclass3, storageclass4}
+	scArrays := make([]*storageV1.StorageClass, len(scNames))
+	for index, scname := range scNames {
+		// Create vSphere Storage Class
+		By(fmt.Sprintf("Creating Storage Class : %v", scname))
+		var sc *storageV1.StorageClass
+		var err error
+		switch scname {
+		case storageclass1:
+			sc, err = client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec(storageclass1, nil))
+		case storageclass2:
+			var scVSanParameters map[string]string
+			scVSanParameters = make(map[string]string)
+			scVSanParameters[Policy_HostFailuresToTolerate] = "1"
+			sc, err = client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec(storageclass2, scVSanParameters))
+		case storageclass3:
+			var scSPBMPolicyParameters map[string]string
+			scSPBMPolicyParameters = make(map[string]string)
+			policyName := os.Getenv("VSPHERE_SPBM_GOLD_POLICY")
+			Expect(policyName).NotTo(BeEmpty())
+			scSPBMPolicyParameters[SpbmStoragePolicy] = policyName
+			sc, err = client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec(storageclass3, scSPBMPolicyParameters))
+		case storageclass4:
+			var scWithDSParameters map[string]string
+			scWithDSParameters = make(map[string]string)
+			datastoreName := os.Getenv("VSPHERE_DATASTORE")
+			Expect(datastoreName).NotTo(BeEmpty())
+			scWithDSParameters[Datastore] = datastoreName
+			scWithDatastoreSpec := getVSphereStorageClassSpec(storageclass4, scWithDSParameters)
+			sc, err = client.StorageV1().StorageClasses().Create(scWithDatastoreSpec)
+		}
+		Expect(sc).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
-		scList = append(scList, storageClass)
+		scArrays[index] = sc
 	}
-
-	return scList
+	return scArrays
 }
 
 // invokeVolumeLifeCyclePerformance peforms full volume life cycle management and records latency for each operation
