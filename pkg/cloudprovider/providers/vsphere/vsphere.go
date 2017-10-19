@@ -142,6 +142,7 @@ type VSphereConfig struct {
 		SCSIControllerType string `dcfg:"scsicontrollertype"`
 	}
 
+	// Endpoint used to create volumes
 	Workspace struct {
 		VCenterIP  string `gcfg:"server"`
 		Datacenter string `gcfg:"datacenter"`
