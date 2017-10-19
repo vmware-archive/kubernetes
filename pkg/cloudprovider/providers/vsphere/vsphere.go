@@ -661,6 +661,15 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeNam
 	}
 	requestTime := time.Now()
 	diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyID, nodeName)
+	if err != nil {
+		if IsManagedObjectNotFoundError(err) {
+			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
+			err := vs.nodeManager.RediscoverNode(nodeName)
+			if err == nil {
+				diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyID, nodeName)
+			}
+		}
+	}
 	vclib.RecordvSphereMetric(vclib.OperationAttachVolume, requestTime, err)
 	return diskUUID, err
 }
@@ -703,7 +712,16 @@ func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error 
 	}
 	requestTime := time.Now()
 	err := detachDiskInternal(volPath, nodeName)
-	vclib.RecordvSphereMetric(vclib.OperationDetachVolume, requestTime, nil)
+	if err != nil {
+		if IsManagedObjectNotFoundError(err) {
+			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
+			err := vs.nodeManager.RediscoverNode(nodeName)
+			if err == nil {
+				err = detachDiskInternal(volPath, nodeName)
+			}
+		}
+	}
+	vclib.RecordvSphereMetric(vclib.OperationDetachVolume, requestTime, err)
 	return err
 }
 
@@ -731,7 +749,7 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 		}
 		vm, err := vs.getVMByName(ctx, nodeName)
 		if err != nil {
-			if vclib.IsNotFound(err) {
+			if vm == nil {
 				glog.Warningf("Node %q does not exist, vsphere CP will assume disk %v is not attached to it.", nodeName, volPath)
 				// make the disk as detached and return false without error.
 				return false, nil
@@ -750,6 +768,19 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 	}
 	requestTime := time.Now()
 	isAttached, err := diskIsAttachedInternal(volPath, nodeName)
+	if err != nil {
+		if IsManagedObjectNotFoundError(err) {
+			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
+			err = vs.nodeManager.RediscoverNode(nodeName)
+			if err != nil {
+				if IsManagedObjectNotFoundError(err) {
+					isAttached, err = false, nil
+				}
+			} else {
+				isAttached, err = diskIsAttachedInternal(volPath, nodeName)
+			}
+		}
+	}
 	vclib.RecordvSphereMetric(vclib.OperationDiskIsAttached, requestTime, err)
 	return isAttached, err
 }
@@ -782,7 +813,7 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 		}
 		vm, err := vs.getVMByName(ctx, nodeName)
 		if err != nil {
-			if vclib.IsNotFound(err) {
+			if vm == nil {
 				glog.Warningf("Node %q does not exist, vsphere CP will assume all disks %v are not attached to it.", nodeName, volPaths)
 				// make all the disks as detached and return false without error.
 				attached := make(map[string]bool)
@@ -814,7 +845,21 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 		return attached, nil
 	}
 	requestTime := time.Now()
+
 	attached, err := disksAreAttachedInternal(volPaths, nodeName)
+	if err != nil {
+		if IsManagedObjectNotFoundError(err) {
+			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
+			err = vs.nodeManager.RediscoverNode(nodeName)
+			if err != nil {
+				if IsManagedObjectNotFoundError(err) {
+					attached, err = make(map[string]bool), nil
+				}
+			} else {
+				attached, err = disksAreAttachedInternal(volPaths, nodeName)
+			}
+		}
+	}
 	vclib.RecordvSphereMetric(vclib.OperationDisksAreAttached, requestTime, err)
 	return attached, err
 }

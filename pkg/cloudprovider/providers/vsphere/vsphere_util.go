@@ -35,6 +35,8 @@ import (
 
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers"
+	"github.com/vmware/govmomi/vim25/types"
+	"github.com/vmware/govmomi/vim25/soap"
 )
 
 const (
@@ -313,4 +315,9 @@ func (vs *VSphere) cleanUpDummyVMs(dummyVMPrefix string) {
 			glog.V(4).Infof("Unable to clean up dummy VM's in the kubernetes cluster: %q. err: %+v", vs.cfg.Global.WorkingDir, err)
 		}
 	}
+}
+
+func IsManagedObjectNotFoundError(err error) bool {
+	_, isManagedObjectNotFoundError := soap.ToSoapFault(err).VimFault().(types.ManagedObjectNotFound)
+	return isManagedObjectNotFoundError
 }
