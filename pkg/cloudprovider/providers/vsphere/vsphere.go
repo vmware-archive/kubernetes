@@ -664,8 +664,9 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeNam
 	if err != nil {
 		if IsManagedObjectNotFoundError(err) {
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
-			err := vs.nodeManager.RediscoverNode(nodeName)
+			err = vs.nodeManager.RediscoverNode(nodeName)
 			if err == nil {
+				glog.V(4).Infof("AttachDisk: Found node %q", convertToString(nodeName))
 				diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyID, nodeName)
 			}
 		}
@@ -715,7 +716,7 @@ func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error 
 	if err != nil {
 		if IsManagedObjectNotFoundError(err) {
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
-			err := vs.nodeManager.RediscoverNode(nodeName)
+			err = vs.nodeManager.RediscoverNode(nodeName)
 			if err == nil {
 				err = detachDiskInternal(volPath, nodeName)
 			}
@@ -749,7 +750,7 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 		}
 		vm, err := vs.getVMByName(ctx, nodeName)
 		if err != nil {
-			if vm == nil {
+			if err == vclib.ErrNoVMFound {
 				glog.Warningf("Node %q does not exist, vsphere CP will assume disk %v is not attached to it.", nodeName, volPath)
 				// make the disk as detached and return false without error.
 				return false, nil
@@ -772,11 +773,9 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 		if IsManagedObjectNotFoundError(err) {
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
 			err = vs.nodeManager.RediscoverNode(nodeName)
-			if err != nil {
-				if IsManagedObjectNotFoundError(err) {
-					isAttached, err = false, nil
-				}
-			} else {
+			if err == vclib.ErrNoVMFound {
+				isAttached, err = false, nil
+			} else if err == nil {
 				isAttached, err = diskIsAttachedInternal(volPath, nodeName)
 			}
 		}
@@ -813,7 +812,7 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 		}
 		vm, err := vs.getVMByName(ctx, nodeName)
 		if err != nil {
-			if vm == nil {
+			if vclib.ErrNoVMFound == nil {
 				glog.Warningf("Node %q does not exist, vsphere CP will assume all disks %v are not attached to it.", nodeName, volPaths)
 				// make all the disks as detached and return false without error.
 				attached := make(map[string]bool)
@@ -851,11 +850,9 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 		if IsManagedObjectNotFoundError(err) {
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
 			err = vs.nodeManager.RediscoverNode(nodeName)
-			if err != nil {
-				if IsManagedObjectNotFoundError(err) {
-					attached, err = make(map[string]bool), nil
-				}
-			} else {
+			if err == vclib.ErrNoVMFound {
+				attached, err = make(map[string]bool), nil
+			} else if err == nil {
 				attached, err = disksAreAttachedInternal(volPaths, nodeName)
 			}
 		}

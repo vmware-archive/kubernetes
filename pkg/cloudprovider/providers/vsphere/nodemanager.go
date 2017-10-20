@@ -57,27 +57,46 @@ const (
 )
 
 func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
-
 	type VmSearch struct {
 		vc         string
 		datacenter *vclib.Datacenter
 	}
 
 	var mutex = &sync.Mutex{}
-
+	var globalErrMutex = &sync.Mutex{}
 	var queueChannel chan *VmSearch
 	var wg sync.WaitGroup
+	var globalErr *error
+
 	queueChannel = make(chan *VmSearch, QUEUE_SIZE)
 	nodeUUID := node.Status.NodeInfo.SystemUUID
 	vmFound := false
+	globalErr = nil
+
+	setGlobalErr := func (err error) {
+		globalErrMutex.Lock()
+		globalErr = &err
+		globalErrMutex.Unlock()
+	}
+
+	setVMFound := func (found bool) {
+			mutex.Lock()
+			vmFound = found
+			mutex.Unlock()
+	}
+
+	getVMFound := func () bool {
+		mutex.Lock()
+		found := vmFound
+		mutex.Unlock()
+		return found
+	}
 
 	go func() {
 		var datacenterObjs []*vclib.Datacenter
 		for vc, vsi := range nm.vsphereInstanceMap {
 
-			mutex.Lock()
-			found := vmFound
-			mutex.Unlock()
+			found := getVMFound()
 			if found == true {
 				break
 			}
@@ -89,6 +108,7 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 			err := vsi.conn.Connect(ctx)
 			if err != nil {
 				glog.V(4).Info("Discovering node error vc:", err)
+				setGlobalErr(err)
 				continue
 			}
 
@@ -96,6 +116,7 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 				datacenterObjs, err = vclib.GetAllDatacenter(ctx, vsi.conn)
 				if err != nil {
 					glog.V(4).Info("Discovering node error dc:", err)
+					setGlobalErr(err)
 					continue
 				}
 			} else {
@@ -108,15 +129,15 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 					datacenterObj, err := vclib.GetDatacenter(ctx, vsi.conn, dc)
 					if err != nil {
 						glog.V(4).Info("Discovering node error dc:", err)
+						setGlobalErr(err)
+						continue
 					}
 					datacenterObjs = append(datacenterObjs, datacenterObj)
 				}
 			}
 
 			for _, datacenterObj := range datacenterObjs {
-				mutex.Lock()
-				found := vmFound
-				mutex.Unlock()
+				found := getVMFound()
 				if found == true {
 					break
 				}
@@ -140,6 +161,12 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 				if err != nil {
 					glog.V(4).Infof("Error %q while looking for vm=%+v in vc=%s and datacenter=%s",
 						err, node.Name, vm, res.vc, res.datacenter.Name())
+					if err != vclib.ErrNoVMFound {
+						setGlobalErr(err)
+					} else {
+						glog.V(4).Infof("Did not find node %s in vc=%s and datacenter=%s",
+							node.Name, res.vc, res.datacenter.Name(), err)
+					}
 					continue
 				}
 				if vm != nil {
@@ -148,16 +175,9 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 
 					nodeInfo := &NodeInfo{dataCenter: res.datacenter, vm: vm, vcServer: res.vc}
 					nm.addNodeInfo(node.ObjectMeta.Name, nodeInfo)
-					for range queueChannel {
-					}
-					mutex.Lock()
-					vmFound = true
-					mutex.Unlock()
+					for range queueChannel {}
+					setVMFound(true)
 					break
-
-				} else {
-					glog.V(4).Infof("Did not find node %s in vc=%s and datacenter=%s",
-						node.Name, res.vc, res.datacenter.Name(), err)
 				}
 			}
 			wg.Done()
@@ -165,10 +185,15 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 		wg.Add(1)
 	}
 	wg.Wait()
-	if !vmFound {
-		return fmt.Errorf("discovery failed for node %q", node.ObjectMeta.Name)
+	if vmFound {
+		return nil
 	}
-	return nil
+	if globalErr != nil {
+		return *globalErr
+	}
+
+	glog.V(4).Infof("Discovery Node: %q vm not found", node.Name)
+	return vclib.ErrNoVMFound
 }
 
 func (nm *NodeManager) RegisterNode(node *v1.Node) error {
@@ -220,7 +245,8 @@ func (nm *NodeManager) GetNodeInfo(nodeName k8stypes.NodeName) (NodeInfo, error)
 	if nodeInfo == nil {
 		err := nm.RediscoverNode(nodeName)
 		if err != nil {
-			return NodeInfo{}, fmt.Errorf("error %q node info for node %q not found", err, convertToString(nodeName))
+			glog.V(4).Infof("error %q node info for node %q not found", err, convertToString(nodeName))
+			return NodeInfo{}, err
 		}
 	}
 	return *nodeInfo, nil

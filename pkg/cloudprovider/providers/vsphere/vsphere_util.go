@@ -35,6 +35,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers"
+
 	"github.com/vmware/govmomi/vim25/types"
 	"github.com/vmware/govmomi/vim25/soap"
 )
@@ -318,6 +319,9 @@ func (vs *VSphere) cleanUpDummyVMs(dummyVMPrefix string) {
 }
 
 func IsManagedObjectNotFoundError(err error) bool {
-	_, isManagedObjectNotFoundError := soap.ToSoapFault(err).VimFault().(types.ManagedObjectNotFound)
+	isManagedObjectNotFoundError := false
+	if soap.IsSoapFault(err) {
+		_, isManagedObjectNotFoundError = soap.ToSoapFault(err).VimFault().(types.ManagedObjectNotFound)
+	}
 	return isManagedObjectNotFoundError
 }
