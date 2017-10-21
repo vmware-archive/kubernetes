@@ -94,6 +94,23 @@ func (dc *Datacenter) GetVMByPath(ctx context.Context, vmPath string) (*VirtualM
 	return &virtualMachine, nil
 }
 
+// TODO: Add doc
+func (dc *Datacenter) GetAllDatastores(ctx context.Context) ([]*Datastore, error) {
+	finder := getFinder(dc)
+	datastores, err := finder.DatastoreList(ctx, "*")
+	if err != nil {
+		glog.Errorf("Failed to get all the datastores. err: %+v", err)
+		return nil, err
+	}
+	var dsList []*Datastore
+	for _, datastore := range datastores {
+		dsList = append(dsList, &(Datastore{datastore, dc}))
+	}
+
+	return dsList, nil
+
+}
+
 // GetDatastoreByPath gets the Datastore object from the given vmDiskPath
 func (dc *Datacenter) GetDatastoreByPath(ctx context.Context, vmDiskPath string) (*Datastore, error) {
 	datastorePathObj := new(object.DatastorePath)
@@ -122,6 +139,23 @@ func (dc *Datacenter) GetDatastoreByName(ctx context.Context, name string) (*Dat
 	}
 	datastore := Datastore{ds, dc}
 	return &datastore, nil
+}
+
+// TODO: Add doc
+func (dc *Datacenter) GetResourcePool(ctx context.Context, computePath string) (*object.ResourcePool, error) {
+	finder := getFinder(dc)
+	var computeResource *object.ComputeResource
+	var err error
+	if computePath == "" {
+		computeResource, err = finder.DefaultComputeResource(ctx)
+	} else {
+		computeResource, err = finder.ComputeResource(ctx, computePath)
+	}
+	if err != nil {
+		glog.Errorf("Failed to get the ResourcePool for computePath '%s'. err: %+v", computePath, err)
+		return nil, err
+	}
+	return computeResource.ResourcePool(ctx)
 }
 
 // GetFolderByPath gets the Folder Object from the given folder path

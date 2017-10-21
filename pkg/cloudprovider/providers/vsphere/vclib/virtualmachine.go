@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/vim25/mo"
 	"github.com/vmware/govmomi/vim25/types"
 )
@@ -215,8 +216,8 @@ func (vm *VirtualMachine) IsActive(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-// GetAllAccessibleDatastores gets the list of accessible Datastores for the given Virtual Machine
-func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]*Datastore, error) {
+// GetAllAccessibleDatastores gets the names of accessible Datastores for the given Virtual Machine
+func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]string, error) {
 	host, err := vm.HostSystem(ctx)
 	if err != nil {
 		glog.Errorf("Failed to get host system for VM: %q. err: %+v", vm.InventoryPath, err)
@@ -229,11 +230,23 @@ func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]*Da
 		glog.Errorf("Failed to retrieve datastores for host: %+v. err: %+v", host, err)
 		return nil, err
 	}
-	var dsObjList []*Datastore
+	var dsRefList []types.ManagedObjectReference
 	for _, dsRef := range hostSystemMo.Datastore {
-		dsObjList = append(dsObjList, &Datastore{object.NewDatastore(vm.Client(), dsRef), vm.Datacenter})
+		dsRefList = append(dsRefList, dsRef)
 	}
-	return dsObjList, nil
+
+	var dsMoList []mo.Datastore
+	pc := property.DefaultCollector(vm.Client())
+	err = pc.Retrieve(ctx, dsRefList, []string{DatastoreNameProperty}, &dsMoList)
+	if err != nil {
+		glog.Errorf("Failed to get Datastore managed objects for: %+v, err: %v", dsRefList, err)
+		return nil, err
+	}
+	var dsNameList []string
+	for _, dsMo := range dsMoList {
+		dsNameList = append(dsNameList, dsMo.Name)
+	}
+	return dsNameList, nil
 }
 
 // CreateDiskSpec creates a disk spec for disk

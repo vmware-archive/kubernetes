@@ -142,18 +142,15 @@ func getvmUUID() (string, error) {
 }
 
 // Get all datastores accessible for the virtual machine object.
-func getSharedDatastoresInK8SCluster(ctx context.Context, folder *vclib.Folder) ([]*vclib.Datastore, error) {
-	vmList, err := folder.GetVirtualMachines(ctx)
-	if err != nil {
-		glog.Errorf("Failed to get virtual machines in the kubernetes cluster: %s, err: %+v", folder.InventoryPath, err)
-		return nil, err
-	}
+func getSharedDatastoresInK8SCluster(ctx context.Context, nodeManager *NodeManager) ([]string, error) {
+	vmList := nodeManager.GetNodeVms()
 	if vmList == nil || len(vmList) == 0 {
-		glog.Errorf("No virtual machines found in the kubernetes cluster: %s", folder.InventoryPath)
-		return nil, fmt.Errorf("No virtual machines found in the kubernetes cluster: %s", folder.InventoryPath)
+		msg := fmt.Sprintf("Kubernetes node vm list is empty. vmList : %+v", vmList)
+		glog.Error(msg)
+		return nil, fmt.Errorf(msg)
 	}
 	index := 0
-	var sharedDatastores []*vclib.Datastore
+	var sharedDatastores []string
 	for _, vm := range vmList {
 		vmName, err := vm.ObjectName(ctx)
 		if err != nil {
@@ -167,9 +164,16 @@ func getSharedDatastoresInK8SCluster(ctx context.Context, folder *vclib.Folder) 
 			if index == 0 {
 				sharedDatastores = accessibleDatastores
 			} else {
+				// Note that we are using datastore names for intersection. For multi-vc support, we are assuming that the
+				// datastore names are same for the shared storage across datacenters and virtual centers. This is because,
+				// the PVs will have the datastore name in the volume path if old version of k8s is used or due to upgrade
+				// or due to static provisioning or PVs. Using datastore URLs in PVs, VCP logic, vsphere.config,
+				// storage class etc should be thought through more.
+				// TODO: THIS IS WRONG! Use datastoreURL for intersection!!!
+				// Ideally we should intersect on datastore URLs here.
 				sharedDatastores = intersect(sharedDatastores, accessibleDatastores)
 				if len(sharedDatastores) == 0 {
-					return nil, fmt.Errorf("No shared datastores found in the Kubernetes cluster: %s", folder.InventoryPath)
+					return nil, fmt.Errorf("No shared datastores found in the Kubernetes cluster for vmList: %+v", vmList)
 				}
 			}
 			index++
@@ -178,12 +182,14 @@ func getSharedDatastoresInK8SCluster(ctx context.Context, folder *vclib.Folder) 
 	return sharedDatastores, nil
 }
 
-func intersect(list1 []*vclib.Datastore, list2 []*vclib.Datastore) []*vclib.Datastore {
-	var sharedDs []*vclib.Datastore
+func intersect(list1 []string, list2 []string) []string {
+	glog.V(4).Infof("list1: %+v", list1)
+	glog.V(4).Infof("list2: %+v", list2)
+	var sharedDs []string
 	for _, val1 := range list1 {
 		// Check if val1 is found in list2
 		for _, val2 := range list2 {
-			if val1.Reference().Value == val2.Reference().Value {
+			if val1 == val2 {
 				sharedDs = append(sharedDs, val1)
 				break
 			}
@@ -230,8 +236,21 @@ func getMostFreeDatastoreName(ctx context.Context, client *vim25.Client, dsObjLi
 	return dsMoList[index].Info.GetDatastoreInfo().Name, nil
 }
 
-func getPbmCompatibleDatastore(ctx context.Context, client *vim25.Client, storagePolicyName string, folder *vclib.Folder) (string, error) {
-	pbmClient, err := vclib.NewPbmClient(ctx, client)
+func getDatastoresForEndpointVC(ctx context.Context, dc *vclib.Datacenter, dsNames []string) []*vclib.Datastore {
+	var datastores []*vclib.Datastore
+	for _, dsName := range dsNames {
+		ds, err := dc.GetDatastoreByName(ctx, dsName)
+		if err != nil {
+			glog.V(4).Infof("Warning: Could not find datastore with name %s in datacenter %s! Ignoring it..", dsName, dc.Name())
+			continue
+		}
+		datastores = append(datastores, ds)
+	}
+	return datastores
+}
+
+func getPbmCompatibleDatastore(ctx context.Context, dc *vclib.Datacenter, storagePolicyName string, nodeManager *NodeManager) (string, error) {
+	pbmClient, err := vclib.NewPbmClient(ctx, dc.Client())
 	if err != nil {
 		return "", err
 	}
@@ -240,17 +259,23 @@ func getPbmCompatibleDatastore(ctx context.Context, client *vim25.Client, storag
 		glog.Errorf("Failed to get Profile ID by name: %s. err: %+v", storagePolicyName, err)
 		return "", err
 	}
-	sharedDsList, err := getSharedDatastoresInK8SCluster(ctx, folder)
+	sharedDs, err := getSharedDatastoresInK8SCluster(ctx, nodeManager)
 	if err != nil {
-		glog.Errorf("Failed to get shared datastores from kubernetes cluster: %s. err: %+v", folder.InventoryPath, err)
+		glog.Errorf("Failed to get shared datastores. err: %+v", err)
 		return "", err
 	}
-	compatibleDatastores, _, err := pbmClient.GetCompatibleDatastores(ctx, storagePolicyID, sharedDsList)
+	sharedDsList := getDatastoresForEndpointVC(ctx, dc, sharedDs)
+	if len(sharedDsList) == 0 {
+		msg := "No shared datastores found in the endpoint virtual center"
+		glog.Errorf(msg)
+		return "", errors.New(msg)
+	}
+	compatibleDatastores, _, err := pbmClient.GetCompatibleDatastores(ctx, dc, storagePolicyID, sharedDsList)
 	if err != nil {
 		glog.Errorf("Failed to get compatible datastores from datastores : %+v with storagePolicy: %s. err: %+v", sharedDsList, storagePolicyID, err)
 		return "", err
 	}
-	datastore, err := getMostFreeDatastoreName(ctx, client, compatibleDatastores)
+	datastore, err := getMostFreeDatastoreName(ctx, dc.Client(), compatibleDatastores)
 	if err != nil {
 		glog.Errorf("Failed to get most free datastore from compatible datastores: %+v. err: %+v", compatibleDatastores, err)
 		return "", err
@@ -258,17 +283,13 @@ func getPbmCompatibleDatastore(ctx context.Context, client *vim25.Client, storag
 	return datastore, err
 }
 
-func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter) (*vclib.VMOptions, error) {
+func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter, computePath string) (*vclib.VMOptions, error) {
 	var vmOptions vclib.VMOptions
-	nodeInfo, err := vs.nodeManager.GetNodeInfo(convertToK8sType(vs.hostName))
+	resourcePool, err := dc.GetResourcePool(ctx, computePath)
 	if err != nil {
 		return nil, err
 	}
-	resourcePool, err := nodeInfo.vm.GetResourcePool(ctx)
-	if err != nil {
-		return nil, err
-	}
-	folder, err := dc.GetFolderByPath(ctx, vs.cfg.Global.WorkingDir)
+	folder, err := dc.GetFolderByPath(ctx, vs.cfg.Workspace.Folder)
 	if err != nil {
 		return nil, err
 	}
@@ -284,24 +305,18 @@ func (vs *VSphere) cleanUpDummyVMs(dummyVMPrefix string) {
 	defer cancel()
 	for {
 		time.Sleep(CleanUpDummyVMRoutineInterval * time.Minute)
-		vsi, err := vs.getVSphereInstance(convertToK8sType(vs.hostName))
+		vsi, err := vs.getVSphereInstanceForServer(vs.cfg.Workspace.VCenterIP, ctx)
 		if err != nil {
 			glog.V(4).Infof("Failed to get VSphere instance with err: %+v. Retrying again...", err)
 			continue
 		}
-		// Ensure client is logged in and session is valid
-		err = vsi.conn.Connect(ctx)
+		dc, err := vclib.GetDatacenter(ctx, vsi.conn, vs.cfg.Workspace.Datacenter)
 		if err != nil {
-			glog.V(4).Infof("Failed to connect to VC with err: %+v. Retrying again...", err)
-			continue
-		}
-		dc, err := vclib.GetDatacenter(ctx, vsi.conn, vs.cfg.Global.Datacenter)
-		if err != nil {
-			glog.V(4).Infof("Failed to get the datacenter: %s from VC. err: %+v", vs.cfg.Global.Datacenter, err)
+			glog.V(4).Infof("Failed to get the datacenter: %s from VC. err: %+v", vs.cfg.Workspace.Datacenter, err)
 			continue
 		}
 		// Get the folder reference for global working directory where the dummy VM needs to be created.
-		vmFolder, err := dc.GetFolderByPath(ctx, vs.cfg.Global.WorkingDir)
+		vmFolder, err := dc.GetFolderByPath(ctx, vs.cfg.Workspace.Folder)
 		if err != nil {
 			glog.V(4).Infof("Unable to get the kubernetes folder: %q reference. err: %+v", vs.cfg.Global.WorkingDir, err)
 			continue

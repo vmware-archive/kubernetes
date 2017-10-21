@@ -260,6 +260,16 @@ func (nm *NodeManager) GetNodeInfo(nodeName k8stypes.NodeName) (NodeInfo, error)
 	return *nodeInfo, nil
 }
 
+func (nm *NodeManager) GetNodeVms() []*vclib.VirtualMachine {
+	nm.nodeInfoLock.RLock()
+	defer nm.nodeInfoLock.RUnlock()
+	var nodeVms []*vclib.VirtualMachine
+	for _, nodeInfo := range nm.nodeInfoMap {
+		nodeVms = append(nodeVms, nodeInfo.vm)
+	}
+	return nodeVms
+}
+
 func (nm *NodeManager) addNodeInfo(nodeName string, nodeInfo *NodeInfo) {
 	nm.nodeInfoLock.Lock()
 	nm.nodeInfoMap[nodeName] = nodeInfo

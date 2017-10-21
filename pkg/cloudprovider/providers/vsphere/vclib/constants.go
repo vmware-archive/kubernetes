@@ -43,7 +43,7 @@ const (
 	LogLevel                 = 4
 	DatastoreProperty        = "datastore"
 	ResourcePoolProperty     = "resourcePool"
-	DatastoreInfoProperty    = "info"
+	DatastoreNameProperty    = "name"
 	VirtualMachineType       = "VirtualMachine"
 	RoundTripperDefaultCount = 3
 	VSANDatastoreType        = "vsan"
