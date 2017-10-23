@@ -156,7 +156,7 @@ type VSphereConfig struct {
 type Volumes interface {
 	// AttachDisk attaches given disk to given node. Current node
 	// is used when nodeName is empty string.
-	AttachDisk(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskUUID string, err error)
+	AttachDisk(vmDiskPath string, storagePolicyName string, nodeName k8stypes.NodeName) (diskUUID string, err error)
 
 	// DetachDisk detaches given disk to given node. Current node
 	// is used when nodeName is empty string.
@@ -648,8 +648,8 @@ func (vs *VSphere) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []st
 }
 
 // AttachDisk attaches given virtual disk volume to the compute running kubelet.
-func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
-	attachDiskInternal := func(vmDiskPath string, storagePolicyID string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
+func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyName string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
+	attachDiskInternal := func(vmDiskPath string, storagePolicyName string, nodeName k8stypes.NodeName) (diskUUID string, err error) {
 		if nodeName == "" {
 			nodeName = convertToK8sType(vs.hostName)
 		}
@@ -665,11 +665,19 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeNam
 		if err != nil {
 			return "", err
 		}
+
 		vm, err := vs.getVMByName(ctx, nodeName)
 		if err != nil {
 			glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToString(nodeName), err)
 			return "", err
 		}
+
+		storagePolicyID, err := getStoragePolicyID(ctx, vm.Client(), storagePolicyName)
+		if err != nil {
+			glog.Errorf("Failed to get Profile ID for policy %s while attaching disk %s to node %s. err: %+v", storagePolicyName, vmDiskPath, nodeName, err)
+			return "", err
+		}
+
 		diskUUID, err = vm.AttachDisk(ctx, vmDiskPath, &vclib.VolumeOptions{SCSIControllerType: vclib.PVSCSIControllerType, StoragePolicyID: storagePolicyID})
 		if err != nil {
 			glog.Errorf("Failed to attach disk: %s for node: %s. err: +%v", vmDiskPath, convertToString(nodeName), err)
@@ -678,14 +686,14 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyID string, nodeNam
 		return diskUUID, nil
 	}
 	requestTime := time.Now()
-	diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyID, nodeName)
+	diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyName, nodeName)
 	if err != nil {
 		if IsManagedObjectNotFoundError(err) {
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
 			err = vs.nodeManager.RediscoverNode(nodeName)
 			if err == nil {
 				glog.V(4).Infof("AttachDisk: Found node %q", convertToString(nodeName))
-				diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyID, nodeName)
+				diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyName, nodeName)
 			}
 		}
 	}

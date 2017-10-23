@@ -280,6 +280,23 @@ func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter) (*vcl
 	return &vmOptions, nil
 }
 
+
+func getStoragePolicyID(ctx context.Context, client *vim25.Client, storagePolicyName string) (string, error) {
+	pbmClient, err := vclib.NewPbmClient(ctx, client)
+	if err != nil {
+		glog.Errorf("Error occurred while creating new pbmClient, err: %+v", err)
+		return "", err
+	}
+
+	storagePolicyID, err := pbmClient.ProfileIDByName(ctx, storagePolicyName)
+	if err != nil {
+		glog.Errorf("Error occurred while getting Profile Id from Profile Name: %s, err: %+v", storagePolicyName, err)
+		return "", err
+	}
+	return storagePolicyID, err
+}
+
+
 // A background routine which will be responsible for deleting stale dummy VM's.
 func (vs *VSphere) cleanUpDummyVMs(dummyVMPrefix string) {
 	// Create context
