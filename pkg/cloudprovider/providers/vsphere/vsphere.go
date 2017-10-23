@@ -539,53 +539,71 @@ func (vs *VSphere) InstanceExistsByProviderID(providerID string) (bool, error) {
 
 // InstanceID returns the cloud provider ID of the node with the specified Name.
 func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
-	// TODO: Based on hostname, locate the VM in VC inventory and check for following cases.
-	// 1. Node Present.
-	// 2. Node Powered On/ Powered off.
-	// Based on these kubernetes core decides to take specific actions.
-	// Also verify if this logic is required only on master or also on worker nodes.
-	if vs.hostName == convertToString(nodeName) {
-		return vs.hostName, nil
-	}
 
-	// TODO: Need to see what to do if nodename and localNodeName are not matching.
-	// return "", cloudprovider.InstanceNotFound
-
-	// TODO: Below logic is the existing logic.
-	//if vs.localInstanceID == convertToString(nodeName) {
-	//	return vs.cfg.Global.WorkingDir + "/" + vs.localInstanceID, nil
-	//}
-
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	vsi, err := vs.getVSphereInstance(nodeName)
-	if err != nil {
-		return "", err
-	}
-	// Ensure client is logged in and session is valid
-	err = vsi.conn.Connect(ctx)
-	if err != nil {
-		return "", err
-	}
-	vm, err := vs.getVMByName(ctx, nodeName)
-	if err != nil {
-		if vclib.IsNotFound(err) {
-			return "", cloudprovider.InstanceNotFound
+	instanceIDInternal := func() (string, error) {
+		// TODO: Based on hostname, locate the VM in VC inventory and check for following cases.
+		// 1. Node Present.
+		// 2. Node Powered On/ Powered off.
+		// Based on these kubernetes core decides to take specific actions.
+		// Also verify if this logic is required only on master or also on worker nodes.
+		if vs.hostName == convertToString(nodeName) {
+			return vs.hostName, nil
 		}
-		glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToString(nodeName), err)
-		return "", err
-	}
-	isActive, err := vm.IsActive(ctx)
-	if err != nil {
-		glog.Errorf("Failed to check whether node %q is active. err: %+v.", convertToString(nodeName), err)
-		return "", err
-	}
-	if isActive {
-		return "/" + vm.InventoryPath, nil
+
+		// TODO: Need to see what to do if nodename and localNodeName are not matching.
+		// return "", cloudprovider.InstanceNotFound
+
+		// TODO: Below logic is the existing logic.
+		//if vs.localInstanceID == convertToString(nodeName) {
+		//	return vs.cfg.Global.WorkingDir + "/" + vs.localInstanceID, nil
+		//}
+
+		// Create context
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		vsi, err := vs.getVSphereInstance(nodeName)
+		if err != nil {
+			return "", err
+		}
+		// Ensure client is logged in and session is valid
+		err = vsi.conn.Connect(ctx)
+		if err != nil {
+			return "", err
+		}
+		vm, err := vs.getVMByName(ctx, nodeName)
+		if err != nil {
+			if err == vclib.ErrNoVMFound {
+				return "", cloudprovider.InstanceNotFound
+			}
+			glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToString(nodeName), err)
+			return "", err
+		}
+		isActive, err := vm.IsActive(ctx)
+		if err != nil {
+			glog.Errorf("Failed to check whether node %q is active. err: %+v.", convertToString(nodeName), err)
+			return "", err
+		}
+		if isActive {
+			return "/" + vm.InventoryPath, nil
+		}
+		return "", fmt.Errorf("The node %q is not active", convertToString(nodeName))
 	}
 
-	return "", fmt.Errorf("The node %q is not active", convertToString(nodeName))
+	instanceID, err := instanceIDInternal()
+	if err != nil {
+		if IsManagedObjectNotFoundError(err) {
+			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
+			err = vs.nodeManager.RediscoverNode(nodeName)
+			if err == nil {
+				glog.V(4).Infof("AttachDisk: Found node %q", convertToString(nodeName))
+				instanceID, err = instanceIDInternal()
+			} else if err == vclib.ErrNoVMFound {
+				return "", cloudprovider.InstanceNotFound
+			}
+		}
+	}
+
+	return instanceID, err
 }
 
 // InstanceTypeByProviderID returns the cloudprovider instance type of the node with the specified unique providerID
