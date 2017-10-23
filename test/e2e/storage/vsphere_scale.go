@@ -168,6 +168,7 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 			By("Deleting pod")
 			framework.DeletePodWithWait(f, client, &pod)
 		}
+		framework.Logf("balu - nodeVolumeMap: %+v", nodeVolumeMap)
 		By("Waiting for volumes to be detached from the node")
 		err = waitForVSphereDisksToDetach(vsp, nodeVolumeMap)
 		Expect(err).NotTo(HaveOccurred())

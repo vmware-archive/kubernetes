@@ -73,6 +73,7 @@ func waitForVSphereDisksToDetach(vsp *vsphere.VSphere, nodeVolumes map[k8stype.N
 		if err != nil {
 			return false, err
 		}
+		framework.Logf("balu - attachedResult: %+v", attachedResult)
 		for nodeName, nodeVolumes := range attachedResult {
 			for volumePath, attached := range nodeVolumes {
 				if attached {
