@@ -163,11 +163,19 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 			}
 		}
 		podList, err := client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
+		framework.Logf("balu - Found %d pods before delete", len(podList.Items))
 		for _, pod := range podList.Items {
-			pvcClaimList = append(pvcClaimList, getClaimsForPod(&pod, volumesPerPod)...)
+			// test code
+			sample := getClaimsForPod(&pod, volumesPerPod)
+			framework.Logf("balu - found %d claims for pod which are %v", len(sample), sample)
+			// end of test code
+			pvcClaimList = append(pvcClaimList, sample...)
 			By("Deleting pod")
-			framework.DeletePodWithWait(f, client, &pod)
+			err = framework.DeletePodWithWait(f, client, &pod)
+			Expect(err).NotTo(HaveOccurred())
 		}
+		podList, err = client.CoreV1().Pods(namespace).List(metav1.ListOptions{})
+		framework.Logf("balu - Found %d pods after delete", len(podList.Items))
 		framework.Logf("balu - nodeVolumeMap: %+v", nodeVolumeMap)
 		By("Waiting for volumes to be detached from the node")
 		err = waitForVSphereDisksToDetach(vsp, nodeVolumeMap)
