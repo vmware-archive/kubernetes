@@ -239,9 +239,13 @@ func (nm *NodeManager) removeNode(node *v1.Node) {
 }
 
 func (nm *NodeManager) GetNodeInfo(nodeName k8stypes.NodeName) (NodeInfo, error) {
-	nm.nodeInfoLock.RLock()
-	nodeInfo := nm.nodeInfoMap[convertToString(nodeName)]
-	nm.nodeInfoLock.RUnlock()
+	getNodeInfo := func (nodeName k8stypes.NodeName) (*NodeInfo) {
+		nm.nodeInfoLock.RLock()
+		nodeInfo := nm.nodeInfoMap[convertToString(nodeName)]
+		nm.nodeInfoLock.RUnlock()
+		return nodeInfo
+	}
+	nodeInfo := getNodeInfo(nodeName)
 	if nodeInfo == nil {
 		err := nm.RediscoverNode(nodeName)
 		if err != nil {
@@ -249,6 +253,7 @@ func (nm *NodeManager) GetNodeInfo(nodeName k8stypes.NodeName) (NodeInfo, error)
 			return NodeInfo{}, err
 		}
 	}
+	nodeInfo = getNodeInfo(nodeName)
 	return *nodeInfo, nil
 }
 
@@ -261,7 +266,8 @@ func (nm *NodeManager) addNodeInfo(nodeName string, nodeInfo *NodeInfo) {
 func (nm *NodeManager) GetVSphereInstance(nodeName k8stypes.NodeName) (VSphereInstance, error) {
 	nodeInfo, err := nm.GetNodeInfo(nodeName)
 	if err != nil {
-		return VSphereInstance{}, fmt.Errorf("node info for node %q not found", convertToString(nodeName))
+		glog.V(4).Infof("node info for node %q not found", convertToString(nodeName))
+		return VSphereInstance{}, err
 	}
 	vsphereInstance := nm.vsphereInstanceMap[nodeInfo.vcServer]
 	if vsphereInstance == nil {

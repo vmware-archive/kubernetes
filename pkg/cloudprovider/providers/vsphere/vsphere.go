@@ -459,7 +459,7 @@ func (vs *VSphere) getVSphereInstance(nodeName k8stypes.NodeName) (*VSphereInsta
 	vsphereIns, err := vs.nodeManager.GetVSphereInstance(nodeName)
 	if err != nil {
 		glog.Errorf("Cannot find node %q in cache. Node not found!!!", nodeName)
-		return nil, errors.New(fmt.Sprintf("Cannot find node %q in vsphere configuration map", nodeName))
+		return nil, err
 	}
 	return &vsphereIns, nil
 }
@@ -595,7 +595,7 @@ func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
 			err = vs.nodeManager.RediscoverNode(nodeName)
 			if err == nil {
-				glog.V(4).Infof("AttachDisk: Found node %q", convertToString(nodeName))
+				glog.V(4).Infof("InstanceID: Found node %q", convertToString(nodeName))
 				instanceID, err = instanceIDInternal()
 			} else if err == vclib.ErrNoVMFound {
 				return "", cloudprovider.InstanceNotFound
@@ -672,13 +672,7 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyName string, nodeN
 			return "", err
 		}
 
-		storagePolicyID, err := getStoragePolicyID(ctx, vm.Client(), storagePolicyName)
-		if err != nil {
-			glog.Errorf("Failed to get Profile ID for policy %s while attaching disk %s to node %s. err: %+v", storagePolicyName, vmDiskPath, nodeName, err)
-			return "", err
-		}
-
-		diskUUID, err = vm.AttachDisk(ctx, vmDiskPath, &vclib.VolumeOptions{SCSIControllerType: vclib.PVSCSIControllerType, StoragePolicyID: storagePolicyID})
+		diskUUID, err = vm.AttachDisk(ctx, vmDiskPath, &vclib.VolumeOptions{SCSIControllerType: vclib.PVSCSIControllerType, StoragePolicyName: storagePolicyName})
 		if err != nil {
 			glog.Errorf("Failed to attach disk: %s for node: %s. err: +%v", vmDiskPath, convertToString(nodeName), err)
 			return "", err
