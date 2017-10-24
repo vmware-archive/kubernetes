@@ -244,6 +244,25 @@ func getPbmCompatibleDatastore(ctx context.Context, client *vim25.Client, storag
 	return datastore, err
 }
 
+func isSharedDatastore(ctx context.Context, folder *vclib.Folder, datastore string) (bool, error) {
+	sharedDsList, err := getSharedDatastoresInK8SCluster(ctx, folder)
+	if err != nil {
+		glog.Errorf("Failed to get shared datastores from kubernetes cluster: %s. err: %+v", folder.InventoryPath, err)
+		return false, err
+	}
+	for _, ds := range sharedDsList {
+		dsName, err := ds.ObjectName(ctx)
+		if err != nil {
+			glog.Errorf("Error occurred while getting datastore object name. err: %+v", err)
+			return false, err
+		}
+		if datastore == dsName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter) (*vclib.VMOptions, error) {
 	var vmOptions vclib.VMOptions
 	vm, err := dc.GetVMByPath(ctx, vs.cfg.Global.WorkingDir+"/"+vs.localInstanceID)

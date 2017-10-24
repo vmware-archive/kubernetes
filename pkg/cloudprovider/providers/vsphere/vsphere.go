@@ -650,6 +650,21 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 		if err != nil {
 			return "", err
 		}
+		isStoragePolicyWithoutDatastore := (volumeOptions.StoragePolicyName != "" && volumeOptions.Datastore == "")
+		if !isStoragePolicyWithoutDatastore {
+			folder, err := dc.GetFolderByPath(ctx, vs.cfg.Global.WorkingDir)
+			if err != nil {
+				return "", err
+			}
+			isShared, err := isSharedDatastore(ctx, folder, datastore)
+			if err != nil {
+				return "", err
+			}
+			if !isShared {
+				glog.Errorf("Unable to create volume: %+v as datastore: %q is non-shared", volumeOptions, datastore)
+				return "", fmt.Errorf("Unable to create volume on a non-shared datastore: %q", datastore)
+			}
+		}
 		var vmOptions *vclib.VMOptions
 		if volumeOptions.VSANStorageProfileData != "" || volumeOptions.StoragePolicyName != "" {
 			// Acquire a read lock to ensure multiple PVC requests can be processed simultaneously.
@@ -670,7 +685,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 				return "", err
 			}
 		}
-		if volumeOptions.StoragePolicyName != "" && volumeOptions.Datastore == "" {
+		if isStoragePolicyWithoutDatastore {
 			datastore, err = getPbmCompatibleDatastore(ctx, dc.Client(), volumeOptions.StoragePolicyName, vmOptions.VMFolder)
 			if err != nil {
 				glog.Errorf("Failed to get pbm compatible datastore with storagePolicy: %s. err: %+v", volumeOptions.StoragePolicyName, err)
