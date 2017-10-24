@@ -95,20 +95,38 @@ func (dc *Datacenter) GetVMByPath(ctx context.Context, vmPath string) (*VirtualM
 }
 
 // TODO: Add doc
-func (dc *Datacenter) GetAllDatastores(ctx context.Context) ([]*Datastore, error) {
+func (dc *Datacenter) GetAllDatastores(ctx context.Context) (map[string]*DatastoreInfo, error) {
 	finder := getFinder(dc)
 	datastores, err := finder.DatastoreList(ctx, "*")
 	if err != nil {
 		glog.Errorf("Failed to get all the datastores. err: %+v", err)
 		return nil, err
 	}
-	var dsList []*Datastore
-	for _, datastore := range datastores {
-		dsList = append(dsList, &(Datastore{datastore, dc}))
+	var dsList []types.ManagedObjectReference
+	for _, ds := range datastores {
+		dsList = append(dsList, ds.Reference())
 	}
 
-	return dsList, nil
+	var dsMoList []mo.Datastore
+	pc := property.DefaultCollector(dc.Client())
+	properties := []string{DatastoreInfoProperty}
+	err = pc.Retrieve(ctx, dsList, properties, &dsMoList)
+	if err != nil {
+		glog.Errorf("Failed to get Datastore managed objects from datastore objects." +
+			" dsObjList: %+v, properties: %+v, err: %v", dsList, properties, err)
+		return nil, err
+	}
 
+	dsUrlInfoMap := make(map[string]*DatastoreInfo)
+	for _, dsMo := range dsMoList {
+		dsUrlInfoMap[dsMo.Info.GetDatastoreInfo().Url] = &DatastoreInfo{
+			&Datastore{object.NewDatastore(dc.Client(), dsMo.Reference()),
+				dc},
+			dsMo.Info.GetDatastoreInfo()}
+	}
+	// TODO: Remove this log
+	glog.V(4).Infof("dsUrlInfoMap : %+v", dsUrlInfoMap)
+	return dsUrlInfoMap, nil
 }
 
 // GetDatastoreByPath gets the Datastore object from the given vmDiskPath

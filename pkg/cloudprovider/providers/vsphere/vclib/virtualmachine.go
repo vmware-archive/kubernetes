@@ -216,8 +216,8 @@ func (vm *VirtualMachine) IsActive(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-// GetAllAccessibleDatastores gets the names of accessible Datastores for the given Virtual Machine
-func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]string, error) {
+// GetAllAccessibleDatastores gets the list of accessible Datastores for the given Virtual Machine
+func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]*DatastoreInfo, error) {
 	host, err := vm.HostSystem(ctx)
 	if err != nil {
 		glog.Errorf("Failed to get host system for VM: %q. err: %+v", vm.InventoryPath, err)
@@ -237,16 +237,24 @@ func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]str
 
 	var dsMoList []mo.Datastore
 	pc := property.DefaultCollector(vm.Client())
-	err = pc.Retrieve(ctx, dsRefList, []string{DatastoreNameProperty}, &dsMoList)
+	properties := []string{DatastoreInfoProperty}
+	err = pc.Retrieve(ctx, dsRefList, properties, &dsMoList)
 	if err != nil {
-		glog.Errorf("Failed to get Datastore managed objects for: %+v, err: %v", dsRefList, err)
+		glog.Errorf("Failed to get Datastore managed objects from datastore objects." +
+			" dsObjList: %+v, properties: %+v, err: %v", dsRefList, properties, err)
 		return nil, err
 	}
-	var dsNameList []string
+	// TODO: Remove this log
+	glog.V(4).Infof("Result dsMoList: %+v", dsMoList)
+	var dsObjList []*DatastoreInfo
 	for _, dsMo := range dsMoList {
-		dsNameList = append(dsNameList, dsMo.Name)
+		dsObjList = append(dsObjList,
+			&DatastoreInfo{
+				&Datastore{object.NewDatastore(vm.Client(), dsMo.Reference()),
+					vm.Datacenter},
+				dsMo.Info.GetDatastoreInfo()})
 	}
-	return dsNameList, nil
+	return dsObjList, nil
 }
 
 // CreateDiskSpec creates a disk spec for disk

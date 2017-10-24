@@ -938,6 +938,23 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath 
 				glog.Errorf("Failed to get pbm compatible datastore with storagePolicy: %s. err: %+v", volumeOptions.StoragePolicyName, err)
 				return "", err
 			}
+		} else {
+			sharedDsList, err := getSharedDatastoresInK8SCluster(ctx, dc, vs.nodeManager)
+			if err != nil {
+				glog.Errorf("Failed to get shared datastore: %+v", err)
+				return "", err
+			}
+			found := false
+			for _, sharedDs := range sharedDsList {
+				if datastore == sharedDs.Info.Name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				msg := fmt.Sprintf("The specified datastore %s is not a shared datastore across node VMs", datastore)
+				return "", errors.New(msg)
+			}
 		}
 		ds, err := dc.GetDatastoreByName(ctx, datastore)
 		if err != nil {
