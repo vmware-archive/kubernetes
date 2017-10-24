@@ -523,6 +523,7 @@ func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error 
 	}
 	requestTime := time.Now()
 	err := detachDiskInternal(volPath, nodeName)
+	glog.V(1).Infof("balu - Calling detach disk for volPath: %q with err: %+v", volPath, err)
 	vclib.RecordvSphereMetric(vclib.OperationDetachVolume, requestTime, nil)
 	return err
 }
