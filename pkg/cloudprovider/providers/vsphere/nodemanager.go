@@ -18,14 +18,13 @@ package vsphere
 
 import (
 	"fmt"
-	"strings"
-	"sync"
-
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
+	"strings"
+	"sync"
 )
 
 // Stores info about the kubernetes node
@@ -73,19 +72,19 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 	vmFound := false
 	globalErr = nil
 
-	setGlobalErr := func (err error) {
+	setGlobalErr := func(err error) {
 		globalErrMutex.Lock()
 		globalErr = &err
 		globalErrMutex.Unlock()
 	}
 
-	setVMFound := func (found bool) {
-			mutex.Lock()
-			vmFound = found
-			mutex.Unlock()
+	setVMFound := func(found bool) {
+		mutex.Lock()
+		vmFound = found
+		mutex.Unlock()
 	}
 
-	getVMFound := func () bool {
+	getVMFound := func() bool {
 		mutex.Lock()
 		found := vmFound
 		mutex.Unlock()
@@ -175,7 +174,8 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 
 					nodeInfo := &NodeInfo{dataCenter: res.datacenter, vm: vm, vcServer: res.vc}
 					nm.addNodeInfo(node.ObjectMeta.Name, nodeInfo)
-					for range queueChannel {}
+					for range queueChannel {
+					}
 					setVMFound(true)
 					break
 				}
@@ -242,7 +242,7 @@ func (nm *NodeManager) removeNode(node *v1.Node) {
 // This method returns an error if it is unable find node VCs and DCs listed in vSphere.conf
 // NodeInfo returned may not be updated to reflect current VM location.
 func (nm *NodeManager) GetNodeInfo(nodeName k8stypes.NodeName) (NodeInfo, error) {
-	getNodeInfo := func (nodeName k8stypes.NodeName) (*NodeInfo) {
+	getNodeInfo := func(nodeName k8stypes.NodeName) *NodeInfo {
 		nm.nodeInfoLock.RLock()
 		nodeInfo := nm.nodeInfoMap[convertToString(nodeName)]
 		nm.nodeInfoLock.RUnlock()

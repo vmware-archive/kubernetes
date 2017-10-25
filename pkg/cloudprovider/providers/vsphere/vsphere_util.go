@@ -36,8 +36,8 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers"
 
-	"github.com/vmware/govmomi/vim25/types"
 	"github.com/vmware/govmomi/vim25/soap"
+	"github.com/vmware/govmomi/vim25/types"
 )
 
 const (

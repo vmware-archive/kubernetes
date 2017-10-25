@@ -35,5 +35,5 @@ var (
 	ErrNoDevicesFound       = errors.New(NoDevicesFoundErrMsg)
 	ErrNoDiskIDFound        = errors.New(DiskNotFoundErrMsg)
 	ErrInvalidVolumeOptions = errors.New(InvalidVolumeOptionsErrMsg)
-	ErrNoVMFound			= errors.New(NoVMFoundErrMsg)
+	ErrNoVMFound            = errors.New(NoVMFoundErrMsg)
 )
