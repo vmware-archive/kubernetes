@@ -481,7 +481,7 @@ func (vs *VSphere) getVSphereInstanceForServer(vcServer string, ctx context.Cont
 }
 
 // Get the VM Managed Object instance by from the node
-func (vs *VSphere) getVMByName(ctx context.Context, nodeName k8stypes.NodeName) (*vclib.VirtualMachine, error) {
+func (vs *VSphere) getVMFromNodeName(ctx context.Context, nodeName k8stypes.NodeName) (*vclib.VirtualMachine, error) {
 	nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
 	if err != nil {
 		return nil, err
@@ -570,7 +570,7 @@ func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		vm, err := vs.getVMByName(ctx, nodeName)
+		vm, err := vs.getVMFromNodeName(ctx, nodeName)
 		if err != nil {
 			if err == vclib.ErrNoVMFound {
 				return "", cloudprovider.InstanceNotFound
@@ -666,7 +666,7 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyName string, nodeN
 			return "", err
 		}
 
-		vm, err := vs.getVMByName(ctx, nodeName)
+		vm, err := vs.getVMFromNodeName(ctx, nodeName)
 		if err != nil {
 			glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToString(nodeName), err)
 			return "", err
@@ -713,7 +713,7 @@ func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error 
 		if err != nil {
 			return err
 		}
-		vm, err := vs.getVMByName(ctx, nodeName)
+		vm, err := vs.getVMFromNodeName(ctx, nodeName)
 		if err != nil {
 			// If node doesn't exist, disk is already detached from node.
 			if err == vclib.ErrNoVMFound {
@@ -768,7 +768,7 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 		if err != nil {
 			return false, err
 		}
-		vm, err := vs.getVMByName(ctx, nodeName)
+		vm, err := vs.getVMFromNodeName(ctx, nodeName)
 		if err != nil {
 			if err == vclib.ErrNoVMFound {
 				glog.Warningf("Node %q does not exist, vsphere CP will assume disk %v is not attached to it.", nodeName, volPath)
@@ -830,7 +830,7 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 		if err != nil {
 			return nil, err
 		}
-		vm, err := vs.getVMByName(ctx, nodeName)
+		vm, err := vs.getVMFromNodeName(ctx, nodeName)
 		if err != nil {
 			if vclib.ErrNoVMFound == nil {
 				glog.Warningf("Node %q does not exist, vsphere CP will assume all disks %v are not attached to it.", nodeName, volPaths)
