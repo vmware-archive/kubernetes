@@ -95,7 +95,7 @@ func (vm *VirtualMachine) AttachDisk(ctx context.Context, vmDiskPath string, vol
 
 	pbmClient, err := NewPbmClient(ctx, vm.Client())
 	if err != nil {
-		glog.Errorf("Error occurred while creating new pbmClient, err: %+v", err)
+		glog.Errorf("Error occurred while creating new pbmClient. err: %+v", err)
 		return "", err
 	}
 
