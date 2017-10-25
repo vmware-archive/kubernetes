@@ -238,6 +238,9 @@ func (nm *NodeManager) removeNode(node *v1.Node) {
 	nm.registeredNodesLock.Unlock()
 }
 
+// GetNodeInfo returns a NodeInfo which datacenter, vm and vc server ip address.
+// This method returns an error if it is unable find node VCs and DCs listed in vSphere.conf
+// NodeInfo returned may not be updated to reflect current VM location.
 func (nm *NodeManager) GetNodeInfo(nodeName k8stypes.NodeName) (NodeInfo, error) {
 	getNodeInfo := func (nodeName k8stypes.NodeName) (*NodeInfo) {
 		nm.nodeInfoLock.RLock()
@@ -252,8 +255,8 @@ func (nm *NodeManager) GetNodeInfo(nodeName k8stypes.NodeName) (NodeInfo, error)
 			glog.V(4).Infof("error %q node info for node %q not found", err, convertToString(nodeName))
 			return NodeInfo{}, err
 		}
+		nodeInfo = getNodeInfo(nodeName)
 	}
-	nodeInfo = getNodeInfo(nodeName)
 	return *nodeInfo, nil
 }
 
