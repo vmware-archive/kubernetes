@@ -25,6 +25,7 @@ import (
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/types"
+	"github.com/vmware/govmomi/vim25/soap"
 )
 
 // IsNotFound return true if err is NotFoundError or DefaultNotFoundError
@@ -129,4 +130,13 @@ func RemoveClusterFromVDiskPath(vDiskPath string) string {
 		vDiskPath = strings.Replace(vDiskPath, datastore, filepath.Base(datastore), 1)
 	}
 	return vDiskPath
+}
+
+// IsManagedObjectNotFoundError returns true if error is of type ManagedObjectNotFound
+func IsManagedObjectNotFoundError(err error) bool {
+	isManagedObjectNotFoundError := false
+	if soap.IsSoapFault(err) {
+		_, isManagedObjectNotFoundError = soap.ToSoapFault(err).VimFault().(types.ManagedObjectNotFound)
+	}
+	return isManagedObjectNotFoundError
 }

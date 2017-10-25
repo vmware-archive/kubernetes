@@ -591,7 +591,7 @@ func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 
 	instanceID, err := instanceIDInternal()
 	if err != nil {
-		if IsManagedObjectNotFoundError(err) {
+		if vclib.IsManagedObjectNotFoundError(err) {
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
 			err = vs.nodeManager.RediscoverNode(nodeName)
 			if err == nil {
@@ -682,7 +682,7 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyName string, nodeN
 	requestTime := time.Now()
 	diskUUID, err = attachDiskInternal(vmDiskPath, storagePolicyName, nodeName)
 	if err != nil {
-		if IsManagedObjectNotFoundError(err) {
+		if vclib.IsManagedObjectNotFoundError(err) {
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
 			err = vs.nodeManager.RediscoverNode(nodeName)
 			if err == nil {
@@ -734,7 +734,7 @@ func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error 
 	requestTime := time.Now()
 	err := detachDiskInternal(volPath, nodeName)
 	if err != nil {
-		if IsManagedObjectNotFoundError(err) {
+		if vclib.IsManagedObjectNotFoundError(err) {
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
 			err = vs.nodeManager.RediscoverNode(nodeName)
 			if err == nil {
@@ -790,7 +790,7 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 	requestTime := time.Now()
 	isAttached, err := diskIsAttachedInternal(volPath, nodeName)
 	if err != nil {
-		if IsManagedObjectNotFoundError(err) {
+		if vclib.IsManagedObjectNotFoundError(err) {
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q", err, convertToString(nodeName))
 			err = vs.nodeManager.RediscoverNode(nodeName)
 			if err == vclib.ErrNoVMFound {
