@@ -35,6 +35,9 @@ import (
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/tools/cache"
 	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
@@ -204,7 +207,23 @@ func init() {
 }
 
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
-func (vs *VSphere) Initialize(clientBuilder controller.ControllerClientBuilder) {}
+func (vs *VSphere) Initialize(clientBuilder controller.ControllerClientBuilder) {
+	if vs.cfg == nil {
+		return
+	}
+
+	// Only on controller node it is required to register listeners.
+	// Register callbacks for node updates
+	client := clientBuilder.ClientOrDie("vSphere-cloud-provider")
+	factory := informers.NewSharedInformerFactory(client, 5*time.Minute)
+	nodeInformer := factory.Core().V1().Nodes()
+	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    vs.NodeAdded,
+		DeleteFunc: vs.NodeDeleted,
+	})
+	go nodeInformer.Informer().Run(wait.NeverStop)
+   glog.V(4).Infof("vSphere cloud provider initialized")
+}
 
 // Creates new worker node interface and returns
 func newWorkerNode() (*VSphere, error) {
@@ -369,8 +388,8 @@ func newControllerNode(cfg VSphereConfig) (*VSphere, error) {
 		vsphereInstanceMap: vsphereInstanceMap,
 		nodeManager: &NodeManager{
 			vsphereInstanceMap: vsphereInstanceMap,
-			nodeInfoMap: make(map[string]*NodeInfo),
-			registeredNodes: make(map[string]*v1.Node),
+			nodeInfoMap:        make(map[string]*NodeInfo),
+			registeredNodes:    make(map[string]*v1.Node),
 		},
 		cfg: &cfg,
 	}
@@ -929,14 +948,27 @@ func (vs *VSphere) HasClusterID() bool {
 	return true
 }
 
-// Notification handler when node is registered.
-func (vs *VSphere) NodeRegistered(node *v1.Node) {
-	glog.V(4).Infof("Node Registered: %+v", node)
+// Notification handler when node is added into k8s cluster.
+func (vs *VSphere) NodeAdded(obj interface{}) {
+	node, ok := obj.(*v1.Node)
+	if node == nil || !ok {
+      glog.Warningf("NodeAdded: unrecognized object %+v", obj);
+		return
+	}
+
+	glog.V(4).Infof("Node added: %+v", node)
 	vs.nodeManager.RegisterNode(node)
 }
 
-// Notification handler when node is unregistered.
-func (vs *VSphere) NodeUnregistered(node *v1.Node) {
-	glog.V(4).Infof("Node Unregistered: %+v", node)
+// Notification handler when node is removed from k8s cluster.
+func (vs *VSphere) NodeDeleted(obj interface{}) {
+	node, ok := obj.(*v1.Node)
+	if node == nil || !ok {
+      glog.Warningf("NodeDeleted: unrecognized object %+v", obj);
+		return
+	}
+
+	glog.V(4).Infof("Node deleted: %+v", node)
 	vs.nodeManager.UnRegisterNode(node)
 }
+
