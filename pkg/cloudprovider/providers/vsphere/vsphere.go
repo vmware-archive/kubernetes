@@ -584,7 +584,13 @@ func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 			return "", err
 		}
 		if isActive {
-			return "/" + vm.InventoryPath, nil
+			node, err := vs.nodeManager.GetNode(nodeName)
+			if err != nil {
+				glog.Errorf("Failed to get nodeobject of node %q. err: %+v.", convertToString(nodeName), err)
+				return "", err
+			}
+			nodeUUID := node.Status.NodeInfo.SystemUUID
+			return nodeUUID, nil
 		}
 		return "", fmt.Errorf("The node %q is not active", convertToString(nodeName))
 	}
