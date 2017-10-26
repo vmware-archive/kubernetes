@@ -1147,13 +1147,3 @@ func (manager *GCEServiceManager) getRegionFromZone(zoneInfo zoneType) (string, 
 
 	return region, nil
 }
-
-// Notification handler when node is registered.
-func (gce *GCECloud) NodeRegistered(node *v1.Node) {
-
-}
-
-// Notification handler when node is unregistered.
-func (gce *GCECloud) NodeUnregistered(node *v1.Node) {
-
-}

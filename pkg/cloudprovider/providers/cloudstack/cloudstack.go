@@ -28,7 +28,6 @@ import (
 	"github.com/xanzy/go-cloudstack/cloudstack"
 	"gopkg.in/gcfg.v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
 )
@@ -262,14 +261,4 @@ func (cs *CSCloud) GetZoneByNodeName(nodeName types.NodeName) (cloudprovider.Zon
 	zone.Region = instance.Zonename
 
 	return zone, nil
-}
-
-// Notification handler when node is registered.
-func (cs *CSCloud) NodeRegistered(node *v1.Node) {
-
-}
-
-// Notification handler when node is unregistered.
-func (cs *CSCloud) NodeUnregistered(node *v1.Node) {
-
 }
