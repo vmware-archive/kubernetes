@@ -27,16 +27,12 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/vmware/govmomi"
-	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25"
-	"github.com/vmware/govmomi/vim25/mo"
 
 	"fmt"
 
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers"
-	"github.com/vmware/govmomi/vim25/soap"
-	"github.com/vmware/govmomi/vim25/types"
 )
 
 const (
@@ -143,10 +139,13 @@ func getvmUUID() (string, error) {
 	return uuid, nil
 }
 
+// Returns the accessible datastores for the given node VM.
 func getAccessibleDatastores(ctx context.Context, nodeVmDetail *NodeDetails, nodeManager *NodeManager) ([]*vclib.DatastoreInfo, error) {
 	accessibleDatastores, err := nodeVmDetail.vm.GetAllAccessibleDatastores(ctx)
 	if err != nil {
-		if IsManagedObjectNotFoundError(err) {
+		// Check if the node VM is not found which indicates that the node info in the node manager is stale.
+		// If so, rediscover the node and retry.
+		if vclib.IsManagedObjectNotFoundError(err) {
 			glog.V(4).Infof("error %q ManagedObjectNotFound for node %q. Rediscovering...", err, nodeVmDetail.NodeName)
 			err = nodeManager.RediscoverNode(convertToK8sType(nodeVmDetail.NodeName))
 			if err == nil {
@@ -185,7 +184,7 @@ func getSharedDatastoresInK8SCluster(ctx context.Context, dc *vclib.Datacenter, 
 	index := 0
 	var sharedDatastores []*vclib.DatastoreInfo
 	for _, nodeVmDetail := range nodeVmDetails {
-		glog.V(4).Infof("Getting accessible datastores for node %s", nodeVmDetail.NodeName)
+		glog.V(9).Infof("Getting accessible datastores for node %s", nodeVmDetail.NodeName)
 		accessibleDatastores, err := getAccessibleDatastores(ctx, &nodeVmDetail, nodeManager)
 		if err != nil {
 			return nil, err
@@ -200,25 +199,24 @@ func getSharedDatastoresInK8SCluster(ctx context.Context, dc *vclib.Datacenter, 
 		}
 		index++
 	}
-	glog.V(4).Infof("sharedDatastores : %+v", sharedDatastores)
+	glog.V(9).Infof("sharedDatastores : %+v", sharedDatastores)
 	sharedDatastores, err := getDatastoresForEndpointVC(ctx, dc, sharedDatastores)
 	if err != nil {
 		glog.Errorf("Failed to get shared datastores from endpoint VC. err: %+v", err)
 		return nil, err
 	}
-	glog.V(4).Infof("sharedDatastores at endpoint VC: %+v", sharedDatastores)
+	glog.V(9).Infof("sharedDatastores at endpoint VC: %+v", sharedDatastores)
 	return sharedDatastores, nil
 }
 
 func intersect(list1 []*vclib.DatastoreInfo, list2 []*vclib.DatastoreInfo) []*vclib.DatastoreInfo {
-	// TODO: Remove these logs
-	glog.V(4).Infof("list1: %+v", list1)
-	glog.V(4).Infof("list2: %+v", list2)
+	glog.V(9).Infof("list1: %+v", list1)
+	glog.V(9).Infof("list2: %+v", list2)
 	var sharedDs []*vclib.DatastoreInfo
 	for _, val1 := range list1 {
 		// Check if val1 is found in list2
 		for _, val2 := range list2 {
-			// Intersect is performed based on the datastoreUrl as this uniquely identifies the datastore.
+			// Intersection is performed based on the datastoreUrl as this uniquely identifies the datastore.
 			if val1.Info.Url == val2.Info.Url {
 				sharedDs = append(sharedDs, val1)
 				break
@@ -226,25 +224,6 @@ func intersect(list1 []*vclib.DatastoreInfo, list2 []*vclib.DatastoreInfo) []*vc
 		}
 	}
 	return sharedDs
-}
-
-// Get the datastores accessible for the virtual machine object.
-func getAllAccessibleDatastores(ctx context.Context, client *vim25.Client, vmMo mo.VirtualMachine) ([]string, error) {
-	host := vmMo.Summary.Runtime.Host
-	if host == nil {
-		return nil, errors.New("VM doesn't have a HostSystem")
-	}
-	var hostSystemMo mo.HostSystem
-	s := object.NewSearchIndex(client)
-	err := s.Properties(ctx, host.Reference(), []string{DatastoreProperty}, &hostSystemMo)
-	if err != nil {
-		return nil, err
-	}
-	var dsRefValues []string
-	for _, dsRef := range hostSystemMo.Datastore {
-		dsRefValues = append(dsRefValues, dsRef.Value)
-	}
-	return dsRefValues, nil
 }
 
 // getMostFreeDatastore gets the best fit compatible datastore by free space.
@@ -262,6 +241,7 @@ func getMostFreeDatastoreName(ctx context.Context, client *vim25.Client, dsInfoL
 	return dsInfoList[index].Info.GetDatastoreInfo().Name, nil
 }
 
+// Returns the datastores in the given datacenter by performing lookup based on datastore URL.
 func getDatastoresForEndpointVC(ctx context.Context, dc *vclib.Datacenter, sharedDsInfos []*vclib.DatastoreInfo) ([]*vclib.DatastoreInfo, error) {
 	var datastores []*vclib.DatastoreInfo
 	allDsInfoMap, err := dc.GetAllDatastores(ctx)
@@ -276,7 +256,7 @@ func getDatastoresForEndpointVC(ctx context.Context, dc *vclib.Datacenter, share
 			glog.V(4).Infof("Warning: Shared datastore with URL %s does not exist in endpoint VC", sharedDsInfo.Info.Url)
 		}
 	}
-	glog.V(4).Infof("Datastore from endpoint VC: %+v", datastores)
+	glog.V(9).Infof("Datastore from endpoint VC: %+v", datastores)
 	return datastores, nil
 }
 
@@ -306,14 +286,12 @@ func getPbmCompatibleDatastore(ctx context.Context, dc *vclib.Datacenter, storag
 			sharedDs, storagePolicyID, err)
 		return "", err
 	}
-	// TODO: remove this log
-	glog.V(4).Infof("compatibleDatastores : %+v", compatibleDatastores)
+	glog.V(9).Infof("compatibleDatastores : %+v", compatibleDatastores)
 	datastore, err := getMostFreeDatastoreName(ctx, dc.Client(), compatibleDatastores)
 	if err != nil {
 		glog.Errorf("Failed to get most free datastore from compatible datastores: %+v. err: %+v", compatibleDatastores, err)
 		return "", err
 	}
-	// TODO: remove this log
 	glog.V(4).Infof("Most free datastore : %+s", datastore)
 	return datastore, err
 }
@@ -324,7 +302,7 @@ func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter, compu
 	if err != nil {
 		return nil, err
 	}
-	glog.V(4).Infof("Compute path %s, resourcePool %+v", computePath, resourcePool)
+	glog.V(9).Infof("Compute path %s, resourcePool %+v", computePath, resourcePool)
 	folder, err := dc.GetFolderByPath(ctx, vs.cfg.Workspace.Folder)
 	if err != nil {
 		return nil, err
@@ -364,12 +342,4 @@ func (vs *VSphere) cleanUpDummyVMs(dummyVMPrefix string) {
 			glog.V(4).Infof("Unable to clean up dummy VM's in the kubernetes cluster: %q. err: %+v", vs.cfg.Workspace.Folder, err)
 		}
 	}
-}
-
-func IsManagedObjectNotFoundError(err error) bool {
-	isManagedObjectNotFoundError := false
-	if soap.IsSoapFault(err) {
-		_, isManagedObjectNotFoundError = soap.ToSoapFault(err).VimFault().(types.ManagedObjectNotFound)
-	}
-	return isManagedObjectNotFoundError
 }

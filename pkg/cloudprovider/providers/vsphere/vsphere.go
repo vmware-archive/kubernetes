@@ -939,6 +939,8 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath 
 				return "", err
 			}
 		} else {
+			// Since no storage policy is specified but datastore is specified, check
+			// if the given datastore is a shared datastore across all node VMs.
 			sharedDsList, err := getSharedDatastoresInK8SCluster(ctx, dc, vs.nodeManager)
 			if err != nil {
 				glog.Errorf("Failed to get shared datastore: %+v", err)

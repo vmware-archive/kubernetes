@@ -40,7 +40,7 @@ type DatastoreInfo struct {
 }
 
 func (di DatastoreInfo) String() string {
-	return fmt.Sprintf("Datastore : %+v, URL : %s", di.Datastore, di.Info.Url)
+	return fmt.Sprintf("Datastore: %+v, datastore URL: %s", di.Datastore, di.Info.Url)
 }
 
 // CreateDirectory creates the directory at location specified by directoryPath.

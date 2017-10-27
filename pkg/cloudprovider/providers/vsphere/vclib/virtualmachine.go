@@ -244,8 +244,7 @@ func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]*Da
 			" dsObjList: %+v, properties: %+v, err: %v", dsRefList, properties, err)
 		return nil, err
 	}
-	// TODO: Remove this log
-	glog.V(4).Infof("Result dsMoList: %+v", dsMoList)
+	glog.V(9).Infof("Result dsMoList: %+v", dsMoList)
 	var dsObjList []*DatastoreInfo
 	for _, dsMo := range dsMoList {
 		dsObjList = append(dsObjList,

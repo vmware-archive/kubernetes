@@ -94,7 +94,8 @@ func (dc *Datacenter) GetVMByPath(ctx context.Context, vmPath string) (*VirtualM
 	return &virtualMachine, nil
 }
 
-// TODO: Add doc
+// GetAllDatastores gets the datastore URL to DatastoreInfo map for all the datastores in
+// the datacenter.
 func (dc *Datacenter) GetAllDatastores(ctx context.Context) (map[string]*DatastoreInfo, error) {
 	finder := getFinder(dc)
 	datastores, err := finder.DatastoreList(ctx, "*")
@@ -124,8 +125,7 @@ func (dc *Datacenter) GetAllDatastores(ctx context.Context) (map[string]*Datasto
 				dc},
 			dsMo.Info.GetDatastoreInfo()}
 	}
-	// TODO: Remove this log
-	glog.V(4).Infof("dsUrlInfoMap : %+v", dsUrlInfoMap)
+	glog.V(9).Infof("dsUrlInfoMap : %+v", dsUrlInfoMap)
 	return dsUrlInfoMap, nil
 }
 
@@ -159,7 +159,7 @@ func (dc *Datacenter) GetDatastoreByName(ctx context.Context, name string) (*Dat
 	return &datastore, nil
 }
 
-// TODO: Add doc
+// GetResourcePool gets the resource pool for the given path
 func (dc *Datacenter) GetResourcePool(ctx context.Context, computePath string) (*object.ResourcePool, error) {
 	finder := getFinder(dc)
 	var computeResource *object.ComputeResource
