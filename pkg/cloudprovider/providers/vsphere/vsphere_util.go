@@ -354,14 +354,14 @@ func (vs *VSphere) cleanUpDummyVMs(dummyVMPrefix string) {
 		// Get the folder reference for global working directory where the dummy VM needs to be created.
 		vmFolder, err := dc.GetFolderByPath(ctx, vs.cfg.Workspace.Folder)
 		if err != nil {
-			glog.V(4).Infof("Unable to get the kubernetes folder: %q reference. err: %+v", vs.cfg.Global.WorkingDir, err)
+			glog.V(4).Infof("Unable to get the kubernetes folder: %q reference. err: %+v", vs.cfg.Workspace.Folder, err)
 			continue
 		}
 		// A write lock is acquired to make sure the cleanUp routine doesn't delete any VM's created by ongoing PVC requests.
 		defer cleanUpDummyVMLock.Lock()
 		err = diskmanagers.CleanUpDummyVMs(ctx, vmFolder, dc)
 		if err != nil {
-			glog.V(4).Infof("Unable to clean up dummy VM's in the kubernetes cluster: %q. err: %+v", vs.cfg.Global.WorkingDir, err)
+			glog.V(4).Infof("Unable to clean up dummy VM's in the kubernetes cluster: %q. err: %+v", vs.cfg.Workspace.Folder, err)
 		}
 	}
 }
