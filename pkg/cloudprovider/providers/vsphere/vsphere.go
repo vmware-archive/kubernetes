@@ -1173,7 +1173,7 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 		}
 		//TODO: Remove Comment
 		glog.V(1).Infof("vmMoMap vmname: %q vmuuid: %s", vmMo.Name, vmMo.Config.Uuid)
-		vmMoMap[vmMo.Config.Uuid] = vmMo
+		vmMoMap[strings.ToLower(vmMo.Config.Uuid)] = vmMo
 	}
 
 	for _, nodeName := range nodes {
