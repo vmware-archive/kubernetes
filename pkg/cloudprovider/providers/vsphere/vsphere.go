@@ -152,7 +152,7 @@ type VSphereConfig struct {
 		Datacenter       string `gcfg:"datacenter"`
 		Folder           string `gcfg:"folder"`
 		DefaultDatastore string `gcfg:"default-datastore"`
-		ComputePath      string `gcfg:"compute-path"`
+		ResourcePoolPath string `gcfg:"resourcepool-path"`
 	}
 }
 
@@ -224,7 +224,7 @@ func (vs *VSphere) Initialize(clientBuilder controller.ControllerClientBuilder) 
 		DeleteFunc: vs.NodeDeleted,
 	})
 	go nodeInformer.Informer().Run(wait.NeverStop)
-   glog.V(4).Infof("vSphere cloud provider initialized")
+	glog.V(4).Infof("vSphere cloud provider initialized")
 }
 
 // Creates new worker node interface and returns
@@ -926,7 +926,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (volumePath 
 				cleanUpRoutineInitialized = true
 			}
 			cleanUpRoutineInitLock.Unlock()
-			vmOptions, err = vs.setVMOptions(ctx, dc, vs.cfg.Workspace.ComputePath)
+			vmOptions, err = vs.setVMOptions(ctx, dc, vs.cfg.Workspace.ResourcePoolPath)
 			if err != nil {
 				glog.Errorf("Failed to set VM options requires to create a vsphere volume. err: %+v", err)
 				return "", err
@@ -1033,7 +1033,7 @@ func (vs *VSphere) HasClusterID() bool {
 func (vs *VSphere) NodeAdded(obj interface{}) {
 	node, ok := obj.(*v1.Node)
 	if node == nil || !ok {
-      glog.Warningf("NodeAdded: unrecognized object %+v", obj);
+		glog.Warningf("NodeAdded: unrecognized object %+v", obj)
 		return
 	}
 
@@ -1045,11 +1045,10 @@ func (vs *VSphere) NodeAdded(obj interface{}) {
 func (vs *VSphere) NodeDeleted(obj interface{}) {
 	node, ok := obj.(*v1.Node)
 	if node == nil || !ok {
-      glog.Warningf("NodeDeleted: unrecognized object %+v", obj);
+		glog.Warningf("NodeDeleted: unrecognized object %+v", obj)
 		return
 	}
 
 	glog.V(4).Infof("Node deleted: %+v", node)
 	vs.nodeManager.UnRegisterNode(node)
 }
-

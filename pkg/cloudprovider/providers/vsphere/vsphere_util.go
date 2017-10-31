@@ -296,13 +296,13 @@ func getPbmCompatibleDatastore(ctx context.Context, dc *vclib.Datacenter, storag
 	return datastore, err
 }
 
-func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter, computePath string) (*vclib.VMOptions, error) {
+func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter, resourcePoolPath string) (*vclib.VMOptions, error) {
 	var vmOptions vclib.VMOptions
-	resourcePool, err := dc.GetResourcePool(ctx, computePath)
+	resourcePool, err := dc.GetResourcePool(ctx, resourcePoolPath)
 	if err != nil {
 		return nil, err
 	}
-	glog.V(9).Infof("Compute path %s, resourcePool %+v", computePath, resourcePool)
+	glog.V(9).Infof("Resource pool path %s, resourcePool %+v", resourcePoolPath, resourcePool)
 	folder, err := dc.GetFolderByPath(ctx, vs.cfg.Workspace.Folder)
 	if err != nil {
 		return nil, err
