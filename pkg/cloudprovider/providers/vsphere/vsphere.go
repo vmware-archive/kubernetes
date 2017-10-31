@@ -1165,13 +1165,13 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 		return nodesToRetry, err
 	}
 
-	vmMoMap := make(map[string]*mo.VirtualMachine)
+	vmMoMap := make(map[string]mo.VirtualMachine)
 	for _, vmMo := range vmMoList {
 		if vmMo.Config == nil {
 			glog.Errorf("Config is not available for VM: %q", vmMo.Name)
 			continue
 		}
-		vmMoMap[vmMo.Config.Uuid] = &vmMo
+		vmMoMap[vmMo.Config.Uuid] = vmMo
 	}
 
 	for _, nodeName := range nodes {
@@ -1179,7 +1179,7 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 		if err != nil {
 			return nodesToRetry, err
 		}
-		vclib.VerifyVolumePathsForVM(*vmMoMap[node.Status.NodeInfo.SystemUUID], nodeVolumes[nodeName], convertToString(nodeName), attached)
+		vclib.VerifyVolumePathsForVM(vmMoMap[node.Status.NodeInfo.SystemUUID], nodeVolumes[nodeName], convertToString(nodeName), attached)
 	}
 	return nodesToRetry, nil
 }
