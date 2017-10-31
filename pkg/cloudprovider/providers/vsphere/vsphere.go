@@ -1124,23 +1124,19 @@ func (vs *VSphere) convertVolPathsToDevicePaths(ctx context.Context, nodeVolumes
 func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeName, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, retry bool) ([]k8stypes.NodeName, error) {
 	var nodesToRetry []k8stypes.NodeName
 	var vmList []*vclib.VirtualMachine
-	var nodeInfo *NodeInfo
+	var nodeInfo NodeInfo
+    var err error
 
 	for _, nodeName := range nodes {
-		nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
+		nodeInfo, err = vs.nodeManager.GetNodeInfo(nodeName)
 		if err != nil {
 			return nodesToRetry, err
 		}
 		vmList = append(vmList, nodeInfo.vm)
 	}
 
-	if nodeInfo == nil {
-		glog.Errorf("No nodes to check disks are attached")
-		return nodesToRetry, fmt.Errorf("No nodes to check disks are attached")
-	}
-
 	// Making sure session is valid
-	_, err := vs.getVSphereInstanceForServer(nodeInfo.vcServer, ctx)
+	_, err = vs.getVSphereInstanceForServer(nodeInfo.vcServer, ctx)
 	if err != nil {
 		return nodesToRetry, err
 	}
