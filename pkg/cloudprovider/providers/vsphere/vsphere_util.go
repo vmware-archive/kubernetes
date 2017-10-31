@@ -36,6 +36,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers"
+	"path/filepath"
 )
 
 const (
@@ -260,7 +261,7 @@ func getPbmCompatibleDatastore(ctx context.Context, client *vim25.Client, storag
 	return datastore, err
 }
 
-func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter) (*vclib.VMOptions, error) {
+func (vs *VSphere) setVMOptions(ctx , dc *vclib.Datacenter) (*vclib.VMOptions, error) {
 	var vmOptions vclib.VMOptions
 	nodeInfo, err := vs.nodeManager.GetNodeInfo(convertToK8sType(vs.hostName))
 	if err != nil {
@@ -373,4 +374,19 @@ func setdatastoreFolderIDMap(
 		datastoreFolderIDMap[datastore] = folderNameIDMap
 	}
 	folderNameIDMap[folderName] = folderID
+}
+
+func convertVolPathToDevicePath(ctx context.Context, dc *vclib.Datacenter, volPath string) (string, error) {
+	volPath = vclib.RemoveClusterFromVDiskPath(volPath)
+	// Get the canonical volume path for volPath.
+	canonicalVolumePath, err := getcanonicalVolumePath(ctx, dc, volPath)
+	if err != nil {
+		glog.Errorf("Failed to get canonical vsphere volume path for volume: %s. err: %+v", volPath, err)
+		return "", err
+	}
+	// Check if the volume path contains .vmdk extension. If not, add the extension and update the nodeVolumes Map
+	if len(canonicalVolumePath) > 0 && filepath.Ext(canonicalVolumePath) != ".vmdk" {
+		canonicalVolumePath += ".vmdk"
+	}
+	return canonicalVolumePath, nil
 }

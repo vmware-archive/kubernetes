@@ -43,6 +43,7 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers"
 	"k8s.io/kubernetes/pkg/controller"
+	"github.com/vmware/govmomi/vim25/mo"
 )
 
 // VSphere Cloud Provider constants
@@ -222,7 +223,7 @@ func (vs *VSphere) Initialize(clientBuilder controller.ControllerClientBuilder) 
 		DeleteFunc: vs.NodeDeleted,
 	})
 	go nodeInformer.Informer().Run(wait.NeverStop)
-   glog.V(4).Infof("vSphere cloud provider initialized")
+	glog.V(4).Infof("vSphere cloud provider initialized")
 }
 
 // Creates new worker node interface and returns
@@ -821,60 +822,90 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 // DisksAreAttached returns if disks are attached to the VM using controllers supported by the plugin.
 func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName]map[string]bool, error) {
 	disksAreAttachedInternal := func(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName]map[string]bool, error) {
-		var nodeName k8stypes.NodeName
-		attached := make(map[k8stypes.NodeName]map[string]bool)
-		if len(nodeVolumes) == 0 {
-			return attached, nil
+
+		disksAreAttach := func(ctx context.Context, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, nodesToRetry []k8stypes.NodeName, retry bool) (error) {
+
+			// Segregate nodes according to DC
+			dcNodes := make(map[string][]k8stypes.NodeName)
+			for nodeName, _ := range nodeVolumes {
+				nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
+				if err != nil {
+					return err
+				}
+				datacenter := nodeInfo.dataCenter.String()
+				dcNodes[datacenter] = append(dcNodes[datacenter], nodeName)
+			}
+
+			var wg sync.WaitGroup
+			var globalErr error
+			globalErr = nil
+
+			for _, nodes := range dcNodes {
+				go func() {
+					err := vs.checkDiskAttached(ctx, nodes, nodeVolumes, attached, nodesToRetry, retry)
+					if !vclib.IsManagedObjectNotFoundError(err) {
+						// Add lock
+						globalErr = &err
+					}
+					wg.Done()
+				}()
+				wg.Add(1)
+			}
+			wg.Wait()
+
+			if globalErr != nil {
+				return globalErr
+			}
+
+			return nil
 		}
+
 		// Create context
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		for node, _ := range nodeVolumes {
-			nodeName = node
-			break
+
+		disksAttached := make(map[k8stypes.NodeName]map[string]bool)
+		if len(nodeVolumes) == 0 {
+			return disksAttached, nil
 		}
 
-		vsi, err := vs.getVSphereInstance(nodeName)
-		if err != nil {
-			return nil, err
-		}
-		// Ensure client is logged in and session is valid
-		err = vsi.conn.Connect(ctx)
-		if err != nil {
-			return nil, err
-		}
-		dc, err := vclib.GetDatacenter(ctx, vsi.conn, vs.cfg.Global.Datacenter)
+		vmVolumes, err := vs.convertVolPathsToDevicePaths(nodeVolumes)
+
+		var nodesToRetry []k8stypes.NodeName
+		attached := make(map[string]map[string]bool)
+		err = disksAreAttach(ctx, vmVolumes, attached, nodesToRetry, false)
 		if err != nil {
 			return nil, err
 		}
 
-		vmVolumes := make(map[string][]string)
-		for nodeName, volPaths := range nodeVolumes {
-			for i, volPath := range volPaths {
-				volPath = vclib.RemoveClusterFromVDiskPath(volPath)
-				// Get the canonical volume path for volPath.
-				canonicalVolumePath, err := getcanonicalVolumePath(ctx, dc, volPath)
+		if len(nodesToRetry) != 0 {
+			// Rediscover nodes which are need to be retried
+			var nodes []k8stypes.NodeName
+			remainingNodesVolumes := make(map[k8stypes.NodeName][]string)
+			for _, nodeName := range nodesToRetry {
+				err = vs.nodeManager.RediscoverNode(nodeName)
 				if err != nil {
-					glog.Errorf("Failed to get canonical vsphere volume path for volume: %s. err: %+v", volPath, err)
+					if err == vclib.ErrNoVMFound {
+						continue
+					}
 					return nil, err
 				}
-				// Check if the volume path contains .vmdk extension. If not, add the extension and update the nodeVolumes Map
-				if len(canonicalVolumePath) > 0 && filepath.Ext(canonicalVolumePath) != ".vmdk" {
-					canonicalVolumePath += ".vmdk"
-				}
-				volPaths[i] = canonicalVolumePath
+				remainingNodesVolumes[nodeName] = nodeVolumes[nodeName]
 			}
-			vmVolumes[convertToString(nodeName)] = volPaths
+
+			// If some remaining nodes are still registered
+			if len(remainingNodesVolumes) != 0 {
+				err = disksAreAttach(ctx, remainingNodesVolumes, attached, nodes, true)
+				if err != nil || len(nodes) != 0 {
+					return nil, err
+				}
+			}
+
+			for nodeName, volPaths := range attached {
+				disksAttached[convertToK8sType(nodeName)] = volPaths
+			}
 		}
-		// Check if the disks are attached to their respective nodes
-		disksAttachedList, err := dc.CheckDisksAttached(ctx, vmVolumes)
-		if err != nil {
-			return nil, err
-		}
-		for vmName, volPaths := range disksAttachedList {
-			attached[convertToK8sType(vmName)] = volPaths
-		}
-		return attached, nil
+		return disksAttached, nil
 	}
 	requestTime := time.Now()
 	attached, err := disksAreAttachedInternal(nodeVolumes)
@@ -1022,7 +1053,7 @@ func (vs *VSphere) HasClusterID() bool {
 func (vs *VSphere) NodeAdded(obj interface{}) {
 	node, ok := obj.(*v1.Node)
 	if node == nil || !ok {
-      glog.Warningf("NodeAdded: unrecognized object %+v", obj);
+		glog.Warningf("NodeAdded: unrecognized object %+v", obj);
 		return
 	}
 
@@ -1034,7 +1065,7 @@ func (vs *VSphere) NodeAdded(obj interface{}) {
 func (vs *VSphere) NodeDeleted(obj interface{}) {
 	node, ok := obj.(*v1.Node)
 	if node == nil || !ok {
-      glog.Warningf("NodeDeleted: unrecognized object %+v", obj);
+		glog.Warningf("NodeDeleted: unrecognized object %+v", obj);
 		return
 	}
 
@@ -1042,3 +1073,92 @@ func (vs *VSphere) NodeDeleted(obj interface{}) {
 	vs.nodeManager.UnRegisterNode(node)
 }
 
+func (vs *VSphere) convertVolPathsToDevicePaths(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName][]string, error) {
+	vmVolumes := make(map[k8stypes.NodeName][]string)
+	for nodeName, volPaths := range nodeVolumes {
+		nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = vs.getVSphereInstanceForServer(nodeInfo.vcServer, ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for i, volPath := range volPaths {
+			deviceVolPath, err := convertVolPathToDevicePath(ctx, nodeInfo.dataCenter, volPath)
+			if err != nil {
+				glog.Errorf("Failed to convert vsphere volume path %s to device path for volume %s. err: %+v", volPath, deviceVolPath, err)
+				return nil, err
+			}
+			volPaths[i] = deviceVolPath
+		}
+		vmVolumes[nodeName] = volPaths
+	}
+	return vmVolumes, nil
+}
+
+func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeName, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, nodesToRetry []k8stypes.NodeName, retry bool) error {
+	var vmList []*vclib.VirtualMachine
+	var nodeInfo *NodeInfo
+
+	for _, nodeName := range nodes {
+		nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
+		if err != nil {
+			return err
+		}
+		vmList = append(vmList, nodeInfo.vm)
+	}
+
+	if nodeInfo == nil {
+		return fmt.Errorf("No nodes to check disks are attached")
+	}
+
+	// Making sure session is valid
+	_, err := vs.getVSphereInstanceForServer(nodeInfo.vcServer, ctx)
+	if err != nil {
+		return err
+	}
+
+	vmMoList, err := nodeInfo.dataCenter.GetVMMoList(ctx, vmList, []string{"config.hardware.device", "name", "config.uuid"})
+	if err != nil {
+		if vclib.IsManagedObjectNotFoundError(err) && !retry {
+			for _, nodeName := range nodes {
+				nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
+				if err != nil {
+					return err
+				}
+				devices, err := nodeInfo.vm.VirtualMachine.Device(ctx)
+				if err != nil {
+					if vclib.IsManagedObjectNotFoundError(err) {
+						// Add lock
+						nodesToRetry = append(nodesToRetry, nodeName)
+						continue
+					}
+					return err
+				}
+				vclib.VerifyVolumePathsForVMDevices(devices, nodeVolumes[nodeName], convertToString(nodeName), attached)
+			}
+		}
+		return err
+	}
+
+	vmMoMap := make(map[string]*mo.VirtualMachine)
+	for _, vmMo := range vmMoList {
+		if vmMo.Config == nil {
+			glog.Errorf("Config is not available for VM: %q", vmMo.Name)
+			continue
+		}
+		vmMoMap[vmMo.Config.Uuid] = &vmMo
+	}
+
+	for _, nodeName := range nodes {
+		node, err := vs.nodeManager.GetNode(nodeName)
+		if err != nil {
+			return err
+		}
+		vclib.VerifyVolumePathsForVM(*vmMoMap[node.Status.NodeInfo.SystemUUID], nodeVolumes[nodeName], convertToString(nodeName), attached)
+	}
+	return nil
+}

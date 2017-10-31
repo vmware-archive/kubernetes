@@ -27,6 +27,7 @@ import (
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/types"
 	"github.com/vmware/govmomi/vim25/soap"
+	"github.com/vmware/govmomi/vim25/mo"
 )
 
 // IsNotFound return true if err is NotFoundError or DefaultNotFoundError
@@ -181,4 +182,45 @@ func IsManagedObjectNotFoundError(err error) bool {
 		_, isManagedObjectNotFoundError = soap.ToSoapFault(err).VimFault().(types.ManagedObjectNotFound)
 	}
 	return isManagedObjectNotFoundError
+}
+
+// VerifyVolumePathsForVM verifies if the volume paths (volPaths) are attached to VM.
+func VerifyVolumePathsForVM(vmMo mo.VirtualMachine, volPaths []string, nodeName string, nodeVolumeMap map[string]map[string]bool) {
+	// Verify if the volume paths are present on the VM backing virtual disk devices
+	vmDevices := object.VirtualDeviceList(vmMo.Config.Hardware.Device)
+	VerifyVolumePathsForVMDevices(vmDevices, volPaths, nodeName, nodeVolumeMap)
+
+}
+
+// VerifyVolumePathsForVM verifies if the volume paths (volPaths) are attached to VM.
+func VerifyVolumePathsForVMDevices(vmDevices object.VirtualDeviceList, volPaths []string, nodeName string, nodeVolumeMap map[string]map[string]bool) {
+	volPathsMap := make(map[string]bool)
+	for _, volPath := range volPaths {
+		volPathsMap[volPath] = true
+	}
+	// Verify if the volume paths are present on the VM backing virtual disk devices
+	for _, device := range vmDevices {
+		if vmDevices.TypeName(device) == "VirtualDisk" {
+			virtualDevice := device.GetVirtualDevice()
+			if backing, ok := virtualDevice.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
+				if volPathsMap[backing.FileName] {
+					setNodeVolumeMap(nodeVolumeMap, backing.FileName, nodeName, true)
+				}
+			}
+		}
+	}
+
+}
+
+func SetNodeVolumeMap(
+	nodeVolumeMap map[string]map[string]bool,
+	volumePath string,
+	nodeName string,
+	check bool) {
+	volumeMap := nodeVolumeMap[nodeName]
+	if volumeMap == nil {
+		volumeMap = make(map[string]bool)
+		nodeVolumeMap[nodeName] = volumeMap
+	}
+	volumeMap[volumePath] = check
 }
