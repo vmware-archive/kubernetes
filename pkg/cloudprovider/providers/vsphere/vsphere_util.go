@@ -261,7 +261,7 @@ func getPbmCompatibleDatastore(ctx context.Context, client *vim25.Client, storag
 	return datastore, err
 }
 
-func (vs *VSphere) setVMOptions(ctx , dc *vclib.Datacenter) (*vclib.VMOptions, error) {
+func (vs *VSphere) setVMOptions(ctx context.Context, dc *vclib.Datacenter) (*vclib.VMOptions, error) {
 	var vmOptions vclib.VMOptions
 	nodeInfo, err := vs.nodeManager.GetNodeInfo(convertToK8sType(vs.hostName))
 	if err != nil {

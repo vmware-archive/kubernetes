@@ -823,41 +823,55 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName]map[string]bool, error) {
 	disksAreAttachedInternal := func(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName]map[string]bool, error) {
 
-		disksAreAttach := func(ctx context.Context, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, nodesToRetry []k8stypes.NodeName, retry bool) (error) {
+		disksAreAttach := func(ctx context.Context, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, retry bool) ([]k8stypes.NodeName, error) {
+
+			var wg sync.WaitGroup
+			var localAttachedMaps []map[string]map[string]bool
+			var nodesToRetry []k8stypes.NodeName
+			var globalErr error
+			globalErr = nil
+			globalErrMutex := &sync.Mutex{}
+			nodesToRetryMutex := &sync.Mutex{}
 
 			// Segregate nodes according to DC
 			dcNodes := make(map[string][]k8stypes.NodeName)
 			for nodeName, _ := range nodeVolumes {
 				nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
 				if err != nil {
-					return err
+					return nodesToRetry, err
 				}
 				datacenter := nodeInfo.dataCenter.String()
 				dcNodes[datacenter] = append(dcNodes[datacenter], nodeName)
 			}
 
-			var wg sync.WaitGroup
-			var globalErr error
-			globalErr = nil
-
 			for _, nodes := range dcNodes {
+				localAttachedMap := make(map[string]map[string]bool)
+				localAttachedMaps = append(localAttachedMaps, localAttachedMap)
 				go func() {
-					err := vs.checkDiskAttached(ctx, nodes, nodeVolumes, attached, nodesToRetry, retry)
+					nodesToRetryLocal, err := vs.checkDiskAttached(ctx, nodes, nodeVolumes, localAttachedMap, retry)
 					if !vclib.IsManagedObjectNotFoundError(err) {
-						// Add lock
-						globalErr = &err
+						globalErrMutex.Lock()
+						globalErr = err
+						globalErrMutex.Unlock()
 					}
+					nodesToRetryMutex.Lock()
+					nodesToRetry = append(nodesToRetry, nodesToRetryLocal...)
+					nodesToRetryMutex.Unlock()
 					wg.Done()
 				}()
 				wg.Add(1)
 			}
 			wg.Wait()
-
 			if globalErr != nil {
-				return globalErr
+				return nodesToRetry, globalErr
+			}
+			for _, localAttachedMap := range localAttachedMaps {
+				for key, value := range localAttachedMap {
+					attached[key] = value
+				}
 			}
 
-			return nil
+			return nodesToRetry, nil
 		}
 
 		// Create context
@@ -869,18 +883,15 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 			return disksAttached, nil
 		}
 
-		vmVolumes, err := vs.convertVolPathsToDevicePaths(nodeVolumes)
-
-		var nodesToRetry []k8stypes.NodeName
+		vmVolumes, err := vs.convertVolPathsToDevicePaths(ctx, nodeVolumes)
 		attached := make(map[string]map[string]bool)
-		err = disksAreAttach(ctx, vmVolumes, attached, nodesToRetry, false)
+		nodesToRetry, err := disksAreAttach(ctx, vmVolumes, attached, false)
 		if err != nil {
 			return nil, err
 		}
 
 		if len(nodesToRetry) != 0 {
 			// Rediscover nodes which are need to be retried
-			var nodes []k8stypes.NodeName
 			remainingNodesVolumes := make(map[k8stypes.NodeName][]string)
 			for _, nodeName := range nodesToRetry {
 				err = vs.nodeManager.RediscoverNode(nodeName)
@@ -895,8 +906,8 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 
 			// If some remaining nodes are still registered
 			if len(remainingNodesVolumes) != 0 {
-				err = disksAreAttach(ctx, remainingNodesVolumes, attached, nodes, true)
-				if err != nil || len(nodes) != 0 {
+				nodesToRetry, err = disksAreAttach(ctx, remainingNodesVolumes, attached, true)
+				if err != nil || len(nodesToRetry) != 0 {
 					return nil, err
 				}
 			}
@@ -1073,7 +1084,7 @@ func (vs *VSphere) NodeDeleted(obj interface{}) {
 	vs.nodeManager.UnRegisterNode(node)
 }
 
-func (vs *VSphere) convertVolPathsToDevicePaths(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName][]string, error) {
+func (vs *VSphere) convertVolPathsToDevicePaths(ctx context.Context, nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName][]string, error) {
 	vmVolumes := make(map[k8stypes.NodeName][]string)
 	for nodeName, volPaths := range nodeVolumes {
 		nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
@@ -1099,26 +1110,27 @@ func (vs *VSphere) convertVolPathsToDevicePaths(nodeVolumes map[k8stypes.NodeNam
 	return vmVolumes, nil
 }
 
-func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeName, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, nodesToRetry []k8stypes.NodeName, retry bool) error {
+func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeName, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, retry bool) ([]k8stypes.NodeName, error) {
+	var nodesToRetry []k8stypes.NodeName
 	var vmList []*vclib.VirtualMachine
 	var nodeInfo *NodeInfo
 
 	for _, nodeName := range nodes {
 		nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
 		if err != nil {
-			return err
+			return nodesToRetry, err
 		}
 		vmList = append(vmList, nodeInfo.vm)
 	}
 
 	if nodeInfo == nil {
-		return fmt.Errorf("No nodes to check disks are attached")
+		return nodesToRetry, fmt.Errorf("No nodes to check disks are attached")
 	}
 
 	// Making sure session is valid
 	_, err := vs.getVSphereInstanceForServer(nodeInfo.vcServer, ctx)
 	if err != nil {
-		return err
+		return nodesToRetry, err
 	}
 
 	vmMoList, err := nodeInfo.dataCenter.GetVMMoList(ctx, vmList, []string{"config.hardware.device", "name", "config.uuid"})
@@ -1127,21 +1139,20 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 			for _, nodeName := range nodes {
 				nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
 				if err != nil {
-					return err
+					return nodesToRetry, err
 				}
 				devices, err := nodeInfo.vm.VirtualMachine.Device(ctx)
 				if err != nil {
 					if vclib.IsManagedObjectNotFoundError(err) {
-						// Add lock
 						nodesToRetry = append(nodesToRetry, nodeName)
 						continue
 					}
-					return err
+					return nodesToRetry, err
 				}
 				vclib.VerifyVolumePathsForVMDevices(devices, nodeVolumes[nodeName], convertToString(nodeName), attached)
 			}
 		}
-		return err
+		return nodesToRetry, err
 	}
 
 	vmMoMap := make(map[string]*mo.VirtualMachine)
@@ -1156,9 +1167,9 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 	for _, nodeName := range nodes {
 		node, err := vs.nodeManager.GetNode(nodeName)
 		if err != nil {
-			return err
+			return nodesToRetry, err
 		}
 		vclib.VerifyVolumePathsForVM(*vmMoMap[node.Status.NodeInfo.SystemUUID], nodeVolumes[nodeName], convertToString(nodeName), attached)
 	}
-	return nil
+	return nodesToRetry, nil
 }
