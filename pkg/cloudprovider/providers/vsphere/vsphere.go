@@ -1171,6 +1171,8 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 			glog.Errorf("Config is not available for VM: %q", vmMo.Name)
 			continue
 		}
+		//TODO: Remove Comment
+		glog.V(1).Infof("vmMoMap vmname: %q vmuuid: %s", vmMo.Name, vmMo.Config.Uuid)
 		vmMoMap[vmMo.Config.Uuid] = vmMo
 	}
 
@@ -1179,6 +1181,8 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 		if err != nil {
 			return nodesToRetry, err
 		}
+		//TODO: Remove Comment
+		glog.V(1).Infof("nodename: %q nodeuuid: %s vmmomap: %+v", nodeName, node.Status.NodeInfo.SystemUUID, vmMoMap)
 		vclib.VerifyVolumePathsForVM(vmMoMap[node.Status.NodeInfo.SystemUUID], nodeVolumes[nodeName], convertToString(nodeName), attached)
 	}
 	return nodesToRetry, nil
