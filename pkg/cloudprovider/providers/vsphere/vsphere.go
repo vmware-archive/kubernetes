@@ -838,6 +838,7 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 			for nodeName, _ := range nodeVolumes {
 				nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
 				if err != nil {
+					glog.Errorf("Failed to get node info: %+v. err: %+v", nodeInfo.vm, err)
 					return nodesToRetry, err
 				}
 				VC_DC := nodeInfo.vcServer + nodeInfo.dataCenter.String()
@@ -853,6 +854,7 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 						globalErrMutex.Lock()
 						globalErr = err
 						globalErrMutex.Unlock()
+						glog.Errorf("Failed to check disk attached for nodes: %+v. err: %+v", nodes, err)
 					}
 					nodesToRetryMutex.Lock()
 					nodesToRetry = append(nodesToRetry, nodesToRetryLocal...)
@@ -874,6 +876,7 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 			return nodesToRetry, nil
 		}
 
+		glog.V(4).Info("Starting DisksAreAttach for vSphere")
 		// Create context
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -884,6 +887,10 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 		}
 
 		vmVolumes, err := vs.convertVolPathsToDevicePaths(ctx, nodeVolumes)
+		if err != nil {
+			glog.Errorf("Failed to convert volPaths to devicePaths: %+v. err: %+v", nodeVolumes, err)
+			return nil, err
+		}
 		attached := make(map[string]map[string]bool)
 		nodesToRetry, err := disksAreAttach(ctx, vmVolumes, attached, false)
 		if err != nil {
@@ -897,8 +904,10 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 				err = vs.nodeManager.RediscoverNode(nodeName)
 				if err != nil {
 					if err == vclib.ErrNoVMFound {
+						glog.V(4).Infof("node %s not found. err: %+v", nodeName, err)
 						continue
 					}
+					glog.Errorf("Failed to rediscover node %s. err: %+v", nodeName, err)
 					return nil, err
 				}
 				remainingNodesVolumes[nodeName] = nodeVolumes[nodeName]
@@ -908,6 +917,7 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 			if len(remainingNodesVolumes) != 0 {
 				nodesToRetry, err = disksAreAttach(ctx, remainingNodesVolumes, attached, true)
 				if err != nil || len(nodesToRetry) != 0 {
+					glog.Errorf("Failed to retry disksAreAttach  for nodes %+v. err: %+v", remainingNodesVolumes, err)
 					return nil, err
 				}
 			}
@@ -916,6 +926,7 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 				disksAttached[convertToK8sType(nodeName)] = volPaths
 			}
 		}
+		glog.V(4).Infof("DisksAreAttach successfully executed. result: %+v", attached)
 		return disksAttached, nil
 	}
 	requestTime := time.Now()
@@ -1124,6 +1135,7 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 	}
 
 	if nodeInfo == nil {
+		glog.Errorf("No nodes to check disks are attached")
 		return nodesToRetry, fmt.Errorf("No nodes to check disks are attached")
 	}
 
@@ -1136,6 +1148,7 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 	vmMoList, err := nodeInfo.dataCenter.GetVMMoList(ctx, vmList, []string{"config.hardware.device", "name", "config.uuid"})
 	if err != nil {
 		if vclib.IsManagedObjectNotFoundError(err) && !retry {
+			glog.V(4).Infof("checkDiskAttach: ManagedObjectNotFound for property collector query for nodes: %+v vms: %+v", nodes, vmList)
 			for _, nodeName := range nodes {
 				nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
 				if err != nil {
@@ -1144,6 +1157,7 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 				devices, err := nodeInfo.vm.VirtualMachine.Device(ctx)
 				if err != nil {
 					if vclib.IsManagedObjectNotFoundError(err) {
+						glog.V(4).Infof("checkDiskAttach: ManagedObjectNotFound for nodes: %s vms: %s", nodeName, nodeInfo.vm)
 						nodesToRetry = append(nodesToRetry, nodeName)
 						continue
 					}
