@@ -833,15 +833,15 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 			globalErrMutex := &sync.Mutex{}
 			nodesToRetryMutex := &sync.Mutex{}
 
-			// Segregate nodes according to DC
+			// Segregate nodes according to VC-DC
 			dcNodes := make(map[string][]k8stypes.NodeName)
 			for nodeName, _ := range nodeVolumes {
 				nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
 				if err != nil {
 					return nodesToRetry, err
 				}
-				datacenter := nodeInfo.dataCenter.String()
-				dcNodes[datacenter] = append(dcNodes[datacenter], nodeName)
+				VC_DC := nodeInfo.vcServer + nodeInfo.dataCenter.String()
+				dcNodes[VC_DC] = append(dcNodes[VC_DC], nodeName)
 			}
 
 			for _, nodes := range dcNodes {
