@@ -1033,7 +1033,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 	requestTime := time.Now()
 	canonicalVolumePath, err = createVolumeInternal(volumeOptions)
 	vclib.RecordCreateVolumeMetric(volumeOptions, requestTime, err)
-	glog.V(1).Infof("The canonical volume path for the newly created vSphere volume is %q", canonicalVolumePath)
+	glog.V(4).Infof("The canonical volume path for the newly created vSphere volume is %q", canonicalVolumePath)
 	return canonicalVolumePath, err
 }
 
@@ -1164,6 +1164,7 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 					}
 					return nodesToRetry, err
 				}
+				glog.V(4).Infof("Verifying Volume Paths by devices for node %s and VM %s", nodeName, nodeInfo.vm)
 				vclib.VerifyVolumePathsForVMDevices(devices, nodeVolumes[nodeName], convertToString(nodeName), attached)
 			}
 		}
@@ -1180,12 +1181,14 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 		vmMoMap[strings.ToLower(vmMo.Config.Uuid)] = vmMo
 	}
 
+	glog.V(9).Infof("vmMoMap: +%v", vmMoMap)
+
 	for _, nodeName := range nodes {
 		node, err := vs.nodeManager.GetNode(nodeName)
 		if err != nil {
 			return nodesToRetry, err
 		}
-		glog.V(9).Infof("nodename: %q nodeuuid: %s vmmomap: %+v", nodeName, node.Status.NodeInfo.SystemUUID, vmMoMap)
+		glog.V(9).Infof("Verifying volume for nodeName: %q with nodeuuid: %s", nodeName, node.Status.NodeInfo.SystemUUID, vmMoMap)
 		vclib.VerifyVolumePathsForVM(vmMoMap[strings.ToLower(node.Status.NodeInfo.SystemUUID)], nodeVolumes[nodeName], convertToString(nodeName), attached)
 	}
 	return nodesToRetry, nil
