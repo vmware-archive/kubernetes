@@ -181,9 +181,8 @@ func getSharedDatastoresInK8SCluster(ctx context.Context, dc *vclib.Datacenter, 
 		glog.Error(msg)
 		return nil, fmt.Errorf(msg)
 	}
-	index := 0
 	var sharedDatastores []*vclib.DatastoreInfo
-	for _, nodeVmDetail := range nodeVmDetails {
+	for index, nodeVmDetail := range nodeVmDetails {
 		glog.V(9).Infof("Getting accessible datastores for node %s", nodeVmDetail.NodeName)
 		accessibleDatastores, err := getAccessibleDatastores(ctx, &nodeVmDetail, nodeManager)
 		if err != nil {
@@ -197,7 +196,6 @@ func getSharedDatastoresInK8SCluster(ctx context.Context, dc *vclib.Datacenter, 
 				return nil, fmt.Errorf("No shared datastores found in the Kubernetes cluster for nodeVmDetails: %+v", nodeVmDetails)
 			}
 		}
-		index++
 	}
 	glog.V(9).Infof("sharedDatastores : %+v", sharedDatastores)
 	sharedDatastores, err := getDatastoresForEndpointVC(ctx, dc, sharedDatastores)
