@@ -1098,6 +1098,7 @@ func (vs *VSphere) NodeDeleted(obj interface{}) {
 	vs.nodeManager.UnRegisterNode(node)
 }
 
+// convertVolPathsToDevicePaths removes cluster or folder path from volPaths and convert to canonicalPath
 func (vs *VSphere) convertVolPathsToDevicePaths(ctx context.Context, nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName][]string, error) {
 	vmVolumes := make(map[k8stypes.NodeName][]string)
 	for nodeName, volPaths := range nodeVolumes {
@@ -1124,6 +1125,8 @@ func (vs *VSphere) convertVolPathsToDevicePaths(ctx context.Context, nodeVolumes
 	return vmVolumes, nil
 }
 
+// checkDiskAttached verifies volumes are attached to the VMs which are in same vCenter and Datacenter
+// Returns nodes if exist any for which VM is not found in that vCenter and Datacenter
 func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeName, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, retry bool) ([]k8stypes.NodeName, error) {
 	var nodesToRetry []k8stypes.NodeName
 	var vmList []*vclib.VirtualMachine
