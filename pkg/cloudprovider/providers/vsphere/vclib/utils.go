@@ -192,7 +192,7 @@ func VerifyVolumePathsForVM(vmMo mo.VirtualMachine, volPaths []string, nodeName 
 
 }
 
-// VerifyVolumePathsForVM verifies if the volume paths (volPaths) are attached to VM.
+// VerifyVolumePathsForVMDevices verifies if the volume paths (volPaths) are attached to VM.
 func VerifyVolumePathsForVMDevices(vmDevices object.VirtualDeviceList, volPaths []string, nodeName string, nodeVolumeMap map[string]map[string]bool) {
 	volPathsMap := make(map[string]bool)
 	for _, volPath := range volPaths {
