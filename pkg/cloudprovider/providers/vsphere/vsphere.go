@@ -850,11 +850,13 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 				localAttachedMaps = append(localAttachedMaps, localAttachedMap)
 				go func() {
 					nodesToRetryLocal, err := vs.checkDiskAttached(ctx, nodes, nodeVolumes, localAttachedMap, retry)
-					if !vclib.IsManagedObjectNotFoundError(err) {
-						globalErrMutex.Lock()
-						globalErr = err
-						globalErrMutex.Unlock()
-						glog.Errorf("Failed to check disk attached for nodes: %+v. err: %+v", nodes, err)
+					if err != nil {
+						if !vclib.IsManagedObjectNotFoundError(err) {
+							globalErrMutex.Lock()
+							globalErr = err
+							globalErrMutex.Unlock()
+							glog.Errorf("Failed to check disk attached for nodes: %+v. err: %+v", nodes, err)
+						}
 					}
 					nodesToRetryMutex.Lock()
 					nodesToRetry = append(nodesToRetry, nodesToRetryLocal...)
