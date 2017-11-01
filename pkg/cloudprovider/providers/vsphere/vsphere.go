@@ -848,6 +848,7 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 			for _, nodes := range dcNodes {
 				localAttachedMap := make(map[string]map[string]bool)
 				localAttachedMaps = append(localAttachedMaps, localAttachedMap)
+				// Start go routines per VC-DC to check disks are attached
 				go func() {
 					nodesToRetryLocal, err := vs.checkDiskAttached(ctx, nodes, nodeVolumes, localAttachedMap, retry)
 					if err != nil {
@@ -1147,6 +1148,8 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 	if err != nil {
 		if vclib.IsManagedObjectNotFoundError(err) && !retry {
 			glog.V(4).Infof("checkDiskAttach: ManagedObjectNotFound for property collector query for nodes: %+v vms: %+v", nodes, vmList)
+			// Property Collector Query failed
+			// VerifyVolumePaths per VM
 			for _, nodeName := range nodes {
 				nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
 				if err != nil {
@@ -1173,8 +1176,7 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 			glog.Errorf("Config is not available for VM: %q", vmMo.Name)
 			continue
 		}
-		//TODO: Remove Comment
-		glog.V(1).Infof("vmMoMap vmname: %q vmuuid: %s", vmMo.Name, vmMo.Config.Uuid)
+		glog.V(9).Infof("vmMoMap vmname: %q vmuuid: %s", vmMo.Name, strings.ToLower(vmMo.Config.Uuid))
 		vmMoMap[strings.ToLower(vmMo.Config.Uuid)] = vmMo
 	}
 
@@ -1183,8 +1185,7 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 		if err != nil {
 			return nodesToRetry, err
 		}
-		//TODO: Remove Comment
-		glog.V(1).Infof("nodename: %q nodeuuid: %s vmmomap: %+v", nodeName, node.Status.NodeInfo.SystemUUID, vmMoMap)
+		glog.V(9).Infof("nodename: %q nodeuuid: %s vmmomap: %+v", nodeName, node.Status.NodeInfo.SystemUUID, vmMoMap)
 		vclib.VerifyVolumePathsForVM(vmMoMap[strings.ToLower(node.Status.NodeInfo.SystemUUID)], nodeVolumes[nodeName], convertToString(nodeName), attached)
 	}
 	return nodesToRetry, nil
