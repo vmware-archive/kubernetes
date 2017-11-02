@@ -211,16 +211,3 @@ func VerifyVolumePathsForVMDevices(vmDevices object.VirtualDeviceList, volPaths 
 	}
 
 }
-
-func SetNodeVolumeMap(
-	nodeVolumeMap map[string]map[string]bool,
-	volumePath string,
-	nodeName string,
-	check bool) {
-	volumeMap := nodeVolumeMap[nodeName]
-	if volumeMap == nil {
-		volumeMap = make(map[string]bool)
-		nodeVolumeMap[nodeName] = volumeMap
-	}
-	volumeMap[volumePath] = check
-}

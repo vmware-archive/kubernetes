@@ -823,6 +823,10 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName]map[string]bool, error) {
 	disksAreAttachedInternal := func(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName]map[string]bool, error) {
 
+		// disksAreAttach checks whether disks are attached to the nodes.
+		// Returns nodes that need to be retried if retry is true
+		// Segregates nodes per VC and DC
+		// Creates go routines per VC-DC to find whether disks are attached to the nodes.
 		disksAreAttach := func(ctx context.Context, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, retry bool) ([]k8stypes.NodeName, error) {
 
 			var wg sync.WaitGroup
@@ -879,7 +883,7 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 			return nodesToRetry, nil
 		}
 
-		glog.V(4).Info("Starting DisksAreAttach for vSphere")
+		glog.V(4).Info("Starting DisksAreAttached API for vSphere with nodeVolumes: %+v", nodeVolumes)
 		// Create context
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -1147,10 +1151,11 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 		return nodesToRetry, err
 	}
 
+	// If any of the nodes are not present property collector query will fail for entire operation
 	vmMoList, err := nodeInfo.dataCenter.GetVMMoList(ctx, vmList, []string{"config.hardware.device", "name", "config.uuid"})
 	if err != nil {
 		if vclib.IsManagedObjectNotFoundError(err) && !retry {
-			glog.V(4).Infof("checkDiskAttach: ManagedObjectNotFound for property collector query for nodes: %+v vms: %+v", nodes, vmList)
+			glog.V(4).Infof("checkDiskAttached: ManagedObjectNotFound for property collector query for nodes: %+v vms: %+v", nodes, vmList)
 			// Property Collector Query failed
 			// VerifyVolumePaths per VM
 			for _, nodeName := range nodes {
@@ -1161,7 +1166,7 @@ func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeN
 				devices, err := nodeInfo.vm.VirtualMachine.Device(ctx)
 				if err != nil {
 					if vclib.IsManagedObjectNotFoundError(err) {
-						glog.V(4).Infof("checkDiskAttach: ManagedObjectNotFound for nodes: %s vms: %s", nodeName, nodeInfo.vm)
+						glog.V(4).Infof("checkDiskAttached: ManagedObjectNotFound for Kubernetes node: %s with vSphere Virtual Machine reference: %v", nodeName, nodeInfo.vm)
 						nodesToRetry = append(nodesToRetry, nodeName)
 						continue
 					}
