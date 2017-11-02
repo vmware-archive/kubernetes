@@ -36,6 +36,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"path/filepath"
 )
 
