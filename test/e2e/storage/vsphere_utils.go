@@ -221,7 +221,7 @@ func getVSphereClaimSpecWithStorageClassAnnotation(ns string, storageclass *stor
 			},
 			Resources: v1.ResourceRequirements{
 				Requests: v1.ResourceList{
-					v1.ResourceName(v1.ResourceStorage): resource.MustParse("2Gi"),
+					v1.ResourceName(v1.ResourceStorage): resource.MustParse(diskSize),
 				},
 			},
 		},
@@ -352,4 +352,13 @@ func verifyVSphereVolumesAccessible(pod *v1.Pod, persistentvolumes []*v1.Persist
 		_, err = framework.LookForStringInPodExec(namespace, pod.Name, []string{"/bin/touch", filepath}, "", time.Minute)
 		Expect(err).NotTo(HaveOccurred())
 	}
+}
+
+// Get vSphere Volume Path from PVC
+func getvSphereVolumePathFromClaim(client clientset.Interface, namespace string, claimName string) string {
+	pvclaim, err := client.CoreV1().PersistentVolumeClaims(namespace).Get(claimName, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	pv, err := client.CoreV1().PersistentVolumes().Get(pvclaim.Spec.VolumeName, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	return pv.Spec.VsphereVolume.VolumePath
 }
