@@ -1109,30 +1109,3 @@ func (vs *VSphere) NodeDeleted(obj interface{}) {
 	glog.V(4).Infof("Node deleted: %+v", node)
 	vs.nodeManager.UnRegisterNode(node)
 }
-
-// convertVolPathsToDevicePaths removes cluster or folder path from volPaths and convert to canonicalPath
-func (vs *VSphere) convertVolPathsToDevicePaths(ctx context.Context, nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName][]string, error) {
-	vmVolumes := make(map[k8stypes.NodeName][]string)
-	for nodeName, volPaths := range nodeVolumes {
-		nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
-		if err != nil {
-			return nil, err
-		}
-
-		_, err = vs.getVSphereInstanceForServer(nodeInfo.vcServer, ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		for i, volPath := range volPaths {
-			deviceVolPath, err := convertVolPathToDevicePath(ctx, nodeInfo.dataCenter, volPath)
-			if err != nil {
-				glog.Errorf("Failed to convert vsphere volume path %s to device path for volume %s. err: %+v", volPath, deviceVolPath, err)
-				return nil, err
-			}
-			volPaths[i] = deviceVolPath
-		}
-		vmVolumes[nodeName] = volPaths
-	}
-	return vmVolumes, nil
-}
