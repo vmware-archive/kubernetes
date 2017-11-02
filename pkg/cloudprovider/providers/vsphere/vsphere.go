@@ -819,7 +819,7 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 }
 
 // DisksAreAttached returns if disks are attached to the VM using controllers supported by the plugin.
-// It converts volPaths into canonical form so that it can be compared with the VM device path.
+// Converts volPaths into canonical form so that it can be compared with the VM device path.
 // Segregates nodes by vCenter and Datacenter they are present in. This reduces calls to VC.
 // Creates go routines per VC-DC to find whether disks are attached to the nodes.
 // If the some of the VMs are not found or migrated then they are added to separate list.
