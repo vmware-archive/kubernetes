@@ -43,7 +43,6 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers"
 	"k8s.io/kubernetes/pkg/controller"
-	"github.com/vmware/govmomi/vim25/mo"
 )
 
 // VSphere Cloud Provider constants
