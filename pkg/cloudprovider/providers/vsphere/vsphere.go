@@ -820,6 +820,14 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 }
 
 // DisksAreAttached returns if disks are attached to the VM using controllers supported by the plugin.
+// It converts volPaths into canonical form so that it can be compared with the VM device path.
+// Segregates nodes by vCenter and Datacenter they are present in. This reduces calls to VC.
+// Creates go routines per VC-DC to find whether disks are attached to the nodes.
+// If the some of the VMs are not found or migrated then they are added to separate list.
+// After successful execution of goroutines,
+// If there are VMs which are needs to be retried are rediscovered
+// If VMs which are removed from vSphere inventory they are ignored.
+// After the successful rediscovery of VMs, the whole operation is initiated again for only rediscovered VMs.
 func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName]map[string]bool, error) {
 	disksAreAttachedInternal := func(nodeVolumes map[k8stypes.NodeName][]string) (map[k8stypes.NodeName]map[string]bool, error) {
 
@@ -893,6 +901,7 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 			return disksAttached, nil
 		}
 
+		// Convert VolPaths into canonical form so that it can be compared with the VM device path.
 		vmVolumes, err := vs.convertVolPathsToDevicePaths(ctx, nodeVolumes)
 		if err != nil {
 			glog.Errorf("Failed to convert volPaths to devicePaths: %+v. err: %+v", nodeVolumes, err)
@@ -1127,77 +1136,4 @@ func (vs *VSphere) convertVolPathsToDevicePaths(ctx context.Context, nodeVolumes
 		vmVolumes[nodeName] = volPaths
 	}
 	return vmVolumes, nil
-}
-
-// checkDiskAttached verifies volumes are attached to the VMs which are in same vCenter and Datacenter
-// Returns nodes if exist any for which VM is not found in that vCenter and Datacenter
-func (vs *VSphere) checkDiskAttached(ctx context.Context, nodes []k8stypes.NodeName, nodeVolumes map[k8stypes.NodeName][]string, attached map[string]map[string]bool, retry bool) ([]k8stypes.NodeName, error) {
-	var nodesToRetry []k8stypes.NodeName
-	var vmList []*vclib.VirtualMachine
-	var nodeInfo NodeInfo
-    var err error
-
-	for _, nodeName := range nodes {
-		nodeInfo, err = vs.nodeManager.GetNodeInfo(nodeName)
-		if err != nil {
-			return nodesToRetry, err
-		}
-		vmList = append(vmList, nodeInfo.vm)
-	}
-
-	// Making sure session is valid
-	_, err = vs.getVSphereInstanceForServer(nodeInfo.vcServer, ctx)
-	if err != nil {
-		return nodesToRetry, err
-	}
-
-	// If any of the nodes are not present property collector query will fail for entire operation
-	vmMoList, err := nodeInfo.dataCenter.GetVMMoList(ctx, vmList, []string{"config.hardware.device", "name", "config.uuid"})
-	if err != nil {
-		if vclib.IsManagedObjectNotFoundError(err) && !retry {
-			glog.V(4).Infof("checkDiskAttached: ManagedObjectNotFound for property collector query for nodes: %+v vms: %+v", nodes, vmList)
-			// Property Collector Query failed
-			// VerifyVolumePaths per VM
-			for _, nodeName := range nodes {
-				nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
-				if err != nil {
-					return nodesToRetry, err
-				}
-				devices, err := nodeInfo.vm.VirtualMachine.Device(ctx)
-				if err != nil {
-					if vclib.IsManagedObjectNotFoundError(err) {
-						glog.V(4).Infof("checkDiskAttached: ManagedObjectNotFound for Kubernetes node: %s with vSphere Virtual Machine reference: %v", nodeName, nodeInfo.vm)
-						nodesToRetry = append(nodesToRetry, nodeName)
-						continue
-					}
-					return nodesToRetry, err
-				}
-				glog.V(4).Infof("Verifying Volume Paths by devices for node %s and VM %s", nodeName, nodeInfo.vm)
-				vclib.VerifyVolumePathsForVMDevices(devices, nodeVolumes[nodeName], convertToString(nodeName), attached)
-			}
-		}
-		return nodesToRetry, err
-	}
-
-	vmMoMap := make(map[string]mo.VirtualMachine)
-	for _, vmMo := range vmMoList {
-		if vmMo.Config == nil {
-			glog.Errorf("Config is not available for VM: %q", vmMo.Name)
-			continue
-		}
-		glog.V(9).Infof("vmMoMap vmname: %q vmuuid: %s", vmMo.Name, strings.ToLower(vmMo.Config.Uuid))
-		vmMoMap[strings.ToLower(vmMo.Config.Uuid)] = vmMo
-	}
-
-	glog.V(9).Infof("vmMoMap: +%v", vmMoMap)
-
-	for _, nodeName := range nodes {
-		node, err := vs.nodeManager.GetNode(nodeName)
-		if err != nil {
-			return nodesToRetry, err
-		}
-		glog.V(9).Infof("Verifying volume for nodeName: %q with nodeuuid: %s", nodeName, node.Status.NodeInfo.SystemUUID, vmMoMap)
-		vclib.VerifyVolumePathsForVM(vmMoMap[strings.ToLower(node.Status.NodeInfo.SystemUUID)], nodeVolumes[nodeName], convertToString(nodeName), attached)
-	}
-	return nodesToRetry, nil
 }
