@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
-	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -73,7 +72,7 @@ var _ = SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:vsphere
 		Expect(err).NotTo(HaveOccurred())
 
 		By("creating a test vsphere volume")
-		volumeOptions := new(vclib.VolumeOptions)
+		volumeOptions := new(vsphere.VolumeOptions)
 		volumeOptions.CapacityKB = 2097152
 		volumeOptions.Name = "e2e-vmdk-" + namespace
 		volumeOptions.Datastore = clusterDatastore

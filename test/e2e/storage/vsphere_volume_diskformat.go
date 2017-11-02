@@ -25,11 +25,11 @@ import (
 	"github.com/vmware/govmomi/find"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stype "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/kubernetes/pkg/api/v1"
 	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
