@@ -44,7 +44,7 @@ const (
 	4. Verify the error returned on PVC failure is the correct.
 */
 
-var _ = SIGDescribe("Volume Disk Size [Feature:vsphere]", func() {
+var _ = framework.KubeDescribe("Volume Disk Size [Feature:vsphere]", func() {
 	f := framework.NewDefaultFramework("volume-disksize")
 	var (
 		client       clientset.Interface

@@ -51,7 +51,7 @@ const (
 	storageclassname = "nginx-sc"
 )
 
-var _ = SIGDescribe("vsphere statefulset", func() {
+var _ = framework.KubeDescribe("vsphere statefulset", func() {
 	f := framework.NewDefaultFramework("vsphere-statefulset")
 	var (
 		namespace string

@@ -90,7 +90,7 @@ const (
 
 */
 
-var _ = SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsphere]", func() {
+var _ = framework.KubeDescribe("Storage Policy Based Volume Provisioning [Feature:vsphere]", func() {
 	f := framework.NewDefaultFramework("volume-vsan-policy")
 	var (
 		client       clientset.Interface

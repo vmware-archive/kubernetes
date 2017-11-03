@@ -63,7 +63,7 @@ const (
 	7. Verify if the MountVolume.MountDevice fails because it is unable to find the file system executable file on the node.
 */
 
-var _ = SIGDescribe("Volume FStype [Feature:vsphere]", func() {
+var _ = framework.KubeDescribe("Volume FStype [Feature:vsphere]", func() {
 	f := framework.NewDefaultFramework("volume-fstype")
 	var (
 		client    clientset.Interface

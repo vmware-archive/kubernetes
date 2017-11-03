@@ -31,7 +31,7 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = SIGDescribe("PersistentVolumes [Feature:ReclaimPolicy]", func() {
+var _ = framework.KubeDescribe("PersistentVolumes [Feature:ReclaimPolicy]", func() {
 	f := framework.NewDefaultFramework("persistentvolumereclaim")
 	var (
 		c          clientset.Interface
@@ -47,7 +47,7 @@ var _ = SIGDescribe("PersistentVolumes [Feature:ReclaimPolicy]", func() {
 		framework.ExpectNoError(framework.WaitForAllNodesSchedulable(c, framework.TestContext.NodeSchedulableTimeout))
 	})
 
-	SIGDescribe("persistentvolumereclaim:vsphere", func() {
+	framework.KubeDescribe("persistentvolumereclaim:vsphere", func() {
 		BeforeEach(func() {
 			framework.SkipUnlessProviderIs("vsphere")
 			pv = nil

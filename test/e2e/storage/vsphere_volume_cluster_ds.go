@@ -39,7 +39,7 @@ import (
 	1. CLUSTER_DATASTORE which should be set to clustered datastore
 	2. VSPHERE_SPBM_POLICY_DS_CLUSTER which should be set to a tag based spbm policy tagged to a clustered datastore
 */
-var _ = SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:vsphere]", func() {
+var _ = framework.KubeDescribe("Volume Provisioning On Clustered Datastore [Feature:vsphere]", func() {
 	f := framework.NewDefaultFramework("volume-provision")
 
 	var client clientset.Interface

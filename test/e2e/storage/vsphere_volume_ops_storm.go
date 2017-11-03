@@ -23,10 +23,10 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	storage "k8s.io/api/storage/v1"
 	k8stype "k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/api/v1"
+	storage "k8s.io/kubernetes/pkg/apis/storage/v1"
 	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
@@ -47,7 +47,7 @@ import (
 		10. Delete storage class.
 */
 
-var _ = SIGDescribe("Volume Operations Storm [Feature:vsphere]", func() {
+var _ = framework.KubeDescribe("Volume Operations Storm [Feature:vsphere]", func() {
 	f := framework.NewDefaultFramework("volume-ops-storm")
 	const DEFAULT_VOLUME_OPS_SCALE = 30
 	var (

@@ -44,7 +44,7 @@ const (
 	4. Verify the error returned on PVC failure is the correct.
 */
 
-var _ = SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", func() {
+var _ = framework.KubeDescribe("Volume Provisioning on Datastore [Feature:vsphere]", func() {
 	f := framework.NewDefaultFramework("volume-datastore")
 	var (
 		client       clientset.Interface
