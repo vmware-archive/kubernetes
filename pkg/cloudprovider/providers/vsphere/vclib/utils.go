@@ -123,10 +123,10 @@ func getSCSIControllers(vmDevices object.VirtualDeviceList) []*types.VirtualCont
 	return scsiControllers
 }
 
-// RemoveClusterFromVDiskPath removes the cluster or folder path from the vDiskPath
+// RemoveStorageClusterORFolderNameFromVDiskPath removes the cluster or folder path from the vDiskPath
 // for vDiskPath [DatastoreCluster/sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk, return value is [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk
 // for vDiskPath [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk, return value remains same [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk
-func RemoveClusterFromVDiskPath(vDiskPath string) string {
+func RemoveStorageClusterORFolderNameFromVDiskPath(vDiskPath string) string {
 	datastore := regexp.MustCompile("\\[(.*?)\\]").FindStringSubmatch(vDiskPath)[1]
 	if filepath.Base(datastore) != datastore {
 		vDiskPath = strings.Replace(vDiskPath, datastore, filepath.Base(datastore), 1)

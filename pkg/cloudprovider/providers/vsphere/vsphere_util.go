@@ -378,7 +378,7 @@ func setdatastoreFolderIDMap(
 }
 
 func convertVolPathToDevicePath(ctx context.Context, dc *vclib.Datacenter, volPath string) (string, error) {
-	volPath = vclib.RemoveClusterFromVDiskPath(volPath)
+	volPath = vclib.RemoveStorageClusterORFolderNameFromVDiskPath(volPath)
 	// Get the canonical volume path for volPath.
 	canonicalVolumePath, err := getcanonicalVolumePath(ctx, dc, volPath)
 	if err != nil {
