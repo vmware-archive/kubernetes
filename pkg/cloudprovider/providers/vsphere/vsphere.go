@@ -845,7 +845,7 @@ func (vs *VSphere) DisksAreAttached(nodeVolumes map[k8stypes.NodeName][]string) 
 
 			// Segregate nodes according to VC-DC
 			dcNodes := make(map[string][]k8stypes.NodeName)
-			for nodeName, _ := range nodeVolumes {
+			for nodeName := range nodeVolumes {
 				nodeInfo, err := vs.nodeManager.GetNodeInfo(nodeName)
 				if err != nil {
 					glog.Errorf("Failed to get node info: %+v. err: %+v", nodeInfo.vm, err)
@@ -1089,7 +1089,7 @@ func (vs *VSphere) HasClusterID() bool {
 func (vs *VSphere) NodeAdded(obj interface{}) {
 	node, ok := obj.(*v1.Node)
 	if node == nil || !ok {
-		glog.Warningf("NodeAdded: unrecognized object %+v", obj);
+		glog.Warningf("NodeAdded: unrecognized object %+v", obj)
 		return
 	}
 
@@ -1101,7 +1101,7 @@ func (vs *VSphere) NodeAdded(obj interface{}) {
 func (vs *VSphere) NodeDeleted(obj interface{}) {
 	node, ok := obj.(*v1.Node)
 	if node == nil || !ok {
-		glog.Warningf("NodeDeleted: unrecognized object %+v", obj);
+		glog.Warningf("NodeDeleted: unrecognized object %+v", obj)
 		return
 	}
 
