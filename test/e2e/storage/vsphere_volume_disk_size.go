@@ -25,8 +25,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -72,7 +72,7 @@ var _ = framework.KubeDescribe("Volume Disk Size [Feature:vsphere]", func() {
 		diskSize := "1"
 		err := invokeInvalidDiskSizeTestNeg(client, namespace, scParameters, diskSize)
 		Expect(err).To(HaveOccurred())
-		errorMsg := `Failed to provision volume with StorageClass \"` + DiskSizeSCName + `\": A specified parameter was not correct`
+		errorMsg := `A specified parameter was not correct`
 		if !strings.Contains(err.Error(), errorMsg) {
 			Expect(err).NotTo(HaveOccurred(), errorMsg)
 		}
