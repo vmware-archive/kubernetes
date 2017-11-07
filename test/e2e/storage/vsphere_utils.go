@@ -47,7 +47,7 @@ func verifyVSphereDiskAttached(vsp *vsphere.VSphere, volumePath string, nodeName
 		vsp, err = vsphere.GetVSphere()
 		Expect(err).NotTo(HaveOccurred())
 	}
-	framework.Logf("-------------------------------------------volumePath: %q, nodeName: %q", volumePath, nodeName)
+	framework.Logf("[verifyVSphereDiskAttached] volumePath: %q, nodeName: %q", volumePath, nodeName)
 	isAttached, err = vsp.DiskIsAttached(volumePath, nodeName)
 	Expect(err).NotTo(HaveOccurred())
 	return isAttached, err
