@@ -23,7 +23,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stype "k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/api/v1"
 	storage "k8s.io/kubernetes/pkg/apis/storage/v1"
@@ -114,10 +113,6 @@ var _ = framework.KubeDescribe("Volume Operations Storm [Feature:vsphere]", func
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Verify all volumes are accessible and available in the pod")
-		framework.Logf("111-----------------------pod.Spec: %v", pod.Spec)
-		pod, err = client.CoreV1().Pods(namespace).Get(pod.Name, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		framework.Logf("222-----------------------pod.Spec: %v", pod.Spec)
 		verifyVSphereVolumesAccessible(pod, persistentvolumes, vsp)
 
 		By("Deleting pod")
