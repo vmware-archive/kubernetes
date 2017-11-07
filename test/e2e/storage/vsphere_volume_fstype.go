@@ -24,8 +24,8 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stype "k8s.io/apimachinery/pkg/types"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
@@ -127,17 +127,14 @@ func invokeTestForInvalidFstype(f *framework.Framework, client clientset.Interfa
 	By("Creating pod to attach PV to the node")
 	var pvclaims []*v1.PersistentVolumeClaim
 	pvclaims = append(pvclaims, pvclaim)
+
 	// Create pod to attach Volume to Node
 	pod, err := framework.CreatePod(client, namespace, pvclaims, false, ExecCommand)
 	Expect(err).To(HaveOccurred())
 
 	eventList, err := client.CoreV1().Events(namespace).List(metav1.ListOptions{})
-
-	// Detach and delete volume
-	detachVolume(f, client, vsp, pod, persistentvolumes[0].Spec.VsphereVolume.VolumePath)
-	deleteVolume(client, pvclaim.Name, namespace)
-
 	Expect(eventList.Items).NotTo(BeEmpty())
+
 	errorMsg := `MountVolume.MountDevice failed for volume "` + persistentvolumes[0].Name + `" : executable file not found`
 	isFound := false
 	for _, item := range eventList.Items {
@@ -146,6 +143,12 @@ func invokeTestForInvalidFstype(f *framework.Framework, client clientset.Interfa
 		}
 	}
 	Expect(isFound).To(BeTrue(), "Unable to verify MountVolume.MountDevice failure")
+
+	// Detach and delete volume
+	pod, err = client.CoreV1().Pods(namespace).Get(pod.Name, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	detachVolume(f, client, vsp, pod, persistentvolumes[0].Spec.VsphereVolume.VolumePath)
+	deleteVolume(client, pvclaim.Name, namespace)
 }
 
 func createVolume(client clientset.Interface, namespace string, scParameters map[string]string) (*v1.PersistentVolumeClaim, []*v1.PersistentVolume) {
