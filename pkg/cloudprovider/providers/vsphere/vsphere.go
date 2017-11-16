@@ -501,8 +501,54 @@ func (vs *VSphere) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress, 
 		return getLocalIP()
 	}
 
-	// TODO: Need to see what to do if nodename and localNodeName are not matching.
-	return nil, cloudprovider.InstanceNotFound
+	if vs.cfg == nil {
+		return nil, cloudprovider.InstanceNotFound
+	}
+
+	// Below logic can be executed only on master as VC details are present.
+	addrs := []v1.NodeAddress{}
+	// Create context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vsi, err := vs.getVSphereInstance(nodeName)
+	if err != nil {
+		return nil, err
+	}
+	// Ensure client is logged in and session is valid
+	err = vsi.conn.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	vm, err := vs.getVMFromNodeName(ctx, nodeName)
+	if err != nil {
+		glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToString(nodeName), err)
+		return nil, err
+	}
+	vmMoList, err := vm.Datacenter.GetVMMoList(ctx, []*vclib.VirtualMachine{vm}, []string{"guest.net"})
+	if err != nil {
+		glog.Errorf("Failed to get VM Managed object with property guest.net for node: %q. err: +%v", convertToString(nodeName), err)
+		return nil, err
+	}
+	// retrieve VM's ip(s)
+	for _, v := range vmMoList[0].Guest.Net {
+		if vs.cfg.Network.PublicNetwork == v.Network {
+			for _, ip := range v.IpAddress {
+				if net.ParseIP(ip).To4() != nil {
+					v1helper.AddToNodeAddresses(&addrs,
+						v1.NodeAddress{
+							Type:    v1.NodeExternalIP,
+							Address: ip,
+						}, v1.NodeAddress{
+							Type:    v1.NodeInternalIP,
+							Address: ip,
+						},
+					)
+				}
+			}
+		}
+	}
+	return addrs, nil
 }
 
 // NodeAddressesByProviderID returns the node addresses of an instances with the specified unique providerID
@@ -579,22 +625,14 @@ func (vs *VSphere) InstanceExistsByProviderID(providerID string) (bool, error) {
 func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 
 	instanceIDInternal := func() (string, error) {
-		// TODO: Based on hostname, locate the VM in VC inventory and check for following cases.
-		// 1. Node Present.
-		// 2. Node Powered On/ Powered off.
-		// Based on these kubernetes core decides to take specific actions.
-		// Also verify if this logic is required only on master or also on worker nodes.
 		if vs.hostName == convertToString(nodeName) {
 			return vs.hostName, nil
 		}
 
-		// TODO: Need to see what to do if nodename and localNodeName are not matching.
-		// return "", cloudprovider.InstanceNotFound
-
-		// TODO: Below logic is the existing logic.
-		//if vs.localInstanceID == convertToString(nodeName) {
-		//	return vs.cfg.Global.WorkingDir + "/" + vs.localInstanceID, nil
-		//}
+		// Below logic can be performed only on master node where VC details are preset.
+		if vs.cfg == nil {
+			return "", fmt.Errorf("The current node can't detremine InstanceID for %q", convertToString(nodeName))
+		}
 
 		// Create context
 		ctx, cancel := context.WithCancel(context.Background())
