@@ -147,7 +147,7 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 			scArrays[index] = sc
 		}
 
-		vsp, err := vsphere.GetVSphere()
+		vsp, err := getVSphere(client)
 		Expect(err).NotTo(HaveOccurred())
 
 		volumeCountPerInstance := volumeCount / numberOfInstances
@@ -173,7 +173,7 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 		By("Waiting for volumes to be detached from the node")
-		err = waitForVSphereDisksToDetach(vsp, nodeVolumeMap)
+		err = waitForVSphereDisksToDetach(client, vsp, nodeVolumeMap)
 		Expect(err).NotTo(HaveOccurred())
 
 		for _, pvcClaim := range pvcClaimList {
@@ -225,7 +225,7 @@ func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*s
 			nodeVolumeMap[pod.Spec.NodeName] = append(nodeVolumeMap[pod.Spec.NodeName], pv.Spec.VsphereVolume.VolumePath)
 		}
 		By("Verify the volume is accessible and available in the pod")
-		verifyVSphereVolumesAccessible(pod, persistentvolumes, vsp)
+		verifyVSphereVolumesAccessible(client, pod, persistentvolumes, vsp)
 		nodeSelectorIndex++
 	}
 	nodeVolumeMapChan <- nodeVolumeMap

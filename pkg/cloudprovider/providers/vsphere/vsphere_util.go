@@ -32,6 +32,7 @@ import (
 
 	"fmt"
 
+	"k8s.io/api/core/v1"
 	"github.com/vmware/govmomi/vim25/mo"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
@@ -67,7 +68,7 @@ func GetVSphere() (*VSphere, error) {
 		},
 	}
 	vsphereInsMap := make(map[string]*VSphereInstance)
-	vsphereInsMap[""] = vsphereIns
+	vsphereInsMap[cfg.Global.VCenterIP] = vsphereIns
 	// TODO: Initialize nodeManager and set it in VSphere.
 	vs := &VSphere{
 		vsphereInstanceMap: vsphereInsMap,
@@ -75,6 +76,8 @@ func GetVSphere() (*VSphere, error) {
 		cfg:                cfg,
 		nodeManager: &NodeManager{
 			vsphereInstanceMap: vsphereInsMap,
+			nodeInfoMap:        make(map[string]*NodeInfo),
+			registeredNodes:    make(map[string]*v1.Node),
 		},
 	}
 	runtime.SetFinalizer(vs, logout)
@@ -95,6 +98,10 @@ func getVSphereConfig() *VSphereConfig {
 	if strings.ToLower(os.Getenv("VSPHERE_INSECURE")) == "true" {
 		cfg.Global.InsecureFlag = true
 	}
+	cfg.Workspace.VCenterIP = cfg.Global.VCenterIP
+	cfg.Workspace.Datacenter = cfg.Global.Datacenters
+	cfg.Workspace.DefaultDatastore = cfg.Global.DefaultDatastore
+	cfg.Workspace.Folder = cfg.Global.WorkingDir
 	return &cfg
 }
 
