@@ -555,8 +555,7 @@ func (vs *VSphere) NodeAddresses(nodeName k8stypes.NodeName) ([]v1.NodeAddress, 
 // This method will not be called from the node that is requesting this ID. i.e. metadata service
 // and other local methods cannot be used here
 func (vs *VSphere) NodeAddressesByProviderID(providerID string) ([]v1.NodeAddress, error) {
-	vmName := path.Base(providerID)
-	return vs.NodeAddresses(convertToK8sType(vmName))
+	return vs.NodeAddresses(convertToK8sType(providerID))
 }
 
 // AddSSHKeyToAllInstances add SSH key to all instances
@@ -585,40 +584,12 @@ func (vs *VSphere) ExternalID(nodeName k8stypes.NodeName) (string, error) {
 // InstanceExistsByProviderID returns true if the instance with the given provider id still exists and is running.
 // If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
 func (vs *VSphere) InstanceExistsByProviderID(providerID string) (bool, error) {
-	vmName := path.Base(providerID)
-	nodeName := convertToK8sType(vmName)
-
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	vsi, err := vs.getVSphereInstance(nodeName)
-	if err != nil {
-		return false, err
-	}
-	// Ensure client is logged in and session is valid
-	err = vsi.conn.Connect(ctx)
-	if err != nil {
-		return false, err
-	}
-	vm, err := vs.getVMFromNodeName(ctx, nodeName)
-	if err != nil {
-		if err == vclib.ErrNoVMFound {
-			return false, nil
-		}
-		glog.Errorf("Failed to get VM object for node: %q. err: +%v", convertToString(nodeName), err)
-		return false, err
+	_, err := vs.InstanceID(convertToK8sType(providerID))
+	if err == nil {
+		return true, nil
 	}
 
-	isActive, err := vm.IsActive(ctx)
-	if err != nil {
-		glog.Errorf("Failed to check whether node %q is active. err: %+v.", convertToString(nodeName), err)
-		return false, err
-	}
-	if !isActive {
-		return false, nil
-	}
-
-	return true, nil
+	return false, err
 }
 
 // InstanceID returns the cloud provider ID of the node with the specified Name.
@@ -660,15 +631,10 @@ func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 			return "", err
 		}
 		if isActive {
-			node, err := vs.nodeManager.GetNode(nodeName)
-			if err != nil {
-				glog.Errorf("Failed to get nodeobject of node %q. err: %+v.", convertToString(nodeName), err)
-				return "", err
-			}
-			nodeUUID := node.Status.NodeInfo.SystemUUID
-			return nodeUUID, nil
+			return convertToString(nodeName), nil
 		}
-		return "", fmt.Errorf("The node %q is not active", convertToString(nodeName))
+		glog.Warningf("The VM: %s is not in %s state", convertToString(nodeName), vclib.ActivePowerState)
+		return "", cloudprovider.InstanceNotFound
 	}
 
 	instanceID, err := instanceIDInternal()
@@ -683,6 +649,7 @@ func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 			}
 		}
 	}
+
 	return instanceID, err
 }
 
