@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package storage
+package vsphere
 
 import (
 	"fmt"
@@ -250,6 +250,11 @@ func createVSphereVolume(vsp *vsphere.VSphere, volumeOptions *vclib.VolumeOption
 	return volumePath, nil
 }
 
+// CreateVSphereVolume creates a vmdk volume
+func CreateVSphereVolume(vsp *vsphere.VSphere, volumeOptions *vclib.VolumeOptions) (string, error) {
+	return createVSphereVolume(vsp, volumeOptions)
+}
+
 // function to write content to the volume backed by given PVC
 func writeContentToVSpherePV(client clientset.Interface, pvc *v1.PersistentVolumeClaim, expectedContent string) {
 	runInPodWithVolume(client, pvc.Namespace, pvc.Name, "echo "+expectedContent+" > /mnt/test/data")
@@ -456,4 +461,9 @@ func getVSphere(c clientset.Interface) (*vsphere.VSphere, error) {
 	}
 	addNodesToVCP(vsp, c)
 	return vsp, nil
+}
+
+// GetVSphere returns vsphere cloud provider
+func GetVSphere(c clientset.Interface) (*vsphere.VSphere, error) {
+	return getVSphere(c)
 }

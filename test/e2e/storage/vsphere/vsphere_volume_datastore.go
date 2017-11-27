@@ -14,11 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package storage
+package vsphere
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -31,62 +30,59 @@ import (
 )
 
 const (
-	DiskSizeSCName = "disksizesc"
+	InvalidDatastore = "invalidDatastore"
+	DatastoreSCName  = "datastoresc"
 )
 
 /*
-	Test to verify disk size specified in PVC is being honored while volume creation.
+	Test to verify datastore specified in storage-class is being honored while volume creation.
 
 	Steps
-	1. Create StorageClass.
-	2. Create PVC with invalid disk size which uses the StorageClass created in step 1.
+	1. Create StorageClass with invalid datastore.
+	2. Create PVC which uses the StorageClass created in step 1.
 	3. Expect the PVC to fail.
 	4. Verify the error returned on PVC failure is the correct.
 */
 
-var _ = SIGDescribe("Volume Disk Size [Feature:vsphere]", func() {
-	f := framework.NewDefaultFramework("volume-disksize")
+var _ = SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", func() {
+	f := framework.NewDefaultFramework("volume-datastore")
 	var (
 		client       clientset.Interface
 		namespace    string
 		scParameters map[string]string
-		datastore    string
 	)
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
 		client = f.ClientSet
 		namespace = f.Namespace.Name
 		scParameters = make(map[string]string)
-		datastore = os.Getenv("VSPHERE_DATASTORE")
-		Expect(datastore).NotTo(BeEmpty())
 		nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
 		if !(len(nodeList.Items) > 0) {
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
 	})
 
-	It("verify dynamically provisioned pv using storageclass with an invalid disk size fails", func() {
-		By("Invoking Test for invalid disk size")
-		scParameters[Datastore] = datastore
+	It("verify dynamically provisioned pv using storageclass fails on an invalid datastore", func() {
+		By("Invoking Test for invalid datastore")
+		scParameters[Datastore] = InvalidDatastore
 		scParameters[DiskFormat] = ThinDisk
-		diskSize := "1"
-		err := invokeInvalidDiskSizeTestNeg(client, namespace, scParameters, diskSize)
+		err := invokeInvalidDatastoreTestNeg(client, namespace, scParameters)
 		Expect(err).To(HaveOccurred())
-		errorMsg := `Failed to provision volume with StorageClass \"` + DiskSizeSCName + `\": A specified parameter was not correct`
+		errorMsg := `Failed to provision volume with StorageClass \"` + DatastoreSCName + `\": The specified datastore ` + InvalidDatastore + ` is not a shared datastore across node VMs`
 		if !strings.Contains(err.Error(), errorMsg) {
 			Expect(err).NotTo(HaveOccurred(), errorMsg)
 		}
 	})
 })
 
-func invokeInvalidDiskSizeTestNeg(client clientset.Interface, namespace string, scParameters map[string]string, diskSize string) error {
-	By("Creating Storage Class With invalid disk size")
-	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec(DiskSizeSCName, scParameters))
+func invokeInvalidDatastoreTestNeg(client clientset.Interface, namespace string, scParameters map[string]string) error {
+	By("Creating Storage Class With Invalid Datastore")
+	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec(DatastoreSCName, scParameters))
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
 	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
 
 	By("Creating PVC using the Storage Class")
-	pvclaim, err := framework.CreatePVC(client, namespace, getVSphereClaimSpecWithStorageClassAnnotation(namespace, diskSize, storageclass))
+	pvclaim, err := framework.CreatePVC(client, namespace, getVSphereClaimSpecWithStorageClassAnnotation(namespace, "2Gi", storageclass))
 	Expect(err).NotTo(HaveOccurred())
 	defer framework.DeletePersistentVolumeClaim(client, pvclaim.Name, namespace)
 

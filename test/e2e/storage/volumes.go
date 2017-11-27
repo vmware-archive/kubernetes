@@ -55,6 +55,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	"k8s.io/kubernetes/test/e2e/framework"
+	vsphereTest "k8s.io/kubernetes/test/e2e/storage/vsphere"
 )
 
 func DeleteCinderVolume(name string) error {
@@ -510,10 +511,10 @@ var _ = SIGDescribe("Volumes", func() {
 			if err != nil {
 				return
 			}
-			vsp, err := getVSphere(c)
+			vsp, err := vsphereTest.GetVSphere(c)
 			Expect(err).NotTo(HaveOccurred())
 
-			volumePath, err = createVSphereVolume(vsp, nil)
+			volumePath, err = vsphereTest.CreateVSphereVolume(vsp, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			defer func() {
