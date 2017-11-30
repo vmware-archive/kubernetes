@@ -66,7 +66,7 @@ var _ = SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		nodes             *v1.NodeList
 		policyName        string
 		datastoreName     string
-		scNames           = []string{storageclass1, storageclass2, storageclass3, storageclass4}
+		scNames           = []string{storageclass1}
 		err               error
 	)
 
