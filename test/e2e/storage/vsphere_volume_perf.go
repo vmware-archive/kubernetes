@@ -135,7 +135,7 @@ func getTestStorageClasses(client clientset.Interface, policyName, datastoreName
 		storageclass3 = "sc-spbm"
 		storageclass4 = "sc-user-specified-ds"
 	)
-	scNames := []string{storageclass1, storageclass2, storageclass3, storageclass4}
+	scNames := []string{storageclass1}
 	scArrays := make([]*storageV1.StorageClass, len(scNames))
 	for index, scname := range scNames {
 		// Create vSphere Storage Class
