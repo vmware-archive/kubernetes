@@ -163,7 +163,7 @@ func testNvidiaGPUsOnCOS(f *framework.Framework) {
 	framework.Logf("Cluster is running on COS. Proceeding with test")
 
 	if f.BaseName == "device-plugin-gpus" {
-		dsYamlUrl = framework.GPUDevicePluginDSYAML
+		dsYamlUrl = "https://raw.githubusercontent.com/GoogleCloudPlatform/container-engine-accelerators/master/daemonset.yaml"
 		gpuResourceName = framework.NVIDIAGPUResourceName
 		podCreationFunc = makeCudaAdditionDevicePluginTestPod
 	} else {
@@ -183,8 +183,13 @@ func testNvidiaGPUsOnCOS(f *framework.Framework) {
 
 	pods, err := framework.WaitForControlledPods(f.ClientSet, ds.Namespace, ds.Name, extensionsinternal.Kind("DaemonSet"))
 	framework.ExpectNoError(err, "getting pods controlled by the daemonset")
+	devicepluginPods, err := framework.WaitForControlledPods(f.ClientSet, "kube-system", "nvidia-gpu-device-plugin", extensionsinternal.Kind("DaemonSet"))
+	if err == nil {
+		framework.Logf("Adding deviceplugin addon pod.")
+		pods.Items = append(pods.Items, devicepluginPods.Items...)
+	}
 	framework.Logf("Starting ResourceUsageGather for the created DaemonSet pods.")
-	rsgather, err := framework.NewResourceUsageGatherer(f.ClientSet, framework.ResourceGathererOptions{false, false, 2 * time.Second, 2 * time.Second}, pods)
+	rsgather, err := framework.NewResourceUsageGatherer(f.ClientSet, framework.ResourceGathererOptions{false, false, 2 * time.Second, 2 * time.Second, true}, pods)
 	framework.ExpectNoError(err, "creating ResourceUsageGather for the daemonset pods")
 	go rsgather.StartGatheringData()
 

@@ -30,12 +30,18 @@ REGIONAL_KUBE_ADDONS=${REGIONAL_KUBE_ADDONS:-true}
 NODE_SIZE=${NODE_SIZE:-n1-standard-2}
 NUM_NODES=${NUM_NODES:-3}
 MASTER_SIZE=${MASTER_SIZE:-n1-standard-$(get-master-size)}
+MASTER_MIN_CPU_ARCHITECTURE=${MASTER_MIN_CPU_ARCHITECTURE:-} # To allow choosing better architectures.
 MASTER_DISK_TYPE=pd-ssd
 MASTER_DISK_SIZE=${MASTER_DISK_SIZE:-$(get-master-disk-size)}
 MASTER_ROOT_DISK_SIZE=${MASTER_ROOT_DISK_SIZE:-$(get-master-root-disk-size)}
 NODE_DISK_TYPE=${NODE_DISK_TYPE:-pd-standard}
 NODE_DISK_SIZE=${NODE_DISK_SIZE:-100GB}
 NODE_LOCAL_SSDS=${NODE_LOCAL_SSDS:-0}
+# An extension to local SSDs allowing users to specify block/fs and SCSI/NVMe devices
+# Format of this variable will be "#,scsi/nvme,block/fs" you can specify multiple
+# configurations by seperating them by a semi-colon ex. "2,scsi,fs;1,nvme,block"
+# is a request for 2 SCSI formatted and mounted SSDs and 1 NVMe block device SSD.
+NODE_LOCAL_SSDS_EXT=${NODE_LOCAL_SSDS_EXT:-}
 # Accelerators to be attached to each node. Format "type=<accelerator-type>,count=<accelerator-count>"
 # More information on available GPUs here - https://cloud.google.com/compute/docs/gpus/
 NODE_ACCELERATORS=${NODE_ACCELERATORS:-""}
@@ -145,6 +151,16 @@ ENABLE_CLUSTER_MONITORING="${KUBE_ENABLE_CLUSTER_MONITORING:-influxdb}"
 # TODO(piosz) remove this option once Metrics Server became a stable thing.
 ENABLE_METRICS_SERVER="${KUBE_ENABLE_METRICS_SERVER:-true}"
 
+# Optional: Metadata agent to setup as part of the cluster bring up:
+#   none        - No metadata agent
+#   stackdriver - Stackdriver metadata agent
+# Metadata agent is a daemon set that provides metadata of kubernetes objects
+# running on the same node for exporting metrics and logs.
+ENABLE_METADATA_AGENT="${KUBE_ENABLE_METADATA_AGENT:-none}"
+
+# Version tag of metadata agent
+METADATA_AGENT_VERSION="${KUBE_METADATA_AGENT_VERSION:-0.2-0.0.13-5-watch}"
+
 # One special node out of NUM_NODES would be created of this type if specified.
 # Useful for scheduling heapster in large clusters with nodes of small size.
 HEAPSTER_MACHINE_TYPE="${HEAPSTER_MACHINE_TYPE:-}"
@@ -204,6 +220,8 @@ if [[ ! -z "${NODE_ACCELERATORS}" ]]; then
 fi
 
 # Optional: Install cluster DNS.
+# Set CLUSTER_DNS_CORE_DNS to 'true' to install CoreDNS instead of kube-dns.
+CLUSTER_DNS_CORE_DNS="${CLUSTER_DNS_CORE_DNS:-false}"
 ENABLE_CLUSTER_DNS="${KUBE_ENABLE_CLUSTER_DNS:-true}"
 DNS_SERVER_IP="${KUBE_DNS_SERVER_IP:-10.0.0.10}"
 DNS_DOMAIN="${KUBE_DNS_DOMAIN:-cluster.local}"
@@ -279,7 +297,7 @@ if [[ -n "${GCE_GLBC_IMAGE:-}" ]]; then
 fi
 
 # Admission Controllers to invoke prior to persisting objects in cluster
-ADMISSION_CONTROL=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,Priority
+ADMISSION_CONTROL=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,PersistentVolumeClaimResize,DefaultTolerationSeconds,NodeRestriction,Priority,PVCProtection
 
 if [[ "${ENABLE_POD_SECURITY_POLICY:-}" == "true" ]]; then
   ADMISSION_CONTROL="${ADMISSION_CONTROL},PodSecurityPolicy"

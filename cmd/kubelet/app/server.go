@@ -414,7 +414,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies) (err error) {
 
 	if kubeDeps.CAdvisorInterface == nil {
 		imageFsInfoProvider := cadvisor.NewImageFsInfoProvider(s.ContainerRuntime, s.RemoteRuntimeEndpoint)
-		kubeDeps.CAdvisorInterface, err = cadvisor.New(s.Address, uint(s.CAdvisorPort), imageFsInfoProvider, s.RootDirectory)
+		kubeDeps.CAdvisorInterface, err = cadvisor.New(s.Address, uint(s.CAdvisorPort), imageFsInfoProvider, s.RootDirectory, cadvisor.UsingLegacyCadvisorStats(s.ContainerRuntime, s.RemoteRuntimeEndpoint))
 		if err != nil {
 			return err
 		}
@@ -728,7 +728,9 @@ func RunKubelet(kubeFlags *options.KubeletFlags, kubeCfg *kubeletconfiginternal.
 		kubeFlags.RegisterSchedulable,
 		kubeFlags.NonMasqueradeCIDR,
 		kubeFlags.KeepTerminatedPodVolumes,
-		kubeFlags.NodeLabels)
+		kubeFlags.NodeLabels,
+		kubeFlags.SeccompProfileRoot,
+		kubeFlags.BootstrapCheckpointPath)
 	if err != nil {
 		return fmt.Errorf("failed to create kubelet: %v", err)
 	}
@@ -800,7 +802,9 @@ func CreateAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	registerSchedulable bool,
 	nonMasqueradeCIDR string,
 	keepTerminatedPodVolumes bool,
-	nodeLabels map[string]string) (k kubelet.Bootstrap, err error) {
+	nodeLabels map[string]string,
+	seccompProfileRoot string,
+	bootstrapCheckpointPath string) (k kubelet.Bootstrap, err error) {
 	// TODO: block until all sources have delivered at least one update to the channel, or break the sync loop
 	// up into "per source" synchronizations
 
@@ -832,7 +836,9 @@ func CreateAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		registerSchedulable,
 		nonMasqueradeCIDR,
 		keepTerminatedPodVolumes,
-		nodeLabels)
+		nodeLabels,
+		seccompProfileRoot,
+		bootstrapCheckpointPath)
 	if err != nil {
 		return nil, err
 	}

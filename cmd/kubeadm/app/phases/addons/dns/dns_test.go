@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientsetfake "k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
+	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	api "k8s.io/kubernetes/pkg/apis/core"
 )
@@ -91,11 +92,12 @@ func TestCompileManifests(t *testing.T) {
 	}{
 		{
 			manifest: v180AndAboveKubeDNSDeployment,
-			data: struct{ ImageRepository, Arch, Version, DNSBindAddr, DNSDomain, DNSProbeType, MasterTaintKey string }{
+			data: struct{ ImageRepository, Arch, Version, DNSBindAddr, DNSProbeAddr, DNSDomain, DNSProbeType, MasterTaintKey string }{
 				ImageRepository: "foo",
 				Arch:            "foo",
 				Version:         "foo",
 				DNSBindAddr:     "foo",
+				DNSProbeAddr:    "foo",
 				DNSDomain:       "foo",
 				DNSProbeType:    "foo",
 				MasterTaintKey:  "foo",
@@ -159,7 +161,7 @@ func TestGetDNSIP(t *testing.T) {
 		},
 	}
 	for _, rt := range tests {
-		dnsIP, err := GetDNSIP(rt.svcSubnet)
+		dnsIP, err := kubeadmconstants.GetDNSIP(rt.svcSubnet)
 		if err != nil {
 			t.Fatalf("couldn't get dnsIP : %v", err)
 		}

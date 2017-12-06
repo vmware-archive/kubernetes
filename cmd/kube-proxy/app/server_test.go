@@ -52,6 +52,15 @@ func (fake *fakeIPTablesVersioner) GetVersion() (string, error) {
 	return fake.version, fake.err
 }
 
+type fakeIPSetVersioner struct {
+	version string // what to return
+	err     error  // what to return
+}
+
+func (fake *fakeIPSetVersioner) GetVersion() (string, error) {
+	return fake.version, fake.err
+}
+
 type fakeKernelCompatTester struct {
 	ok bool
 }
@@ -72,8 +81,10 @@ func Test_getProxyMode(t *testing.T) {
 		annotationKey   string
 		annotationVal   string
 		iptablesVersion string
+		ipsetVersion    string
 		kernelCompat    bool
 		iptablesError   error
+		ipsetError      error
 		expected        string
 	}{
 		{ // flag says userspace
@@ -128,7 +139,8 @@ func Test_getProxyMode(t *testing.T) {
 	for i, c := range cases {
 		versioner := &fakeIPTablesVersioner{c.iptablesVersion, c.iptablesError}
 		kcompater := &fakeKernelCompatTester{c.kernelCompat}
-		r := getProxyMode(c.flag, versioner, kcompater)
+		ipsetver := &fakeIPSetVersioner{c.ipsetVersion, c.ipsetError}
+		r := getProxyMode(c.flag, versioner, ipsetver, kcompater)
 		if r != c.expected {
 			t.Errorf("Case[%d] Expected %q, got %q", i, c.expected, r)
 		}
@@ -150,7 +162,7 @@ func TestProxyServerWithCleanupAndExit(t *testing.T) {
 		}
 		options.CleanupAndExit = true
 
-		proxyserver, err := NewProxyServer(options.config, options.CleanupAndExit, options.scheme, options.master)
+		proxyserver, err := NewProxyServer(options)
 
 		assert.Nil(t, err, "unexpected error in NewProxyServer, addr: %s", addr)
 		assert.NotNil(t, proxyserver, "nil proxy server obj, addr: %s", addr)

@@ -21,6 +21,7 @@ import (
 
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/admission"
@@ -67,6 +68,13 @@ func (c *mockVolumes) DisksAreAttached(nodeDisks map[types.NodeName][]aws.Kubern
 	return nil, fmt.Errorf("not implemented")
 }
 
+func (c *mockVolumes) ResizeDisk(
+	diskName aws.KubernetesVolumeID,
+	oldSize resource.Quantity,
+	newSize resource.Quantity) (resource.Quantity, error) {
+	return oldSize, nil
+}
+
 func mockVolumeFailure(err error) *mockVolumes {
 	return &mockVolumes{volumeLabelsError: err}
 }
@@ -78,7 +86,7 @@ func mockVolumeLabels(labels map[string]string) *mockVolumes {
 // TestAdmission
 func TestAdmission(t *testing.T) {
 	pvHandler := NewPersistentVolumeLabel()
-	handler := admission.NewChainHandler(admission.NewNamedHandler("pv", pvHandler))
+	handler := admission.NewChainHandler(pvHandler)
 	ignoredPV := api.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{Name: "noncloud", Namespace: "myns"},
 		Spec: api.PersistentVolumeSpec{

@@ -46,7 +46,7 @@ func init() {
 		})
 	factory.RegisterPriorityMetadataProducerFactory(
 		func(args factory.PluginFactoryArgs) algorithm.MetadataProducer {
-			return priorities.PriorityMetadata
+			return priorities.NewPriorityMetadataFactory(args.ServiceLister, args.ControllerLister, args.ReplicaSetLister, args.StatefulSetLister)
 		})
 
 	registerAlgorithmProvider(defaultPredicates(), defaultPriorities())
@@ -80,8 +80,12 @@ func init() {
 	// Fit is determined by node selector query.
 	factory.RegisterFitPredicate("MatchNodeSelector", predicates.PodMatchNodeSelector)
 
-	// Use equivalence class to speed up predicates & priorities
-	factory.RegisterGetEquivalencePodFunction(predicates.GetEquivalencePod)
+	// Use equivalence class to speed up heavy predicates phase.
+	factory.RegisterGetEquivalencePodFunction(
+		func(args factory.PluginFactoryArgs) algorithm.GetEquivalencePodFunc {
+			return predicates.NewEquivalencePodGenerator(args.PVCInfo)
+		},
+	)
 
 	// ServiceSpreadingPriority is a priority config factory that spreads pods by minimizing
 	// the number of pods (belonging to the same service) on the same node.
@@ -90,13 +94,12 @@ func init() {
 	factory.RegisterPriorityConfigFactory(
 		"ServiceSpreadingPriority",
 		factory.PriorityConfigFactory{
-			Function: func(args factory.PluginFactoryArgs) algorithm.PriorityFunction {
+			MapReduceFunction: func(args factory.PluginFactoryArgs) (algorithm.PriorityMapFunction, algorithm.PriorityReduceFunction) {
 				return priorities.NewSelectorSpreadPriority(args.ServiceLister, algorithm.EmptyControllerLister{}, algorithm.EmptyReplicaSetLister{}, algorithm.EmptyStatefulSetLister{})
 			},
 			Weight: 1,
 		},
 	)
-
 	// EqualPriority is a prioritizer function that gives an equal weight of one to all nodes
 	// Register the priority function so that its available
 	// but do not include it as part of the default priorities
@@ -107,6 +110,10 @@ func init() {
 	factory.RegisterPriorityFunction2("ImageLocalityPriority", priorities.ImageLocalityPriorityMap, nil, 1)
 	// Optional, cluster-autoscaler friendly priority function - give used nodes higher priority.
 	factory.RegisterPriorityFunction2("MostRequestedPriority", priorities.MostRequestedPriorityMap, nil, 1)
+	// Prioritizes nodes that satisfy pod's resource limits
+	if utilfeature.DefaultFeatureGate.Enabled(features.ResourceLimitsPriorityFunction) {
+		factory.RegisterPriorityFunction2("ResourceLimitsPriority", priorities.ResourceLimitsPriorityMap, nil, 1)
+	}
 }
 
 func defaultPredicates() sets.String {
@@ -115,7 +122,7 @@ func defaultPredicates() sets.String {
 		factory.RegisterFitPredicateFactory(
 			"NoVolumeZoneConflict",
 			func(args factory.PluginFactoryArgs) algorithm.FitPredicate {
-				return predicates.NewVolumeZonePredicate(args.PVInfo, args.PVCInfo)
+				return predicates.NewVolumeZonePredicate(args.PVInfo, args.PVCInfo, args.StorageClassInfo)
 			},
 		),
 		// Fit is determined by whether or not there would be too many AWS EBS volumes attached to the node
@@ -166,11 +173,11 @@ func defaultPredicates() sets.String {
 		// Fit is determined based on whether a pod can tolerate all of the node's taints
 		factory.RegisterFitPredicate("PodToleratesNodeTaints", predicates.PodToleratesNodeTaints),
 
-		// Fit is determined by volume zone requirements.
+		// Fit is determined by volume topology requirements.
 		factory.RegisterFitPredicateFactory(
-			"NoVolumeNodeConflict",
+			predicates.CheckVolumeBinding,
 			func(args factory.PluginFactoryArgs) algorithm.FitPredicate {
-				return predicates.NewVolumeNodePredicate(args.PVInfo, args.PVCInfo, nil)
+				return predicates.NewVolumeBindingPredicate(args.VolumeBinder)
 			},
 		),
 	)
@@ -213,7 +220,7 @@ func defaultPriorities() sets.String {
 		factory.RegisterPriorityConfigFactory(
 			"SelectorSpreadPriority",
 			factory.PriorityConfigFactory{
-				Function: func(args factory.PluginFactoryArgs) algorithm.PriorityFunction {
+				MapReduceFunction: func(args factory.PluginFactoryArgs) (algorithm.PriorityMapFunction, algorithm.PriorityReduceFunction) {
 					return priorities.NewSelectorSpreadPriority(args.ServiceLister, args.ControllerLister, args.ReplicaSetLister, args.StatefulSetLister)
 				},
 				Weight: 1,

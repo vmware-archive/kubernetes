@@ -63,6 +63,7 @@ import (
 	"k8s.io/kubernetes/pkg/proxy/ipvs"
 	"k8s.io/kubernetes/pkg/proxy/userspace"
 	"k8s.io/kubernetes/pkg/util/configz"
+	utilipset "k8s.io/kubernetes/pkg/util/ipset"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	utilipvs "k8s.io/kubernetes/pkg/util/ipvs"
 	utilnode "k8s.io/kubernetes/pkg/util/node"
@@ -94,7 +95,8 @@ type Options struct {
 	WriteConfigTo string
 	// CleanupAndExit, when true, makes the proxy server clean up iptables rules, then exit.
 	CleanupAndExit bool
-
+	// CleanupIPVS, when true, makes the proxy server clean up ipvs rules before running.
+	CleanupIPVS bool
 	// config is the proxy server's configuration object.
 	config *kubeproxyconfig.KubeProxyConfiguration
 
@@ -119,6 +121,7 @@ func AddFlags(options *Options, fs *pflag.FlagSet) {
 	fs.BoolVar(&options.CleanupAndExit, "cleanup-iptables", options.CleanupAndExit, "If true cleanup iptables and ipvs rules and exit.")
 	fs.MarkDeprecated("cleanup-iptables", "This flag is replaced by --cleanup.")
 	fs.BoolVar(&options.CleanupAndExit, "cleanup", options.CleanupAndExit, "If true cleanup iptables and ipvs rules and exit.")
+	fs.BoolVar(&options.CleanupIPVS, "cleanup-ipvs", options.CleanupIPVS, "If true make kube-proxy cleanup ipvs rules before running.  Default is true")
 
 	// All flags below here are deprecated and will eventually be removed.
 
@@ -172,6 +175,7 @@ func NewOptions() *Options {
 		healthzPort: ports.ProxyHealthzPort,
 		scheme:      scheme.Scheme,
 		codecs:      scheme.Codecs,
+		CleanupIPVS: true,
 	}
 }
 
@@ -214,7 +218,7 @@ func (o *Options) Run() error {
 		return o.writeConfigFile()
 	}
 
-	proxyServer, err := NewProxyServer(o.config, o.CleanupAndExit, o.scheme, o.master)
+	proxyServer, err := NewProxyServer(o)
 	if err != nil {
 		return err
 	}
@@ -356,6 +360,7 @@ type ProxyServer struct {
 	EventClient            v1core.EventsGetter
 	IptInterface           utiliptables.Interface
 	IpvsInterface          utilipvs.Interface
+	IpsetInterface         utilipset.Interface
 	execer                 exec.Interface
 	Proxier                proxy.ProxyProvider
 	Broadcaster            record.EventBroadcaster
@@ -365,6 +370,7 @@ type ProxyServer struct {
 	ProxyMode              string
 	NodeRef                *v1.ObjectReference
 	CleanupAndExit         bool
+	CleanupIPVS            bool
 	MetricsBindAddress     string
 	EnableProfiling        bool
 	OOMScoreAdj            *int32
@@ -422,7 +428,7 @@ func (s *ProxyServer) Run() error {
 	if s.CleanupAndExit {
 		encounteredError := userspace.CleanupLeftovers(s.IptInterface)
 		encounteredError = iptables.CleanupLeftovers(s.IptInterface) || encounteredError
-		encounteredError = ipvs.CleanupLeftovers(s.IpvsInterface, s.IptInterface) || encounteredError
+		encounteredError = ipvs.CleanupLeftovers(s.IpvsInterface, s.IptInterface, s.IpsetInterface, s.CleanupIPVS) || encounteredError
 		if encounteredError {
 			return errors.New("encountered an error while tearing down rules.")
 		}

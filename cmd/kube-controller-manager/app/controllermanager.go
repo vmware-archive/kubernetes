@@ -359,6 +359,7 @@ func NewControllerInitializers() map[string]InitFunc {
 	controllers["attachdetach"] = startAttachDetachController
 	controllers["persistentvolume-expander"] = startVolumeExpandController
 	controllers["clusterrole-aggregation"] = startClusterRoleAggregrationController
+	controllers["pvc-protection"] = startPVCProtectionController
 
 	return controllers
 }
@@ -440,6 +441,10 @@ func CreateControllerContext(s *options.CMServer, rootClientBuilder, clientBuild
 		} else {
 			return ControllerContext{}, fmt.Errorf("no ClusterID Found.  A ClusterID is required for the cloud provider to function properly.  This check can be bypassed by setting the allow-untagged-cloud option")
 		}
+	}
+
+	if informerUserCloud, ok := cloud.(cloudprovider.InformerUser); ok {
+		informerUserCloud.SetInformers(sharedInformers)
 	}
 
 	ctx := ControllerContext{

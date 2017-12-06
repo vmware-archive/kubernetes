@@ -19325,986 +19325,6 @@
      }
     ]
    },
-   "/apis/admissionregistration.k8s.io/v1alpha1/mutatingwebhookconfigurations": {
-    "get": {
-     "description": "list or watch objects of kind MutatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf",
-      "application/json;stream=watch",
-      "application/vnd.kubernetes.protobuf;stream=watch"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "listAdmissionregistrationV1alpha1MutatingWebhookConfiguration",
-     "parameters": [
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
-       "name": "continue",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
-       "name": "fieldSelector",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "If true, partially initialized resources are included in the response.",
-       "name": "includeUninitialized",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
-       "name": "labelSelector",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "integer",
-       "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
-       "name": "limit",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
-       "name": "resourceVersion",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "integer",
-       "description": "Timeout for the list/watch call.",
-       "name": "timeoutSeconds",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
-       "name": "watch",
-       "in": "query"
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfigurationList"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "list",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "MutatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "post": {
-     "description": "create a MutatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "createAdmissionregistrationV1alpha1MutatingWebhookConfiguration",
-     "parameters": [
-      {
-       "name": "body",
-       "in": "body",
-       "required": true,
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfiguration"
-       }
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfiguration"
-       }
-      },
-      "201": {
-       "description": "Created",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfiguration"
-       }
-      },
-      "202": {
-       "description": "Accepted",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfiguration"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "post",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "MutatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "delete": {
-     "description": "delete collection of MutatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "deleteAdmissionregistrationV1alpha1CollectionMutatingWebhookConfiguration",
-     "parameters": [
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
-       "name": "continue",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
-       "name": "fieldSelector",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "If true, partially initialized resources are included in the response.",
-       "name": "includeUninitialized",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
-       "name": "labelSelector",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "integer",
-       "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
-       "name": "limit",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
-       "name": "resourceVersion",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "integer",
-       "description": "Timeout for the list/watch call.",
-       "name": "timeoutSeconds",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
-       "name": "watch",
-       "in": "query"
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "deletecollection",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "MutatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "parameters": [
-     {
-      "uniqueItems": true,
-      "type": "string",
-      "description": "If 'true', then the output is pretty printed.",
-      "name": "pretty",
-      "in": "query"
-     }
-    ]
-   },
-   "/apis/admissionregistration.k8s.io/v1alpha1/mutatingwebhookconfigurations/{name}": {
-    "get": {
-     "description": "read the specified MutatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "readAdmissionregistrationV1alpha1MutatingWebhookConfiguration",
-     "parameters": [
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "Should the export be exact.  Exact export maintains cluster-specific fields like 'Namespace'.",
-       "name": "exact",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "Should this value be exported.  Export strips fields that a user can not specify.",
-       "name": "export",
-       "in": "query"
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfiguration"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "get",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "MutatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "put": {
-     "description": "replace the specified MutatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "replaceAdmissionregistrationV1alpha1MutatingWebhookConfiguration",
-     "parameters": [
-      {
-       "name": "body",
-       "in": "body",
-       "required": true,
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfiguration"
-       }
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfiguration"
-       }
-      },
-      "201": {
-       "description": "Created",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfiguration"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "put",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "MutatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "delete": {
-     "description": "delete a MutatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "deleteAdmissionregistrationV1alpha1MutatingWebhookConfiguration",
-     "parameters": [
-      {
-       "name": "body",
-       "in": "body",
-       "required": true,
-       "schema": {
-        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.DeleteOptions"
-       }
-      },
-      {
-       "uniqueItems": true,
-       "type": "integer",
-       "description": "The duration in seconds before the object should be deleted. Value must be non-negative integer. The value zero indicates delete immediately. If this value is nil, the default grace period for the specified type will be used. Defaults to a per object value if not specified. zero means delete immediately.",
-       "name": "gracePeriodSeconds",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "Deprecated: please use the PropagationPolicy, this field will be deprecated in 1.7. Should the dependent objects be orphaned. If true/false, the \"orphan\" finalizer will be added to/removed from the object's finalizers list. Either this field or PropagationPolicy may be set, but not both.",
-       "name": "orphanDependents",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "Whether and how garbage collection will be performed. Either this field or OrphanDependents may be set, but not both. The default policy is decided by the existing finalizer set in the metadata.finalizers and the resource-specific default policy. Acceptable values are: 'Orphan' - orphan the dependents; 'Background' - allow the garbage collector to delete the dependents in the background; 'Foreground' - a cascading policy that deletes all dependents in the foreground.",
-       "name": "propagationPolicy",
-       "in": "query"
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "delete",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "MutatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "patch": {
-     "description": "partially update the specified MutatingWebhookConfiguration",
-     "consumes": [
-      "application/json-patch+json",
-      "application/merge-patch+json",
-      "application/strategic-merge-patch+json"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "patchAdmissionregistrationV1alpha1MutatingWebhookConfiguration",
-     "parameters": [
-      {
-       "name": "body",
-       "in": "body",
-       "required": true,
-       "schema": {
-        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Patch"
-       }
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfiguration"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "patch",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "MutatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "parameters": [
-     {
-      "uniqueItems": true,
-      "type": "string",
-      "description": "name of the MutatingWebhookConfiguration",
-      "name": "name",
-      "in": "path",
-      "required": true
-     },
-     {
-      "uniqueItems": true,
-      "type": "string",
-      "description": "If 'true', then the output is pretty printed.",
-      "name": "pretty",
-      "in": "query"
-     }
-    ]
-   },
-   "/apis/admissionregistration.k8s.io/v1alpha1/validatingwebhookconfigurations": {
-    "get": {
-     "description": "list or watch objects of kind ValidatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf",
-      "application/json;stream=watch",
-      "application/vnd.kubernetes.protobuf;stream=watch"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "listAdmissionregistrationV1alpha1ValidatingWebhookConfiguration",
-     "parameters": [
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
-       "name": "continue",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
-       "name": "fieldSelector",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "If true, partially initialized resources are included in the response.",
-       "name": "includeUninitialized",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
-       "name": "labelSelector",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "integer",
-       "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
-       "name": "limit",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
-       "name": "resourceVersion",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "integer",
-       "description": "Timeout for the list/watch call.",
-       "name": "timeoutSeconds",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
-       "name": "watch",
-       "in": "query"
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfigurationList"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "list",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "ValidatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "post": {
-     "description": "create a ValidatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "createAdmissionregistrationV1alpha1ValidatingWebhookConfiguration",
-     "parameters": [
-      {
-       "name": "body",
-       "in": "body",
-       "required": true,
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration"
-       }
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration"
-       }
-      },
-      "201": {
-       "description": "Created",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration"
-       }
-      },
-      "202": {
-       "description": "Accepted",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "post",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "ValidatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "delete": {
-     "description": "delete collection of ValidatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "deleteAdmissionregistrationV1alpha1CollectionValidatingWebhookConfiguration",
-     "parameters": [
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
-       "name": "continue",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
-       "name": "fieldSelector",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "If true, partially initialized resources are included in the response.",
-       "name": "includeUninitialized",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
-       "name": "labelSelector",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "integer",
-       "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
-       "name": "limit",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
-       "name": "resourceVersion",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "integer",
-       "description": "Timeout for the list/watch call.",
-       "name": "timeoutSeconds",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
-       "name": "watch",
-       "in": "query"
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "deletecollection",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "ValidatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "parameters": [
-     {
-      "uniqueItems": true,
-      "type": "string",
-      "description": "If 'true', then the output is pretty printed.",
-      "name": "pretty",
-      "in": "query"
-     }
-    ]
-   },
-   "/apis/admissionregistration.k8s.io/v1alpha1/validatingwebhookconfigurations/{name}": {
-    "get": {
-     "description": "read the specified ValidatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "readAdmissionregistrationV1alpha1ValidatingWebhookConfiguration",
-     "parameters": [
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "Should the export be exact.  Exact export maintains cluster-specific fields like 'Namespace'.",
-       "name": "exact",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "Should this value be exported.  Export strips fields that a user can not specify.",
-       "name": "export",
-       "in": "query"
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "get",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "ValidatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "put": {
-     "description": "replace the specified ValidatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "replaceAdmissionregistrationV1alpha1ValidatingWebhookConfiguration",
-     "parameters": [
-      {
-       "name": "body",
-       "in": "body",
-       "required": true,
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration"
-       }
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration"
-       }
-      },
-      "201": {
-       "description": "Created",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "put",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "ValidatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "delete": {
-     "description": "delete a ValidatingWebhookConfiguration",
-     "consumes": [
-      "*/*"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "deleteAdmissionregistrationV1alpha1ValidatingWebhookConfiguration",
-     "parameters": [
-      {
-       "name": "body",
-       "in": "body",
-       "required": true,
-       "schema": {
-        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.DeleteOptions"
-       }
-      },
-      {
-       "uniqueItems": true,
-       "type": "integer",
-       "description": "The duration in seconds before the object should be deleted. Value must be non-negative integer. The value zero indicates delete immediately. If this value is nil, the default grace period for the specified type will be used. Defaults to a per object value if not specified. zero means delete immediately.",
-       "name": "gracePeriodSeconds",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "boolean",
-       "description": "Deprecated: please use the PropagationPolicy, this field will be deprecated in 1.7. Should the dependent objects be orphaned. If true/false, the \"orphan\" finalizer will be added to/removed from the object's finalizers list. Either this field or PropagationPolicy may be set, but not both.",
-       "name": "orphanDependents",
-       "in": "query"
-      },
-      {
-       "uniqueItems": true,
-       "type": "string",
-       "description": "Whether and how garbage collection will be performed. Either this field or OrphanDependents may be set, but not both. The default policy is decided by the existing finalizer set in the metadata.finalizers and the resource-specific default policy. Acceptable values are: 'Orphan' - orphan the dependents; 'Background' - allow the garbage collector to delete the dependents in the background; 'Foreground' - a cascading policy that deletes all dependents in the foreground.",
-       "name": "propagationPolicy",
-       "in": "query"
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "delete",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "ValidatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "patch": {
-     "description": "partially update the specified ValidatingWebhookConfiguration",
-     "consumes": [
-      "application/json-patch+json",
-      "application/merge-patch+json",
-      "application/strategic-merge-patch+json"
-     ],
-     "produces": [
-      "application/json",
-      "application/yaml",
-      "application/vnd.kubernetes.protobuf"
-     ],
-     "schemes": [
-      "https"
-     ],
-     "tags": [
-      "admissionregistration_v1alpha1"
-     ],
-     "operationId": "patchAdmissionregistrationV1alpha1ValidatingWebhookConfiguration",
-     "parameters": [
-      {
-       "name": "body",
-       "in": "body",
-       "required": true,
-       "schema": {
-        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Patch"
-       }
-      }
-     ],
-     "responses": {
-      "200": {
-       "description": "OK",
-       "schema": {
-        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration"
-       }
-      },
-      "401": {
-       "description": "Unauthorized"
-      }
-     },
-     "x-kubernetes-action": "patch",
-     "x-kubernetes-group-version-kind": {
-      "group": "admissionregistration.k8s.io",
-      "kind": "ValidatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    },
-    "parameters": [
-     {
-      "uniqueItems": true,
-      "type": "string",
-      "description": "name of the ValidatingWebhookConfiguration",
-      "name": "name",
-      "in": "path",
-      "required": true
-     },
-     {
-      "uniqueItems": true,
-      "type": "string",
-      "description": "If 'true', then the output is pretty printed.",
-      "name": "pretty",
-      "in": "query"
-     }
-    ]
-   },
    "/apis/admissionregistration.k8s.io/v1alpha1/watch/initializerconfigurations": {
     "get": {
      "description": "watch individual changes to a list of InitializerConfiguration",
@@ -20521,7 +19541,1020 @@
      }
     ]
    },
-   "/apis/admissionregistration.k8s.io/v1alpha1/watch/mutatingwebhookconfigurations": {
+   "/apis/admissionregistration.k8s.io/v1beta1/": {
+    "get": {
+     "description": "get available resources",
+     "consumes": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "getAdmissionregistrationV1beta1APIResources",
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.APIResourceList"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     }
+    }
+   },
+   "/apis/admissionregistration.k8s.io/v1beta1/mutatingwebhookconfigurations": {
+    "get": {
+     "description": "list or watch objects of kind MutatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf",
+      "application/json;stream=watch",
+      "application/vnd.kubernetes.protobuf;stream=watch"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "listAdmissionregistrationV1beta1MutatingWebhookConfiguration",
+     "parameters": [
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+       "name": "continue",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
+       "name": "fieldSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "If true, partially initialized resources are included in the response.",
+       "name": "includeUninitialized",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
+       "name": "labelSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+       "name": "limit",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
+       "name": "resourceVersion",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "Timeout for the list/watch call.",
+       "name": "timeoutSeconds",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
+       "name": "watch",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfigurationList"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "list",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "MutatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "post": {
+     "description": "create a MutatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "createAdmissionregistrationV1beta1MutatingWebhookConfiguration",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfiguration"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfiguration"
+       }
+      },
+      "201": {
+       "description": "Created",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfiguration"
+       }
+      },
+      "202": {
+       "description": "Accepted",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfiguration"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "post",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "MutatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "delete": {
+     "description": "delete collection of MutatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "deleteAdmissionregistrationV1beta1CollectionMutatingWebhookConfiguration",
+     "parameters": [
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+       "name": "continue",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
+       "name": "fieldSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "If true, partially initialized resources are included in the response.",
+       "name": "includeUninitialized",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
+       "name": "labelSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+       "name": "limit",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
+       "name": "resourceVersion",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "Timeout for the list/watch call.",
+       "name": "timeoutSeconds",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
+       "name": "watch",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "deletecollection",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "MutatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "parameters": [
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "If 'true', then the output is pretty printed.",
+      "name": "pretty",
+      "in": "query"
+     }
+    ]
+   },
+   "/apis/admissionregistration.k8s.io/v1beta1/mutatingwebhookconfigurations/{name}": {
+    "get": {
+     "description": "read the specified MutatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "readAdmissionregistrationV1beta1MutatingWebhookConfiguration",
+     "parameters": [
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Should the export be exact.  Exact export maintains cluster-specific fields like 'Namespace'.",
+       "name": "exact",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Should this value be exported.  Export strips fields that a user can not specify.",
+       "name": "export",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfiguration"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "get",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "MutatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "put": {
+     "description": "replace the specified MutatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "replaceAdmissionregistrationV1beta1MutatingWebhookConfiguration",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfiguration"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfiguration"
+       }
+      },
+      "201": {
+       "description": "Created",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfiguration"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "put",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "MutatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "delete": {
+     "description": "delete a MutatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "deleteAdmissionregistrationV1beta1MutatingWebhookConfiguration",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.DeleteOptions"
+       }
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "The duration in seconds before the object should be deleted. Value must be non-negative integer. The value zero indicates delete immediately. If this value is nil, the default grace period for the specified type will be used. Defaults to a per object value if not specified. zero means delete immediately.",
+       "name": "gracePeriodSeconds",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Deprecated: please use the PropagationPolicy, this field will be deprecated in 1.7. Should the dependent objects be orphaned. If true/false, the \"orphan\" finalizer will be added to/removed from the object's finalizers list. Either this field or PropagationPolicy may be set, but not both.",
+       "name": "orphanDependents",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "Whether and how garbage collection will be performed. Either this field or OrphanDependents may be set, but not both. The default policy is decided by the existing finalizer set in the metadata.finalizers and the resource-specific default policy. Acceptable values are: 'Orphan' - orphan the dependents; 'Background' - allow the garbage collector to delete the dependents in the background; 'Foreground' - a cascading policy that deletes all dependents in the foreground.",
+       "name": "propagationPolicy",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "delete",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "MutatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "patch": {
+     "description": "partially update the specified MutatingWebhookConfiguration",
+     "consumes": [
+      "application/json-patch+json",
+      "application/merge-patch+json",
+      "application/strategic-merge-patch+json"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "patchAdmissionregistrationV1beta1MutatingWebhookConfiguration",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Patch"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfiguration"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "patch",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "MutatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "parameters": [
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "name of the MutatingWebhookConfiguration",
+      "name": "name",
+      "in": "path",
+      "required": true
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "If 'true', then the output is pretty printed.",
+      "name": "pretty",
+      "in": "query"
+     }
+    ]
+   },
+   "/apis/admissionregistration.k8s.io/v1beta1/validatingwebhookconfigurations": {
+    "get": {
+     "description": "list or watch objects of kind ValidatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf",
+      "application/json;stream=watch",
+      "application/vnd.kubernetes.protobuf;stream=watch"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "listAdmissionregistrationV1beta1ValidatingWebhookConfiguration",
+     "parameters": [
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+       "name": "continue",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
+       "name": "fieldSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "If true, partially initialized resources are included in the response.",
+       "name": "includeUninitialized",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
+       "name": "labelSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+       "name": "limit",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
+       "name": "resourceVersion",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "Timeout for the list/watch call.",
+       "name": "timeoutSeconds",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
+       "name": "watch",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfigurationList"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "list",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "ValidatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "post": {
+     "description": "create a ValidatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "createAdmissionregistrationV1beta1ValidatingWebhookConfiguration",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfiguration"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfiguration"
+       }
+      },
+      "201": {
+       "description": "Created",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfiguration"
+       }
+      },
+      "202": {
+       "description": "Accepted",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfiguration"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "post",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "ValidatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "delete": {
+     "description": "delete collection of ValidatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "deleteAdmissionregistrationV1beta1CollectionValidatingWebhookConfiguration",
+     "parameters": [
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+       "name": "continue",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
+       "name": "fieldSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "If true, partially initialized resources are included in the response.",
+       "name": "includeUninitialized",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
+       "name": "labelSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+       "name": "limit",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
+       "name": "resourceVersion",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "Timeout for the list/watch call.",
+       "name": "timeoutSeconds",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
+       "name": "watch",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "deletecollection",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "ValidatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "parameters": [
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "If 'true', then the output is pretty printed.",
+      "name": "pretty",
+      "in": "query"
+     }
+    ]
+   },
+   "/apis/admissionregistration.k8s.io/v1beta1/validatingwebhookconfigurations/{name}": {
+    "get": {
+     "description": "read the specified ValidatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "readAdmissionregistrationV1beta1ValidatingWebhookConfiguration",
+     "parameters": [
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Should the export be exact.  Exact export maintains cluster-specific fields like 'Namespace'.",
+       "name": "exact",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Should this value be exported.  Export strips fields that a user can not specify.",
+       "name": "export",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfiguration"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "get",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "ValidatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "put": {
+     "description": "replace the specified ValidatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "replaceAdmissionregistrationV1beta1ValidatingWebhookConfiguration",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfiguration"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfiguration"
+       }
+      },
+      "201": {
+       "description": "Created",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfiguration"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "put",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "ValidatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "delete": {
+     "description": "delete a ValidatingWebhookConfiguration",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "deleteAdmissionregistrationV1beta1ValidatingWebhookConfiguration",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.DeleteOptions"
+       }
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "The duration in seconds before the object should be deleted. Value must be non-negative integer. The value zero indicates delete immediately. If this value is nil, the default grace period for the specified type will be used. Defaults to a per object value if not specified. zero means delete immediately.",
+       "name": "gracePeriodSeconds",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Deprecated: please use the PropagationPolicy, this field will be deprecated in 1.7. Should the dependent objects be orphaned. If true/false, the \"orphan\" finalizer will be added to/removed from the object's finalizers list. Either this field or PropagationPolicy may be set, but not both.",
+       "name": "orphanDependents",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "Whether and how garbage collection will be performed. Either this field or OrphanDependents may be set, but not both. The default policy is decided by the existing finalizer set in the metadata.finalizers and the resource-specific default policy. Acceptable values are: 'Orphan' - orphan the dependents; 'Background' - allow the garbage collector to delete the dependents in the background; 'Foreground' - a cascading policy that deletes all dependents in the foreground.",
+       "name": "propagationPolicy",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "delete",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "ValidatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "patch": {
+     "description": "partially update the specified ValidatingWebhookConfiguration",
+     "consumes": [
+      "application/json-patch+json",
+      "application/merge-patch+json",
+      "application/strategic-merge-patch+json"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "admissionregistration_v1beta1"
+     ],
+     "operationId": "patchAdmissionregistrationV1beta1ValidatingWebhookConfiguration",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Patch"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfiguration"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "patch",
+     "x-kubernetes-group-version-kind": {
+      "group": "admissionregistration.k8s.io",
+      "kind": "ValidatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    },
+    "parameters": [
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "name of the ValidatingWebhookConfiguration",
+      "name": "name",
+      "in": "path",
+      "required": true
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "If 'true', then the output is pretty printed.",
+      "name": "pretty",
+      "in": "query"
+     }
+    ]
+   },
+   "/apis/admissionregistration.k8s.io/v1beta1/watch/mutatingwebhookconfigurations": {
     "get": {
      "description": "watch individual changes to a list of MutatingWebhookConfiguration",
      "consumes": [
@@ -20538,9 +20571,9 @@
       "https"
      ],
      "tags": [
-      "admissionregistration_v1alpha1"
+      "admissionregistration_v1beta1"
      ],
-     "operationId": "watchAdmissionregistrationV1alpha1MutatingWebhookConfigurationList",
+     "operationId": "watchAdmissionregistrationV1beta1MutatingWebhookConfigurationList",
      "responses": {
       "200": {
        "description": "OK",
@@ -20556,7 +20589,7 @@
      "x-kubernetes-group-version-kind": {
       "group": "admissionregistration.k8s.io",
       "kind": "MutatingWebhookConfiguration",
-      "version": "v1alpha1"
+      "version": "v1beta1"
      }
     },
     "parameters": [
@@ -20625,7 +20658,7 @@
      }
     ]
    },
-   "/apis/admissionregistration.k8s.io/v1alpha1/watch/mutatingwebhookconfigurations/{name}": {
+   "/apis/admissionregistration.k8s.io/v1beta1/watch/mutatingwebhookconfigurations/{name}": {
     "get": {
      "description": "watch changes to an object of kind MutatingWebhookConfiguration",
      "consumes": [
@@ -20642,9 +20675,9 @@
       "https"
      ],
      "tags": [
-      "admissionregistration_v1alpha1"
+      "admissionregistration_v1beta1"
      ],
-     "operationId": "watchAdmissionregistrationV1alpha1MutatingWebhookConfiguration",
+     "operationId": "watchAdmissionregistrationV1beta1MutatingWebhookConfiguration",
      "responses": {
       "200": {
        "description": "OK",
@@ -20660,7 +20693,7 @@
      "x-kubernetes-group-version-kind": {
       "group": "admissionregistration.k8s.io",
       "kind": "MutatingWebhookConfiguration",
-      "version": "v1alpha1"
+      "version": "v1beta1"
      }
     },
     "parameters": [
@@ -20737,7 +20770,7 @@
      }
     ]
    },
-   "/apis/admissionregistration.k8s.io/v1alpha1/watch/validatingwebhookconfigurations": {
+   "/apis/admissionregistration.k8s.io/v1beta1/watch/validatingwebhookconfigurations": {
     "get": {
      "description": "watch individual changes to a list of ValidatingWebhookConfiguration",
      "consumes": [
@@ -20754,9 +20787,9 @@
       "https"
      ],
      "tags": [
-      "admissionregistration_v1alpha1"
+      "admissionregistration_v1beta1"
      ],
-     "operationId": "watchAdmissionregistrationV1alpha1ValidatingWebhookConfigurationList",
+     "operationId": "watchAdmissionregistrationV1beta1ValidatingWebhookConfigurationList",
      "responses": {
       "200": {
        "description": "OK",
@@ -20772,7 +20805,7 @@
      "x-kubernetes-group-version-kind": {
       "group": "admissionregistration.k8s.io",
       "kind": "ValidatingWebhookConfiguration",
-      "version": "v1alpha1"
+      "version": "v1beta1"
      }
     },
     "parameters": [
@@ -20841,7 +20874,7 @@
      }
     ]
    },
-   "/apis/admissionregistration.k8s.io/v1alpha1/watch/validatingwebhookconfigurations/{name}": {
+   "/apis/admissionregistration.k8s.io/v1beta1/watch/validatingwebhookconfigurations/{name}": {
     "get": {
      "description": "watch changes to an object of kind ValidatingWebhookConfiguration",
      "consumes": [
@@ -20858,9 +20891,9 @@
       "https"
      ],
      "tags": [
-      "admissionregistration_v1alpha1"
+      "admissionregistration_v1beta1"
      ],
-     "operationId": "watchAdmissionregistrationV1alpha1ValidatingWebhookConfiguration",
+     "operationId": "watchAdmissionregistrationV1beta1ValidatingWebhookConfiguration",
      "responses": {
       "200": {
        "description": "OK",
@@ -20876,7 +20909,7 @@
      "x-kubernetes-group-version-kind": {
       "group": "admissionregistration.k8s.io",
       "kind": "ValidatingWebhookConfiguration",
-      "version": "v1alpha1"
+      "version": "v1beta1"
      }
     },
     "parameters": [
@@ -45598,6 +45631,1018 @@
      }
     ]
    },
+   "/apis/events.k8s.io/": {
+    "get": {
+     "description": "get information of a group",
+     "consumes": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events"
+     ],
+     "operationId": "getEventsAPIGroup",
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.APIGroup"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     }
+    }
+   },
+   "/apis/events.k8s.io/v1beta1/": {
+    "get": {
+     "description": "get available resources",
+     "consumes": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "getEventsV1beta1APIResources",
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.APIResourceList"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     }
+    }
+   },
+   "/apis/events.k8s.io/v1beta1/events": {
+    "get": {
+     "description": "list or watch objects of kind Event",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf",
+      "application/json;stream=watch",
+      "application/vnd.kubernetes.protobuf;stream=watch"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "listEventsV1beta1EventForAllNamespaces",
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.events.v1beta1.EventList"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "list",
+     "x-kubernetes-group-version-kind": {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    },
+    "parameters": [
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+      "name": "continue",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
+      "name": "fieldSelector",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "boolean",
+      "description": "If true, partially initialized resources are included in the response.",
+      "name": "includeUninitialized",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
+      "name": "labelSelector",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "integer",
+      "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "If 'true', then the output is pretty printed.",
+      "name": "pretty",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
+      "name": "resourceVersion",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "integer",
+      "description": "Timeout for the list/watch call.",
+      "name": "timeoutSeconds",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "boolean",
+      "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
+      "name": "watch",
+      "in": "query"
+     }
+    ]
+   },
+   "/apis/events.k8s.io/v1beta1/namespaces/{namespace}/events": {
+    "get": {
+     "description": "list or watch objects of kind Event",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf",
+      "application/json;stream=watch",
+      "application/vnd.kubernetes.protobuf;stream=watch"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "listEventsV1beta1NamespacedEvent",
+     "parameters": [
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+       "name": "continue",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
+       "name": "fieldSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "If true, partially initialized resources are included in the response.",
+       "name": "includeUninitialized",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
+       "name": "labelSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+       "name": "limit",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
+       "name": "resourceVersion",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "Timeout for the list/watch call.",
+       "name": "timeoutSeconds",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
+       "name": "watch",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.events.v1beta1.EventList"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "list",
+     "x-kubernetes-group-version-kind": {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    },
+    "post": {
+     "description": "create an Event",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "createEventsV1beta1NamespacedEvent",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.events.v1beta1.Event"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.events.v1beta1.Event"
+       }
+      },
+      "201": {
+       "description": "Created",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.events.v1beta1.Event"
+       }
+      },
+      "202": {
+       "description": "Accepted",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.events.v1beta1.Event"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "post",
+     "x-kubernetes-group-version-kind": {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    },
+    "delete": {
+     "description": "delete collection of Event",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "deleteEventsV1beta1CollectionNamespacedEvent",
+     "parameters": [
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+       "name": "continue",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
+       "name": "fieldSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "If true, partially initialized resources are included in the response.",
+       "name": "includeUninitialized",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
+       "name": "labelSelector",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+       "name": "limit",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
+       "name": "resourceVersion",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "Timeout for the list/watch call.",
+       "name": "timeoutSeconds",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
+       "name": "watch",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "deletecollection",
+     "x-kubernetes-group-version-kind": {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    },
+    "parameters": [
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "object name and auth scope, such as for teams and projects",
+      "name": "namespace",
+      "in": "path",
+      "required": true
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "If 'true', then the output is pretty printed.",
+      "name": "pretty",
+      "in": "query"
+     }
+    ]
+   },
+   "/apis/events.k8s.io/v1beta1/namespaces/{namespace}/events/{name}": {
+    "get": {
+     "description": "read the specified Event",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "readEventsV1beta1NamespacedEvent",
+     "parameters": [
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Should the export be exact.  Exact export maintains cluster-specific fields like 'Namespace'.",
+       "name": "exact",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Should this value be exported.  Export strips fields that a user can not specify.",
+       "name": "export",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.events.v1beta1.Event"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "get",
+     "x-kubernetes-group-version-kind": {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    },
+    "put": {
+     "description": "replace the specified Event",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "replaceEventsV1beta1NamespacedEvent",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.events.v1beta1.Event"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.events.v1beta1.Event"
+       }
+      },
+      "201": {
+       "description": "Created",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.events.v1beta1.Event"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "put",
+     "x-kubernetes-group-version-kind": {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    },
+    "delete": {
+     "description": "delete an Event",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "deleteEventsV1beta1NamespacedEvent",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.DeleteOptions"
+       }
+      },
+      {
+       "uniqueItems": true,
+       "type": "integer",
+       "description": "The duration in seconds before the object should be deleted. Value must be non-negative integer. The value zero indicates delete immediately. If this value is nil, the default grace period for the specified type will be used. Defaults to a per object value if not specified. zero means delete immediately.",
+       "name": "gracePeriodSeconds",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "boolean",
+       "description": "Deprecated: please use the PropagationPolicy, this field will be deprecated in 1.7. Should the dependent objects be orphaned. If true/false, the \"orphan\" finalizer will be added to/removed from the object's finalizers list. Either this field or PropagationPolicy may be set, but not both.",
+       "name": "orphanDependents",
+       "in": "query"
+      },
+      {
+       "uniqueItems": true,
+       "type": "string",
+       "description": "Whether and how garbage collection will be performed. Either this field or OrphanDependents may be set, but not both. The default policy is decided by the existing finalizer set in the metadata.finalizers and the resource-specific default policy. Acceptable values are: 'Orphan' - orphan the dependents; 'Background' - allow the garbage collector to delete the dependents in the background; 'Foreground' - a cascading policy that deletes all dependents in the foreground.",
+       "name": "propagationPolicy",
+       "in": "query"
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Status"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "delete",
+     "x-kubernetes-group-version-kind": {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    },
+    "patch": {
+     "description": "partially update the specified Event",
+     "consumes": [
+      "application/json-patch+json",
+      "application/merge-patch+json",
+      "application/strategic-merge-patch+json"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "patchEventsV1beta1NamespacedEvent",
+     "parameters": [
+      {
+       "name": "body",
+       "in": "body",
+       "required": true,
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Patch"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.api.events.v1beta1.Event"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "patch",
+     "x-kubernetes-group-version-kind": {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    },
+    "parameters": [
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "name of the Event",
+      "name": "name",
+      "in": "path",
+      "required": true
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "object name and auth scope, such as for teams and projects",
+      "name": "namespace",
+      "in": "path",
+      "required": true
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "If 'true', then the output is pretty printed.",
+      "name": "pretty",
+      "in": "query"
+     }
+    ]
+   },
+   "/apis/events.k8s.io/v1beta1/watch/events": {
+    "get": {
+     "description": "watch individual changes to a list of Event",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf",
+      "application/json;stream=watch",
+      "application/vnd.kubernetes.protobuf;stream=watch"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "watchEventsV1beta1EventListForAllNamespaces",
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.WatchEvent"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "watchlist",
+     "x-kubernetes-group-version-kind": {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    },
+    "parameters": [
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+      "name": "continue",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
+      "name": "fieldSelector",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "boolean",
+      "description": "If true, partially initialized resources are included in the response.",
+      "name": "includeUninitialized",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
+      "name": "labelSelector",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "integer",
+      "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "If 'true', then the output is pretty printed.",
+      "name": "pretty",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
+      "name": "resourceVersion",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "integer",
+      "description": "Timeout for the list/watch call.",
+      "name": "timeoutSeconds",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "boolean",
+      "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
+      "name": "watch",
+      "in": "query"
+     }
+    ]
+   },
+   "/apis/events.k8s.io/v1beta1/watch/namespaces/{namespace}/events": {
+    "get": {
+     "description": "watch individual changes to a list of Event",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf",
+      "application/json;stream=watch",
+      "application/vnd.kubernetes.protobuf;stream=watch"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "watchEventsV1beta1NamespacedEventList",
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.WatchEvent"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "watchlist",
+     "x-kubernetes-group-version-kind": {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    },
+    "parameters": [
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+      "name": "continue",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
+      "name": "fieldSelector",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "boolean",
+      "description": "If true, partially initialized resources are included in the response.",
+      "name": "includeUninitialized",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
+      "name": "labelSelector",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "integer",
+      "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "object name and auth scope, such as for teams and projects",
+      "name": "namespace",
+      "in": "path",
+      "required": true
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "If 'true', then the output is pretty printed.",
+      "name": "pretty",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
+      "name": "resourceVersion",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "integer",
+      "description": "Timeout for the list/watch call.",
+      "name": "timeoutSeconds",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "boolean",
+      "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
+      "name": "watch",
+      "in": "query"
+     }
+    ]
+   },
+   "/apis/events.k8s.io/v1beta1/watch/namespaces/{namespace}/events/{name}": {
+    "get": {
+     "description": "watch changes to an object of kind Event",
+     "consumes": [
+      "*/*"
+     ],
+     "produces": [
+      "application/json",
+      "application/yaml",
+      "application/vnd.kubernetes.protobuf",
+      "application/json;stream=watch",
+      "application/vnd.kubernetes.protobuf;stream=watch"
+     ],
+     "schemes": [
+      "https"
+     ],
+     "tags": [
+      "events_v1beta1"
+     ],
+     "operationId": "watchEventsV1beta1NamespacedEvent",
+     "responses": {
+      "200": {
+       "description": "OK",
+       "schema": {
+        "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.WatchEvent"
+       }
+      },
+      "401": {
+       "description": "Unauthorized"
+      }
+     },
+     "x-kubernetes-action": "watch",
+     "x-kubernetes-group-version-kind": {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    },
+    "parameters": [
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "The continue option should be set when retrieving more results from the server. Since this value is server defined, clients may only use the continue value from a previous query result with identical query parameters (except for the value of continue) and the server may reject a continue value it does not recognize. If the specified continue value is no longer valid whether due to expiration (generally five to fifteen minutes) or a configuration change on the server the server will respond with a 410 ResourceExpired error indicating the client must restart their list without the continue field. This field is not supported when watch is true. Clients may start a watch from the last resourceVersion value returned by the server and not miss any modifications.",
+      "name": "continue",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "A selector to restrict the list of returned objects by their fields. Defaults to everything.",
+      "name": "fieldSelector",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "boolean",
+      "description": "If true, partially initialized resources are included in the response.",
+      "name": "includeUninitialized",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "A selector to restrict the list of returned objects by their labels. Defaults to everything.",
+      "name": "labelSelector",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "integer",
+      "description": "limit is a maximum number of responses to return for a list call. If more items exist, the server will set the `continue` field on the list metadata to a value that can be used with the same initial query to retrieve the next set of results. Setting a limit may return fewer than the requested amount of items (up to zero items) in the event all requested objects are filtered out and clients should only use the presence of the continue field to determine whether more results are available. Servers may choose not to support the limit argument and will return all of the available results. If limit is specified and the continue field is empty, clients may assume that no more results are available. This field is not supported if watch is true.\n\nThe server guarantees that the objects returned when using continue will be identical to issuing a single list call without a limit - that is, no objects created, modified, or deleted after the first request is issued will be included in any subsequent continued requests. This is sometimes referred to as a consistent snapshot, and ensures that a client that is using limit to receive smaller chunks of a very large result can ensure they see all possible objects. If objects are updated during a chunked list the version of the object that was present at the time the first list result was calculated is returned.",
+      "name": "limit",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "name of the Event",
+      "name": "name",
+      "in": "path",
+      "required": true
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "object name and auth scope, such as for teams and projects",
+      "name": "namespace",
+      "in": "path",
+      "required": true
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "If 'true', then the output is pretty printed.",
+      "name": "pretty",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "string",
+      "description": "When specified with a watch call, shows changes that occur after that particular version of a resource. Defaults to changes from the beginning of history. When specified for list: - if unset, then the result is returned from remote storage based on quorum-read flag; - if it's 0, then we simply return what we currently have in cache, no guarantee; - if set to non zero, then the result is at least as fresh as given rv.",
+      "name": "resourceVersion",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "integer",
+      "description": "Timeout for the list/watch call.",
+      "name": "timeoutSeconds",
+      "in": "query"
+     },
+     {
+      "uniqueItems": true,
+      "type": "boolean",
+      "description": "Watch for changes to the described resources and return them as a stream of add, update, and remove notifications. Specify resourceVersion.",
+      "name": "watch",
+      "in": "query"
+     }
+    ]
+   },
    "/apis/extensions/": {
     "get": {
      "description": "get information of a group",
@@ -68533,73 +69578,6 @@
      }
     ]
    },
-   "io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfiguration": {
-    "description": "MutatingWebhookConfiguration describes the configuration of and admission webhook that accept or reject and may change the object.",
-    "properties": {
-     "apiVersion": {
-      "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
-      "type": "string"
-     },
-     "kind": {
-      "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
-      "type": "string"
-     },
-     "metadata": {
-      "description": "Standard object metadata; More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata.",
-      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
-     },
-     "webhooks": {
-      "description": "Webhooks is a list of webhooks and the affected resources and operations.",
-      "type": "array",
-      "items": {
-       "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.Webhook"
-      },
-      "x-kubernetes-patch-merge-key": "name",
-      "x-kubernetes-patch-strategy": "merge"
-     }
-    },
-    "x-kubernetes-group-version-kind": [
-     {
-      "group": "admissionregistration.k8s.io",
-      "kind": "MutatingWebhookConfiguration",
-      "version": "v1alpha1"
-     }
-    ]
-   },
-   "io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfigurationList": {
-    "description": "MutatingWebhookConfigurationList is a list of MutatingWebhookConfiguration.",
-    "required": [
-     "items"
-    ],
-    "properties": {
-     "apiVersion": {
-      "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
-      "type": "string"
-     },
-     "items": {
-      "description": "List of MutatingWebhookConfiguration.",
-      "type": "array",
-      "items": {
-       "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.MutatingWebhookConfiguration"
-      }
-     },
-     "kind": {
-      "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
-      "type": "string"
-     },
-     "metadata": {
-      "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
-      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta"
-     }
-    },
-    "x-kubernetes-group-version-kind": [
-     {
-      "group": "admissionregistration.k8s.io",
-      "kind": "MutatingWebhookConfigurationList",
-      "version": "v1alpha1"
-     }
-    ]
-   },
    "io.k8s.api.admissionregistration.v1alpha1.Rule": {
     "description": "Rule is a tuple of APIGroups, APIVersion, and Resources.It is recommended to make sure that all the tuple expansions are valid.",
     "properties": {
@@ -68626,7 +69604,74 @@
      }
     }
    },
-   "io.k8s.api.admissionregistration.v1alpha1.RuleWithOperations": {
+   "io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfiguration": {
+    "description": "MutatingWebhookConfiguration describes the configuration of and admission webhook that accept or reject and may change the object.",
+    "properties": {
+     "apiVersion": {
+      "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+      "type": "string"
+     },
+     "kind": {
+      "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+      "type": "string"
+     },
+     "metadata": {
+      "description": "Standard object metadata; More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata.",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+     },
+     "webhooks": {
+      "description": "Webhooks is a list of webhooks and the affected resources and operations.",
+      "type": "array",
+      "items": {
+       "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.Webhook"
+      },
+      "x-kubernetes-patch-merge-key": "name",
+      "x-kubernetes-patch-strategy": "merge"
+     }
+    },
+    "x-kubernetes-group-version-kind": [
+     {
+      "group": "admissionregistration.k8s.io",
+      "kind": "MutatingWebhookConfiguration",
+      "version": "v1beta1"
+     }
+    ]
+   },
+   "io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfigurationList": {
+    "description": "MutatingWebhookConfigurationList is a list of MutatingWebhookConfiguration.",
+    "required": [
+     "items"
+    ],
+    "properties": {
+     "apiVersion": {
+      "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+      "type": "string"
+     },
+     "items": {
+      "description": "List of MutatingWebhookConfiguration.",
+      "type": "array",
+      "items": {
+       "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.MutatingWebhookConfiguration"
+      }
+     },
+     "kind": {
+      "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+      "type": "string"
+     },
+     "metadata": {
+      "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta"
+     }
+    },
+    "x-kubernetes-group-version-kind": [
+     {
+      "group": "admissionregistration.k8s.io",
+      "kind": "MutatingWebhookConfigurationList",
+      "version": "v1beta1"
+     }
+    ]
+   },
+   "io.k8s.api.admissionregistration.v1beta1.RuleWithOperations": {
     "description": "RuleWithOperations is a tuple of Operations and Resources. It is recommended to make sure that all the tuple expansions are valid.",
     "properties": {
      "apiGroups": {
@@ -68659,7 +69704,7 @@
      }
     }
    },
-   "io.k8s.api.admissionregistration.v1alpha1.ServiceReference": {
+   "io.k8s.api.admissionregistration.v1beta1.ServiceReference": {
     "description": "ServiceReference holds a reference to Service.legacy.k8s.io",
     "required": [
      "namespace",
@@ -68680,7 +69725,7 @@
      }
     }
    },
-   "io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration": {
+   "io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfiguration": {
     "description": "ValidatingWebhookConfiguration describes the configuration of and admission webhook that accept or reject and object without changing it.",
     "properties": {
      "apiVersion": {
@@ -68699,7 +69744,7 @@
       "description": "Webhooks is a list of webhooks and the affected resources and operations.",
       "type": "array",
       "items": {
-       "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.Webhook"
+       "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.Webhook"
       },
       "x-kubernetes-patch-merge-key": "name",
       "x-kubernetes-patch-strategy": "merge"
@@ -68709,11 +69754,11 @@
      {
       "group": "admissionregistration.k8s.io",
       "kind": "ValidatingWebhookConfiguration",
-      "version": "v1alpha1"
+      "version": "v1beta1"
      }
     ]
    },
-   "io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfigurationList": {
+   "io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfigurationList": {
     "description": "ValidatingWebhookConfigurationList is a list of ValidatingWebhookConfiguration.",
     "required": [
      "items"
@@ -68727,7 +69772,7 @@
       "description": "List of ValidatingWebhookConfiguration.",
       "type": "array",
       "items": {
-       "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration"
+       "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ValidatingWebhookConfiguration"
       }
      },
      "kind": {
@@ -68743,11 +69788,11 @@
      {
       "group": "admissionregistration.k8s.io",
       "kind": "ValidatingWebhookConfigurationList",
-      "version": "v1alpha1"
+      "version": "v1beta1"
      }
     ]
    },
-   "io.k8s.api.admissionregistration.v1alpha1.Webhook": {
+   "io.k8s.api.admissionregistration.v1beta1.Webhook": {
     "description": "Webhook describes an admission webhook and the resources and operations it applies to.",
     "required": [
      "name",
@@ -68756,7 +69801,7 @@
     "properties": {
      "clientConfig": {
       "description": "ClientConfig defines how to communicate with the hook. Required",
-      "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.WebhookClientConfig"
+      "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.WebhookClientConfig"
      },
      "failurePolicy": {
       "description": "FailurePolicy defines how unrecognized errors from the admission endpoint are handled - allowed values are Ignore or Fail. Defaults to Ignore.",
@@ -68774,12 +69819,12 @@
       "description": "Rules describes what operations on what resources/subresources the webhook cares about. The webhook cares about an operation if it matches _any_ Rule.",
       "type": "array",
       "items": {
-       "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.RuleWithOperations"
+       "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.RuleWithOperations"
       }
      }
     }
    },
-   "io.k8s.api.admissionregistration.v1alpha1.WebhookClientConfig": {
+   "io.k8s.api.admissionregistration.v1beta1.WebhookClientConfig": {
     "description": "WebhookClientConfig contains the information to make a TLS connection with the webhook",
     "required": [
      "caBundle"
@@ -68792,7 +69837,7 @@
      },
      "service": {
       "description": "`service` is a reference to the service for this webhook. Either `service` or `url` must be specified.\n\nIf the webhook is running within the cluster, then you should use `service`.\n\nIf there is only one port open for the service, that port will be used. If there are multiple ports open, port 443 will be used if it is open, otherwise it is an error.",
-      "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ServiceReference"
+      "$ref": "#/definitions/io.k8s.api.admissionregistration.v1beta1.ServiceReference"
      },
      "url": {
       "description": "`url` gives the location of the webhook, in standard URL form (`[scheme://]host:port/path`). Exactly one of `url` or `service` must be specified.\n\nThe `host` should not refer to a service running in the cluster; use the `service` field instead. The host might be resolved via external DNS in some apiservers (e.g., `kube-apiserver` cannot resolve in-cluster DNS as that would be a layering violation). `host` may also be an IP address.\n\nPlease note that using `localhost` or `127.0.0.1` as a `host` is risky unless you take great care to run this webhook on all hosts which run an apiserver which might need to make calls to this webhook. Such installs are likely to be non-portable, i.e., not easy to turn up in a new cluster.\n\nThe scheme must be \"https\"; the URL must begin with \"https://\".\n\nA path is optional, and if present may be any string permissible in a URL. You may use the path to pass an arbitrary string to the webhook, for example, a cluster identifier.\n\nAttempting to use a user or basic auth e.g. \"user:password@\" is not allowed. Fragments (\"#...\") and query parameters (\"?...\") are not allowed, either.",
@@ -70306,7 +71351,7 @@
     }
    },
    "io.k8s.api.apps.v1beta2.ControllerRevision": {
-    "description": "ControllerRevision implements an immutable snapshot of state data. Clients are responsible for serializing and deserializing the objects that contain their internal state. Once a ControllerRevision has been successfully created, it can not be updated. The API Server will fail validation of all requests that attempt to mutate the Data field. ControllerRevisions may, however, be deleted. Note that, due to its use by both the DaemonSet and StatefulSet controllers for update and rollback, this object is beta. However, it may be subject to name and representation changes in future releases, and clients should not depend on its stability. It is primarily for internal use by controllers.",
+    "description": "DEPRECATED - This group version of ControllerRevision is deprecated by apps/v1/ControllerRevision. See the release notes for more information. ControllerRevision implements an immutable snapshot of state data. Clients are responsible for serializing and deserializing the objects that contain their internal state. Once a ControllerRevision has been successfully created, it can not be updated. The API Server will fail validation of all requests that attempt to mutate the Data field. ControllerRevisions may, however, be deleted. Note that, due to its use by both the DaemonSet and StatefulSet controllers for update and rollback, this object is beta. However, it may be subject to name and representation changes in future releases, and clients should not depend on its stability. It is primarily for internal use by controllers.",
     "required": [
      "revision"
     ],
@@ -70376,7 +71421,7 @@
     ]
    },
    "io.k8s.api.apps.v1beta2.DaemonSet": {
-    "description": "DaemonSet represents the configuration of a daemon set.",
+    "description": "DEPRECATED - This group version of DaemonSet is deprecated by apps/v1/DaemonSet. See the release notes for more information. DaemonSet represents the configuration of a daemon set.",
     "properties": {
      "apiVersion": {
       "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
@@ -70473,6 +71518,7 @@
    "io.k8s.api.apps.v1beta2.DaemonSetSpec": {
     "description": "DaemonSetSpec is the specification of a daemon set.",
     "required": [
+     "selector",
      "template"
     ],
     "properties": {
@@ -70487,7 +71533,7 @@
       "format": "int32"
      },
      "selector": {
-      "description": "A label query over pods that are managed by the daemon set. Must match in order to be controlled. If empty, defaulted to labels on Pod template. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors",
+      "description": "A label query over pods that are managed by the daemon set. Must match in order to be controlled. It must match the pod template's labels. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors",
       "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector"
      },
      "template": {
@@ -70579,7 +71625,7 @@
     }
    },
    "io.k8s.api.apps.v1beta2.Deployment": {
-    "description": "Deployment enables declarative updates for Pods and ReplicaSets.",
+    "description": "DEPRECATED - This group version of Deployment is deprecated by apps/v1/Deployment. See the release notes for more information. Deployment enables declarative updates for Pods and ReplicaSets.",
     "properties": {
      "apiVersion": {
       "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
@@ -70680,6 +71726,7 @@
    "io.k8s.api.apps.v1beta2.DeploymentSpec": {
     "description": "DeploymentSpec is the specification of the desired behavior of the Deployment.",
     "required": [
+     "selector",
      "template"
     ],
     "properties": {
@@ -70708,7 +71755,7 @@
       "format": "int32"
      },
      "selector": {
-      "description": "Label selector for pods. Existing ReplicaSets whose pods are selected by this will be the ones affected by this deployment.",
+      "description": "Label selector for pods. Existing ReplicaSets whose pods are selected by this will be the ones affected by this deployment. It must match the pod template's labels.",
       "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector"
      },
      "strategy": {
@@ -70784,7 +71831,7 @@
     }
    },
    "io.k8s.api.apps.v1beta2.ReplicaSet": {
-    "description": "ReplicaSet ensures that a specified number of pod replicas are running at any given time.",
+    "description": "DEPRECATED - This group version of ReplicaSet is deprecated by apps/v1/ReplicaSet. See the release notes for more information. ReplicaSet ensures that a specified number of pod replicas are running at any given time.",
     "properties": {
      "apiVersion": {
       "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
@@ -70880,6 +71927,9 @@
    },
    "io.k8s.api.apps.v1beta2.ReplicaSetSpec": {
     "description": "ReplicaSetSpec is the specification of a ReplicaSet.",
+    "required": [
+     "selector"
+    ],
     "properties": {
      "minReadySeconds": {
       "description": "Minimum number of seconds for which a newly created pod should be ready without any of its container crashing, for it to be considered available. Defaults to 0 (pod will be considered available as soon as it is ready)",
@@ -70892,7 +71942,7 @@
       "format": "int32"
      },
      "selector": {
-      "description": "Selector is a label query over pods that should match the replica count. If the selector is empty, it is defaulted to the labels present on the pod template. Label keys and values that must match in order to be controlled by this replica set. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors",
+      "description": "Selector is a label query over pods that should match the replica count. Label keys and values that must match in order to be controlled by this replica set. It must match the pod template's labels. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors",
       "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector"
      },
      "template": {
@@ -71042,7 +72092,7 @@
     }
    },
    "io.k8s.api.apps.v1beta2.StatefulSet": {
-    "description": "StatefulSet represents a set of pods with consistent identities. Identities are defined as:\n - Network: A single stable DNS and hostname.\n - Storage: As many VolumeClaims as requested.\nThe StatefulSet guarantees that a given network identity will always map to the same storage identity.",
+    "description": "DEPRECATED - This group version of StatefulSet is deprecated by apps/v1/StatefulSet. See the release notes for more information. StatefulSet represents a set of pods with consistent identities. Identities are defined as:\n - Network: A single stable DNS and hostname.\n - Storage: As many VolumeClaims as requested.\nThe StatefulSet guarantees that a given network identity will always map to the same storage identity.",
     "properties": {
      "apiVersion": {
       "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
@@ -71136,6 +72186,7 @@
    "io.k8s.api.apps.v1beta2.StatefulSetSpec": {
     "description": "A StatefulSetSpec is the specification of a StatefulSet.",
     "required": [
+     "selector",
      "template",
      "serviceName"
     ],
@@ -71155,7 +72206,7 @@
       "format": "int32"
      },
      "selector": {
-      "description": "selector is a label query over pods that should match the replica count. If empty, defaulted to labels on the pod template. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors",
+      "description": "selector is a label query over pods that should match the replica count. It must match the pod template's labels. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors",
       "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector"
      },
      "serviceName": {
@@ -73464,6 +74515,27 @@
      }
     ]
    },
+   "io.k8s.api.core.v1.CSIPersistentVolumeSource": {
+    "description": "Represents storage that is managed by an external CSI volume driver",
+    "required": [
+     "driver",
+     "volumeHandle"
+    ],
+    "properties": {
+     "driver": {
+      "description": "Driver is the name of the driver to use for this volume. Required.",
+      "type": "string"
+     },
+     "readOnly": {
+      "description": "Optional: The value to pass to ControllerPublishVolumeRequest. Defaults to false (read/write).",
+      "type": "boolean"
+     },
+     "volumeHandle": {
+      "description": "VolumeHandle is the unique volume name returned by the CSI volume plugin’s CreateVolume to refer to the volume on all subsequent calls. Required.",
+      "type": "string"
+     }
+    }
+   },
    "io.k8s.api.core.v1.Capabilities": {
     "description": "Adds and removes POSIX capabilities from running containers.",
     "properties": {
@@ -73914,6 +74986,15 @@
      "tty": {
       "description": "Whether this container should allocate a TTY for itself, also requires 'stdin' to be true. Default is false.",
       "type": "boolean"
+     },
+     "volumeDevices": {
+      "description": "volumeDevices is the list of block devices to be used by the container. This is an alpha feature and may change in the future.",
+      "type": "array",
+      "items": {
+       "$ref": "#/definitions/io.k8s.api.core.v1.VolumeDevice"
+      },
+      "x-kubernetes-patch-merge-key": "devicePath",
+      "x-kubernetes-patch-strategy": "merge"
      },
      "volumeMounts": {
       "description": "Pod volumes to mount into the container's filesystem. Cannot be updated.",
@@ -74386,6 +75467,10 @@
      "involvedObject"
     ],
     "properties": {
+     "action": {
+      "description": "What action was taken/failed regarding to the Regarding object.",
+      "type": "string"
+     },
      "apiVersion": {
       "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
       "type": "string"
@@ -74394,6 +75479,10 @@
       "description": "The number of times this event has occurred.",
       "type": "integer",
       "format": "int32"
+     },
+     "eventTime": {
+      "description": "Time when this Event was first observed.",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.MicroTime"
      },
      "firstTimestamp": {
       "description": "The time at which the event was first recorded. (Time of server receipt is in TypeMeta.)",
@@ -74422,6 +75511,22 @@
      "reason": {
       "description": "This should be a short, machine understandable string that gives the reason for the transition into the object's current status.",
       "type": "string"
+     },
+     "related": {
+      "description": "Optional secondary object for more complex actions.",
+      "$ref": "#/definitions/io.k8s.api.core.v1.ObjectReference"
+     },
+     "reportingComponent": {
+      "description": "Name of the controller that emitted this Event, e.g. `kubernetes.io/kubelet`.",
+      "type": "string"
+     },
+     "reportingInstance": {
+      "description": "ID of the controller instance, e.g. `kubelet-xyzf`.",
+      "type": "string"
+     },
+     "series": {
+      "description": "Data about the Event series this event represents or nil if it's a singleton Event.",
+      "$ref": "#/definitions/io.k8s.api.core.v1.EventSeries"
      },
      "source": {
       "description": "The component reporting this event. Should be a short machine understandable string.",
@@ -74473,6 +75578,24 @@
       "version": "v1"
      }
     ]
+   },
+   "io.k8s.api.core.v1.EventSeries": {
+    "description": "EventSeries contain information on series of events, i.e. thing that was/is happening continously for some time.",
+    "properties": {
+     "count": {
+      "description": "Number of occurrences in this series up to the last heartbeat time",
+      "type": "integer",
+      "format": "int32"
+     },
+     "lastObservedTime": {
+      "description": "Time of the last occurence observed",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.MicroTime"
+     },
+     "state": {
+      "description": "State of this Series: Ongoing or Finished",
+      "type": "string"
+     }
+    }
    },
    "io.k8s.api.core.v1.EventSource": {
     "description": "EventSource contains information for an event.",
@@ -74738,6 +75861,64 @@
      }
     }
    },
+   "io.k8s.api.core.v1.ISCSIPersistentVolumeSource": {
+    "description": "ISCSIPersistentVolumeSource represents an ISCSI disk. ISCSI volumes can only be mounted as read/write once. ISCSI volumes support ownership management and SELinux relabeling.",
+    "required": [
+     "targetPortal",
+     "iqn",
+     "lun"
+    ],
+    "properties": {
+     "chapAuthDiscovery": {
+      "description": "whether support iSCSI Discovery CHAP authentication",
+      "type": "boolean"
+     },
+     "chapAuthSession": {
+      "description": "whether support iSCSI Session CHAP authentication",
+      "type": "boolean"
+     },
+     "fsType": {
+      "description": "Filesystem type of the volume that you want to mount. Tip: Ensure that the filesystem type is supported by the host operating system. Examples: \"ext4\", \"xfs\", \"ntfs\". Implicitly inferred to be \"ext4\" if unspecified. More info: https://kubernetes.io/docs/concepts/storage/volumes#iscsi",
+      "type": "string"
+     },
+     "initiatorName": {
+      "description": "Custom iSCSI Initiator Name. If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface \u003ctarget portal\u003e:\u003cvolume name\u003e will be created for the connection.",
+      "type": "string"
+     },
+     "iqn": {
+      "description": "Target iSCSI Qualified Name.",
+      "type": "string"
+     },
+     "iscsiInterface": {
+      "description": "iSCSI Interface Name that uses an iSCSI transport. Defaults to 'default' (tcp).",
+      "type": "string"
+     },
+     "lun": {
+      "description": "iSCSI Target Lun number.",
+      "type": "integer",
+      "format": "int32"
+     },
+     "portals": {
+      "description": "iSCSI Target Portal List. The Portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260).",
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "readOnly": {
+      "description": "ReadOnly here will force the ReadOnly setting in VolumeMounts. Defaults to false.",
+      "type": "boolean"
+     },
+     "secretRef": {
+      "description": "CHAP Secret for iSCSI target and initiator authentication",
+      "$ref": "#/definitions/io.k8s.api.core.v1.SecretReference"
+     },
+     "targetPortal": {
+      "description": "iSCSI Target Portal. The Portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260).",
+      "type": "string"
+     }
+    }
+   },
    "io.k8s.api.core.v1.ISCSIVolumeSource": {
     "description": "Represents an ISCSI disk. ISCSI volumes can only be mounted as read/write once. ISCSI volumes support ownership management and SELinux relabeling.",
     "required": [
@@ -74759,7 +75940,7 @@
       "type": "string"
      },
      "initiatorName": {
-      "description": "Custom iSCSI initiator name. If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface \u003ctarget portal\u003e:\u003cvolume name\u003e will be created for the connection.",
+      "description": "Custom iSCSI Initiator Name. If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface \u003ctarget portal\u003e:\u003cvolume name\u003e will be created for the connection.",
       "type": "string"
      },
      "iqn": {
@@ -74767,16 +75948,16 @@
       "type": "string"
      },
      "iscsiInterface": {
-      "description": "Optional: Defaults to 'default' (tcp). iSCSI interface name that uses an iSCSI transport.",
+      "description": "iSCSI Interface Name that uses an iSCSI transport. Defaults to 'default' (tcp).",
       "type": "string"
      },
      "lun": {
-      "description": "iSCSI target lun number.",
+      "description": "iSCSI Target Lun number.",
       "type": "integer",
       "format": "int32"
      },
      "portals": {
-      "description": "iSCSI target portal List. The portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260).",
+      "description": "iSCSI Target Portal List. The portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260).",
       "type": "array",
       "items": {
        "type": "string"
@@ -74787,11 +75968,11 @@
       "type": "boolean"
      },
      "secretRef": {
-      "description": "CHAP secret for iSCSI target and initiator authentication",
+      "description": "CHAP Secret for iSCSI target and initiator authentication",
       "$ref": "#/definitions/io.k8s.api.core.v1.LocalObjectReference"
      },
      "targetPortal": {
-      "description": "iSCSI target portal. The portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260).",
+      "description": "iSCSI Target Portal. The Portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260).",
       "type": "string"
      }
     }
@@ -75683,6 +76864,10 @@
       "description": "Name of the StorageClass required by the claim. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1",
       "type": "string"
      },
+     "volumeMode": {
+      "description": "volumeMode defines what type of volume is required by the claim. Value of Filesystem is implied when not included in claim spec. This is an alpha feature and may change in the future.",
+      "type": "string"
+     },
      "volumeName": {
       "description": "VolumeName is the binding reference to the PersistentVolume backing this claim.",
       "type": "string"
@@ -75812,6 +76997,10 @@
       "description": "ClaimRef is part of a bi-directional binding between PersistentVolume and PersistentVolumeClaim. Expected to be non-nil when bound. claim.VolumeName is the authoritative bind between PV and PVC. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#binding",
       "$ref": "#/definitions/io.k8s.api.core.v1.ObjectReference"
      },
+     "csi": {
+      "description": "CSI represents storage that handled by an external CSI driver",
+      "$ref": "#/definitions/io.k8s.api.core.v1.CSIPersistentVolumeSource"
+     },
      "fc": {
       "description": "FC represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.",
       "$ref": "#/definitions/io.k8s.api.core.v1.FCVolumeSource"
@@ -75838,7 +77027,7 @@
      },
      "iscsi": {
       "description": "ISCSI represents an ISCSI Disk resource that is attached to a kubelet's host machine and then exposed to the pod. Provisioned by an admin.",
-      "$ref": "#/definitions/io.k8s.api.core.v1.ISCSIVolumeSource"
+      "$ref": "#/definitions/io.k8s.api.core.v1.ISCSIPersistentVolumeSource"
      },
      "local": {
       "description": "Local represents directly-attached storage with node affinity",
@@ -75886,6 +77075,10 @@
      "storageos": {
       "description": "StorageOS represents a StorageOS volume that is attached to the kubelet's host machine and mounted into the pod More info: https://releases.k8s.io/HEAD/examples/volumes/storageos/README.md",
       "$ref": "#/definitions/io.k8s.api.core.v1.StorageOSPersistentVolumeSource"
+     },
+     "volumeMode": {
+      "description": "volumeMode defines if a volume is intended to be used with a formatted filesystem or to remain in raw block state. Value of Filesystem is implied when not included in spec. This is an alpha feature and may change in the future.",
+      "type": "string"
      },
      "vsphereVolume": {
       "description": "VsphereVolume represents a vSphere volume attached and mounted on kubelets host machine",
@@ -76052,6 +77245,44 @@
      }
     }
    },
+   "io.k8s.api.core.v1.PodDNSConfig": {
+    "description": "PodDNSConfig defines the DNS parameters of a pod in addition to those generated from DNSPolicy.",
+    "properties": {
+     "nameservers": {
+      "description": "A list of DNS name server IP addresses. This will be appended to the base nameservers generated from DNSPolicy. Duplicated nameservers will be removed.",
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "options": {
+      "description": "A list of DNS resolver options. This will be merged with the base options generated from DNSPolicy. Duplicated entries will be removed. Resolution options given in Options will override those that appear in the base DNSPolicy.",
+      "type": "array",
+      "items": {
+       "$ref": "#/definitions/io.k8s.api.core.v1.PodDNSConfigOption"
+      }
+     },
+     "searches": {
+      "description": "A list of DNS search domains for host-name lookup. This will be appended to the base search paths generated from DNSPolicy. Duplicated search paths will be removed.",
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "io.k8s.api.core.v1.PodDNSConfigOption": {
+    "description": "PodDNSConfigOption defines DNS resolver options of a pod.",
+    "properties": {
+     "name": {
+      "description": "Required.",
+      "type": "string"
+     },
+     "value": {
+      "type": "string"
+     }
+    }
+   },
    "io.k8s.api.core.v1.PodList": {
     "description": "PodList is a list of Pods.",
     "required": [
@@ -76145,8 +77376,12 @@
       "x-kubernetes-patch-merge-key": "name",
       "x-kubernetes-patch-strategy": "merge"
      },
+     "dnsConfig": {
+      "description": "Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy. This is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.",
+      "$ref": "#/definitions/io.k8s.api.core.v1.PodDNSConfig"
+     },
      "dnsPolicy": {
-      "description": "Set DNS policy for containers within the pod. One of 'ClusterFirstWithHostNet', 'ClusterFirst' or 'Default'. Defaults to \"ClusterFirst\". To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.",
+      "description": "Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'. Note that 'None' policy is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.",
       "type": "string"
      },
      "hostAliases": {
@@ -77425,7 +78660,7 @@
       }
      },
      "externalName": {
-      "description": "externalName is the external reference that kubedns or equivalent will return as a CNAME record for this service. No proxying will be involved. Must be a valid DNS name and requires Type to be ExternalName.",
+      "description": "externalName is the external reference that kubedns or equivalent will return as a CNAME record for this service. No proxying will be involved. Must be a valid RFC-1123 hostname (https://tools.ietf.org/html/rfc1123) and requires Type to be ExternalName.",
       "type": "string"
      },
      "externalTrafficPolicy": {
@@ -77737,6 +78972,23 @@
      }
     }
    },
+   "io.k8s.api.core.v1.VolumeDevice": {
+    "description": "volumeDevice describes a mapping of a raw block device within a container.",
+    "required": [
+     "name",
+     "devicePath"
+    ],
+    "properties": {
+     "devicePath": {
+      "description": "devicePath is the path inside of the container that the device will be mapped to.",
+      "type": "string"
+     },
+     "name": {
+      "description": "name must match the name of a persistentVolumeClaim in the pod",
+      "type": "string"
+     }
+    }
+   },
    "io.k8s.api.core.v1.VolumeMount": {
     "description": "VolumeMount describes a mounting of a Volume within a container.",
     "required": [
@@ -77822,6 +79074,158 @@
       "description": "weight associated with matching the corresponding podAffinityTerm, in the range 1-100.",
       "type": "integer",
       "format": "int32"
+     }
+    }
+   },
+   "io.k8s.api.events.v1beta1.Event": {
+    "description": "Event is a report of an event somewhere in the cluster. It generally denotes some state change in the system.",
+    "required": [
+     "eventTime"
+    ],
+    "properties": {
+     "action": {
+      "description": "What action was taken/failed regarding to the regarding object.",
+      "type": "string"
+     },
+     "apiVersion": {
+      "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+      "type": "string"
+     },
+     "deprecatedCount": {
+      "description": "Deprecated field assuring backward compatibility with core.v1 Event type",
+      "type": "integer",
+      "format": "int32"
+     },
+     "deprecatedFirstTimestamp": {
+      "description": "Deprecated field assuring backward compatibility with core.v1 Event type",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
+     },
+     "deprecatedLastTimestamp": {
+      "description": "Deprecated field assuring backward compatibility with core.v1 Event type",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
+     },
+     "deprecatedSource": {
+      "description": "Deprecated field assuring backward compatibility with core.v1 Event type",
+      "$ref": "#/definitions/io.k8s.api.core.v1.EventSource"
+     },
+     "eventTime": {
+      "description": "Required. Time when this Event was first observed.",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.MicroTime"
+     },
+     "kind": {
+      "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+      "type": "string"
+     },
+     "metadata": {
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+     },
+     "note": {
+      "description": "Optional. A human-readable description of the status of this operation. Maximal length of the note is 1kB, but libraries should be prepared to handle values up to 64kB.",
+      "type": "string"
+     },
+     "reason": {
+      "description": "Why the action was taken.",
+      "type": "string"
+     },
+     "regarding": {
+      "description": "The object this Event is about. In most cases it's an Object reporting controller implements. E.g. ReplicaSetController implements ReplicaSets and this event is emitted because it acts on some changes in a ReplicaSet object.",
+      "$ref": "#/definitions/io.k8s.api.core.v1.ObjectReference"
+     },
+     "related": {
+      "description": "Optional secondary object for more complex actions. E.g. when regarding object triggers a creation or deletion of related object.",
+      "$ref": "#/definitions/io.k8s.api.core.v1.ObjectReference"
+     },
+     "reportingController": {
+      "description": "Name of the controller that emitted this Event, e.g. `kubernetes.io/kubelet`.",
+      "type": "string"
+     },
+     "reportingInstance": {
+      "description": "ID of the controller instance, e.g. `kubelet-xyzf`.",
+      "type": "string"
+     },
+     "series": {
+      "description": "Data about the Event series this event represents or nil if it's a singleton Event.",
+      "$ref": "#/definitions/io.k8s.api.events.v1beta1.EventSeries"
+     },
+     "type": {
+      "description": "Type of this event (Normal, Warning), new types could be added in the future.",
+      "type": "string"
+     }
+    },
+    "x-kubernetes-group-version-kind": [
+     {
+      "group": "events.k8s.io",
+      "kind": "Event",
+      "version": "v1beta1"
+     }
+    ]
+   },
+   "io.k8s.api.events.v1beta1.EventList": {
+    "description": "EventList is a list of Event objects.",
+    "required": [
+     "items"
+    ],
+    "properties": {
+     "apiVersion": {
+      "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+      "type": "string"
+     },
+     "items": {
+      "description": "Items is a list of schema objects.",
+      "type": "array",
+      "items": {
+       "$ref": "#/definitions/io.k8s.api.events.v1beta1.Event"
+      }
+     },
+     "kind": {
+      "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+      "type": "string"
+     },
+     "metadata": {
+      "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#metadata",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta"
+     }
+    },
+    "x-kubernetes-group-version-kind": [
+     {
+      "group": "events.k8s.io",
+      "kind": "EventList",
+      "version": "v1beta1"
+     }
+    ]
+   },
+   "io.k8s.api.events.v1beta1.EventSeries": {
+    "description": "EventSeries contain information on series of events, i.e. thing that was/is happening continously for some time.",
+    "required": [
+     "count",
+     "lastObservedTime",
+     "state"
+    ],
+    "properties": {
+     "count": {
+      "description": "Number of occurrences in this series up to the last heartbeat time",
+      "type": "integer",
+      "format": "int32"
+     },
+     "lastObservedTime": {
+      "description": "Time when last Event from the series was seen before last heartbeat.",
+      "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.MicroTime"
+     },
+     "state": {
+      "description": "Information whether this series is ongoing or finished.",
+      "type": "string"
+     }
+    }
+   },
+   "io.k8s.api.extensions.v1beta1.AllowedFlexVolume": {
+    "description": "AllowedFlexVolume represents a single Flexvolume that is allowed to be used.",
+    "required": [
+     "driver"
+    ],
+    "properties": {
+     "driver": {
+      "description": "Driver is the name of the Flexvolume driver.",
+      "type": "string"
      }
     }
    },
@@ -78376,7 +79780,7 @@
     }
    },
    "io.k8s.api.extensions.v1beta1.IPBlock": {
-    "description": "IPBlock describes a particular CIDR (Ex. \"192.168.1.1/24\") that is allowed to the pods matched by a NetworkPolicySpec's podSelector. The except entry describes CIDRs that should not be included within this rule.",
+    "description": "DEPRECATED 1.9 - This group version of IPBlock is deprecated by networking/v1/IPBlock. IPBlock describes a particular CIDR (Ex. \"192.168.1.1/24\") that is allowed to the pods matched by a NetworkPolicySpec's podSelector. The except entry describes CIDRs that should not be included within this rule.",
     "required": [
      "cidr"
     ],
@@ -78538,7 +79942,7 @@
     }
    },
    "io.k8s.api.extensions.v1beta1.NetworkPolicy": {
-    "description": "NetworkPolicy describes what network traffic is allowed for a set of Pods",
+    "description": "DEPRECATED 1.9 - This group version of NetworkPolicy is deprecated by networking/v1/NetworkPolicy. NetworkPolicy describes what network traffic is allowed for a set of Pods",
     "properties": {
      "apiVersion": {
       "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
@@ -78566,7 +79970,7 @@
     ]
    },
    "io.k8s.api.extensions.v1beta1.NetworkPolicyEgressRule": {
-    "description": "NetworkPolicyEgressRule describes a particular set of traffic that is allowed out of pods matched by a NetworkPolicySpec's podSelector. The traffic must match both ports and to. This type is beta-level in 1.8",
+    "description": "DEPRECATED 1.9 - This group version of NetworkPolicyEgressRule is deprecated by networking/v1/NetworkPolicyEgressRule. NetworkPolicyEgressRule describes a particular set of traffic that is allowed out of pods matched by a NetworkPolicySpec's podSelector. The traffic must match both ports and to. This type is beta-level in 1.8",
     "properties": {
      "ports": {
       "description": "List of destination ports for outgoing traffic. Each item in this list is combined using a logical OR. If this field is empty or missing, this rule matches all ports (traffic not restricted by port). If this field is present and contains at least one item, then this rule allows traffic only if the traffic matches at least one port in the list.",
@@ -78585,7 +79989,7 @@
     }
    },
    "io.k8s.api.extensions.v1beta1.NetworkPolicyIngressRule": {
-    "description": "This NetworkPolicyIngressRule matches traffic if and only if the traffic matches both ports AND from.",
+    "description": "DEPRECATED 1.9 - This group version of NetworkPolicyIngressRule is deprecated by networking/v1/NetworkPolicyIngressRule. This NetworkPolicyIngressRule matches traffic if and only if the traffic matches both ports AND from.",
     "properties": {
      "from": {
       "description": "List of sources which should be able to access the pods selected for this rule. Items in this list are combined using a logical OR operation. If this field is empty or missing, this rule matches all sources (traffic not restricted by source). If this field is present and contains at least on item, this rule allows traffic only if the traffic matches at least one item in the from list.",
@@ -78604,7 +80008,7 @@
     }
    },
    "io.k8s.api.extensions.v1beta1.NetworkPolicyList": {
-    "description": "Network Policy List is a list of NetworkPolicy objects.",
+    "description": "DEPRECATED 1.9 - This group version of NetworkPolicyList is deprecated by networking/v1/NetworkPolicyList. Network Policy List is a list of NetworkPolicy objects.",
     "required": [
      "items"
     ],
@@ -78638,6 +80042,7 @@
     ]
    },
    "io.k8s.api.extensions.v1beta1.NetworkPolicyPeer": {
+    "description": "DEPRECATED 1.9 - This group version of NetworkPolicyPeer is deprecated by networking/v1/NetworkPolicyPeer.",
     "properties": {
      "ipBlock": {
       "description": "IPBlock defines policy on a particular IPBlock",
@@ -78654,6 +80059,7 @@
     }
    },
    "io.k8s.api.extensions.v1beta1.NetworkPolicyPort": {
+    "description": "DEPRECATED 1.9 - This group version of NetworkPolicyPort is deprecated by networking/v1/NetworkPolicyPort.",
     "properties": {
      "port": {
       "description": "If specified, the port on the given protocol.  This can either be a numerical or named port on a pod.  If this field is not provided, this matches all port names and numbers. If present, only traffic on the specified protocol AND port will be matched.",
@@ -78666,6 +80072,7 @@
     }
    },
    "io.k8s.api.extensions.v1beta1.NetworkPolicySpec": {
+    "description": "DEPRECATED 1.9 - This group version of NetworkPolicySpec is deprecated by networking/v1/NetworkPolicySpec.",
     "required": [
      "podSelector"
     ],
@@ -78777,6 +80184,13 @@
       "type": "array",
       "items": {
        "type": "string"
+      }
+     },
+     "allowedFlexVolumes": {
+      "description": "AllowedFlexVolumes is a whitelist of allowed Flexvolumes.  Empty or nil indicates that all Flexvolumes may be used.  This parameter is effective only when the usage of the Flexvolumes is allowed in the \"Volumes\" field.",
+      "type": "array",
+      "items": {
+       "$ref": "#/definitions/io.k8s.api.extensions.v1beta1.AllowedFlexVolume"
       }
      },
      "allowedHostPaths": {
@@ -81798,12 +83212,17 @@
      {
       "group": "admission.k8s.io",
       "kind": "DeleteOptions",
-      "version": "v1alpha1"
+      "version": "v1beta1"
      },
      {
       "group": "admissionregistration.k8s.io",
       "kind": "DeleteOptions",
       "version": "v1alpha1"
+     },
+     {
+      "group": "admissionregistration.k8s.io",
+      "kind": "DeleteOptions",
+      "version": "v1beta1"
      },
      {
       "group": "apps",
@@ -81867,6 +83286,11 @@
      },
      {
       "group": "certificates.k8s.io",
+      "kind": "DeleteOptions",
+      "version": "v1beta1"
+     },
+     {
+      "group": "events.k8s.io",
       "kind": "DeleteOptions",
       "version": "v1beta1"
      },
@@ -82043,6 +83467,10 @@
       "type": "string"
      }
     }
+   },
+   "io.k8s.apimachinery.pkg.apis.meta.v1.MicroTime": {
+    "type": "string",
+    "format": "date-time"
    },
    "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta": {
     "description": "ObjectMeta is metadata that all persisted resources must have, which includes all objects users must create.",
@@ -82317,12 +83745,17 @@
      {
       "group": "admission.k8s.io",
       "kind": "WatchEvent",
-      "version": "v1alpha1"
+      "version": "v1beta1"
      },
      {
       "group": "admissionregistration.k8s.io",
       "kind": "WatchEvent",
       "version": "v1alpha1"
+     },
+     {
+      "group": "admissionregistration.k8s.io",
+      "kind": "WatchEvent",
+      "version": "v1beta1"
      },
      {
       "group": "apps",
@@ -82386,6 +83819,11 @@
      },
      {
       "group": "certificates.k8s.io",
+      "kind": "WatchEvent",
+      "version": "v1beta1"
+     },
+     {
+      "group": "events.k8s.io",
       "kind": "WatchEvent",
       "version": "v1beta1"
      },
@@ -83268,26 +84706,6 @@
    "io.k8s.kubernetes.pkg.apis.admissionregistration.v1alpha1.Rule": {
     "description": "Deprecated. Please use io.k8s.api.admissionregistration.v1alpha1.Rule instead.",
     "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.Rule"
-   },
-   "io.k8s.kubernetes.pkg.apis.admissionregistration.v1alpha1.RuleWithOperations": {
-    "description": "Deprecated. Please use io.k8s.api.admissionregistration.v1alpha1.RuleWithOperations instead.",
-    "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.RuleWithOperations"
-   },
-   "io.k8s.kubernetes.pkg.apis.admissionregistration.v1alpha1.ServiceReference": {
-    "description": "Deprecated. Please use io.k8s.api.admissionregistration.v1alpha1.ServiceReference instead.",
-    "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ServiceReference"
-   },
-   "io.k8s.kubernetes.pkg.apis.admissionregistration.v1alpha1.ValidatingWebhookConfiguration": {
-    "description": "Deprecated. Please use io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration instead.",
-    "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfiguration"
-   },
-   "io.k8s.kubernetes.pkg.apis.admissionregistration.v1alpha1.ValidatingWebhookConfigurationList": {
-    "description": "Deprecated. Please use io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfigurationList instead.",
-    "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.ValidatingWebhookConfigurationList"
-   },
-   "io.k8s.kubernetes.pkg.apis.admissionregistration.v1alpha1.Webhook": {
-    "description": "Deprecated. Please use io.k8s.api.admissionregistration.v1alpha1.Webhook instead.",
-    "$ref": "#/definitions/io.k8s.api.admissionregistration.v1alpha1.Webhook"
    },
    "io.k8s.kubernetes.pkg.apis.apps.v1beta1.ControllerRevision": {
     "description": "Deprecated. Please use io.k8s.api.apps.v1beta1.ControllerRevision instead.",

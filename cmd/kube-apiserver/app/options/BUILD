@@ -30,6 +30,7 @@ go_library(
         "//plugin/pkg/admission/deny:go_default_library",
         "//plugin/pkg/admission/eventratelimit:go_default_library",
         "//plugin/pkg/admission/exec:go_default_library",
+        "//plugin/pkg/admission/extendedresourcetoleration:go_default_library",
         "//plugin/pkg/admission/gc:go_default_library",
         "//plugin/pkg/admission/imagepolicy:go_default_library",
         "//plugin/pkg/admission/initialresources:go_default_library",
@@ -39,6 +40,7 @@ go_library(
         "//plugin/pkg/admission/noderestriction:go_default_library",
         "//plugin/pkg/admission/persistentvolume/label:go_default_library",
         "//plugin/pkg/admission/persistentvolume/resize:go_default_library",
+        "//plugin/pkg/admission/persistentvolumeclaim/pvcprotection:go_default_library",
         "//plugin/pkg/admission/podnodeselector:go_default_library",
         "//plugin/pkg/admission/podpreset:go_default_library",
         "//plugin/pkg/admission/podtolerationrestriction:go_default_library",
@@ -72,6 +74,7 @@ go_test(
         "//vendor/k8s.io/apiserver/pkg/server/options:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/storage/storagebackend:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/util/flag:go_default_library",
+        "//vendor/k8s.io/apiserver/plugin/pkg/audit/webhook:go_default_library",
         "//vendor/k8s.io/client-go/rest:go_default_library",
     ],
 )

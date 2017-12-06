@@ -18,7 +18,6 @@ package dns
 
 import (
 	"fmt"
-	"net"
 	"runtime"
 
 	apps "k8s.io/api/apps/v1beta2"
@@ -34,7 +33,6 @@ import (
 	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	"k8s.io/kubernetes/cmd/kubeadm/app/util/apiclient"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
-	"k8s.io/kubernetes/pkg/registry/core/service/ipallocator"
 	"k8s.io/kubernetes/pkg/util/version"
 )
 
@@ -60,27 +58,30 @@ func kubeDNSAddon(cfg *kubeadmapi.MasterConfiguration, client clientset.Interfac
 		return err
 	}
 
-	dnsip, err := GetDNSIP(cfg.Networking.ServiceSubnet)
+	dnsip, err := kubeadmconstants.GetDNSIP(cfg.Networking.ServiceSubnet)
 	if err != nil {
 		return err
 	}
 
-	var dnsBindAddr string
+	var dnsBindAddr, dnsProbeAddr string
 	if dnsip.To4() == nil {
 		dnsBindAddr = "::1"
+		dnsProbeAddr = "[" + dnsBindAddr + "]"
 	} else {
 		dnsBindAddr = "127.0.0.1"
+		dnsProbeAddr = dnsBindAddr
 	}
 
 	// Get the YAML manifest conditionally based on the k8s version
 	kubeDNSDeploymentBytes := GetKubeDNSManifest(k8sVersion)
 	dnsDeploymentBytes, err := kubeadmutil.ParseTemplate(kubeDNSDeploymentBytes,
-		struct{ ImageRepository, Arch, Version, DNSBindAddr, DNSDomain, DNSProbeType, MasterTaintKey string }{
+		struct{ ImageRepository, Arch, Version, DNSBindAddr, DNSProbeAddr, DNSDomain, DNSProbeType, MasterTaintKey string }{
 			ImageRepository: cfg.ImageRepository,
 			Arch:            runtime.GOARCH,
 			// Get the kube-dns version conditionally based on the k8s version
 			Version:        GetDNSVersion(k8sVersion, kubeadmconstants.KubeDNS),
 			DNSBindAddr:    dnsBindAddr,
+			DNSProbeAddr:   dnsProbeAddr,
 			DNSDomain:      cfg.Networking.DNSDomain,
 			DNSProbeType:   GetKubeDNSProbeType(k8sVersion),
 			MasterTaintKey: kubeadmconstants.LabelNodeRoleMaster,
@@ -149,7 +150,7 @@ func coreDNSAddon(cfg *kubeadmapi.MasterConfiguration, client clientset.Interfac
 		return fmt.Errorf("error when parsing CoreDNS configMap template: %v", err)
 	}
 
-	dnsip, err := GetDNSIP(cfg.Networking.ServiceSubnet)
+	dnsip, err := kubeadmconstants.GetDNSIP(cfg.Networking.ServiceSubnet)
 	if err != nil {
 		return err
 	}
@@ -243,22 +244,4 @@ func createDNSService(dnsService *v1.Service, serviceBytes []byte, client client
 		}
 	}
 	return nil
-}
-
-// GetDNSIP returns a dnsIP, which is 10th IP in svcSubnet CIDR range
-func GetDNSIP(svcSubnet string) (net.IP, error) {
-
-	// Get the service subnet CIDR
-	_, svcSubnetCIDR, err := net.ParseCIDR(svcSubnet)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't parse service subnet CIDR %q: %v", svcSubnet, err)
-	}
-
-	// Selects the 10th IP in service subnet CIDR range as dnsIP
-	dnsIP, err := ipallocator.GetIndexedIP(svcSubnetCIDR, 10)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get tenth IP address from service subnet CIDR %s: %v", svcSubnetCIDR.String(), err)
-	}
-
-	return dnsIP, nil
 }

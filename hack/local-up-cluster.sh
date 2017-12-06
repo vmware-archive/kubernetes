@@ -419,7 +419,9 @@ function start_apiserver {
     fi
 
     # Admission Controllers to invoke prior to persisting objects in cluster
-    ADMISSION_CONTROL=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount${security_admission},DefaultStorageClass,DefaultTolerationSeconds,GenericAdmissionWebhook,ResourceQuota
+    #
+    # ResourceQuota must come last, or a creation is recorded, but the pod may be forbidden.
+    ADMISSION_CONTROL=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount${security_admission},DefaultStorageClass,DefaultTolerationSeconds,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota
     # This is the default dir and filename where the apiserver will generate a self-signed cert
     # which should be able to be used as the CA to verify itself
 
@@ -760,6 +762,7 @@ EOF
     ${CONTROLPLANE_SUDO} "${GO_OUT}/hyperkube" scheduler \
       --v=${LOG_LEVEL} \
       --kubeconfig "$CERT_DIR"/scheduler.kubeconfig \
+      --feature-gates="${FEATURE_GATES}" \
       --master="https://${API_HOST}:${API_SECURE_PORT}" >"${SCHEDULER_LOG}" 2>&1 &
     SCHEDULER_PID=$!
 }
@@ -782,8 +785,11 @@ function start_kubedashboard {
     if [[ "${ENABLE_CLUSTER_DASHBOARD}" = true ]]; then
         echo "Creating kubernetes-dashboard"
         # use kubectl to create the dashboard
-        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" create -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-controller.yaml
-        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" create -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-service.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" apply -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-secret.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" apply -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-configmap.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" apply -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-rbac.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" apply -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-controller.yaml
+        ${KUBECTL} --kubeconfig="${CERT_DIR}/admin.kubeconfig" apply -f ${KUBE_ROOT}/cluster/addons/dashboard/dashboard-service.yaml
         echo "kubernetes-dashboard deployment and service successfully deployed."
     fi
 }

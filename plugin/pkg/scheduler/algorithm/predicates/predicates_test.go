@@ -17,15 +17,16 @@ limitations under the License.
 package predicates
 
 import (
-	"fmt"
 	"os"
 	"reflect"
 	"strconv"
 	"testing"
 
 	"k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm"
@@ -34,73 +35,33 @@ import (
 	schedutil "k8s.io/kubernetes/plugin/pkg/scheduler/util"
 )
 
-type FakeNodeInfo v1.Node
-
-func (n FakeNodeInfo) GetNodeInfo(nodeName string) (*v1.Node, error) {
-	node := v1.Node(n)
-	return &node, nil
-}
-
-type FakeNodeListInfo []v1.Node
-
-func (nodes FakeNodeListInfo) GetNodeInfo(nodeName string) (*v1.Node, error) {
-	for _, node := range nodes {
-		if node.Name == nodeName {
-			return &node, nil
-		}
-	}
-	return nil, fmt.Errorf("Unable to find node: %s", nodeName)
-}
-
-type FakePersistentVolumeClaimInfo []v1.PersistentVolumeClaim
-
-func (pvcs FakePersistentVolumeClaimInfo) GetPersistentVolumeClaimInfo(namespace string, pvcID string) (*v1.PersistentVolumeClaim, error) {
-	for _, pvc := range pvcs {
-		if pvc.Name == pvcID && pvc.Namespace == namespace {
-			return &pvc, nil
-		}
-	}
-	return nil, fmt.Errorf("Unable to find persistent volume claim: %s/%s", namespace, pvcID)
-}
-
-type FakePersistentVolumeInfo []v1.PersistentVolume
-
-func (pvs FakePersistentVolumeInfo) GetPersistentVolumeInfo(pvID string) (*v1.PersistentVolume, error) {
-	for _, pv := range pvs {
-		if pv.Name == pvID {
-			return &pv, nil
-		}
-	}
-	return nil, fmt.Errorf("Unable to find persistent volume: %s", pvID)
-}
-
 var (
-	opaqueResourceA   = v1helper.OpaqueIntResourceName("AAA")
-	opaqueResourceB   = v1helper.OpaqueIntResourceName("BBB")
+	extendedResourceA = v1.ResourceName("example.com/aaa")
+	extendedResourceB = v1.ResourceName("example.com/bbb")
 	hugePageResourceA = v1helper.HugePageResourceName(resource.MustParse("2Mi"))
 )
 
-func makeResources(milliCPU, memory, nvidiaGPUs, pods, opaqueA, storage, hugePageA int64) v1.NodeResources {
+func makeResources(milliCPU, memory, nvidiaGPUs, pods, extendedA, storage, hugePageA int64) v1.NodeResources {
 	return v1.NodeResources{
 		Capacity: v1.ResourceList{
 			v1.ResourceCPU:              *resource.NewMilliQuantity(milliCPU, resource.DecimalSI),
 			v1.ResourceMemory:           *resource.NewQuantity(memory, resource.BinarySI),
 			v1.ResourcePods:             *resource.NewQuantity(pods, resource.DecimalSI),
 			v1.ResourceNvidiaGPU:        *resource.NewQuantity(nvidiaGPUs, resource.DecimalSI),
-			opaqueResourceA:             *resource.NewQuantity(opaqueA, resource.DecimalSI),
+			extendedResourceA:           *resource.NewQuantity(extendedA, resource.DecimalSI),
 			v1.ResourceEphemeralStorage: *resource.NewQuantity(storage, resource.BinarySI),
 			hugePageResourceA:           *resource.NewQuantity(hugePageA, resource.BinarySI),
 		},
 	}
 }
 
-func makeAllocatableResources(milliCPU, memory, nvidiaGPUs, pods, opaqueA, storage, hugePageA int64) v1.ResourceList {
+func makeAllocatableResources(milliCPU, memory, nvidiaGPUs, pods, extendedA, storage, hugePageA int64) v1.ResourceList {
 	return v1.ResourceList{
 		v1.ResourceCPU:              *resource.NewMilliQuantity(milliCPU, resource.DecimalSI),
 		v1.ResourceMemory:           *resource.NewQuantity(memory, resource.BinarySI),
 		v1.ResourcePods:             *resource.NewQuantity(pods, resource.DecimalSI),
 		v1.ResourceNvidiaGPU:        *resource.NewQuantity(nvidiaGPUs, resource.DecimalSI),
-		opaqueResourceA:             *resource.NewQuantity(opaqueA, resource.DecimalSI),
+		extendedResourceA:           *resource.NewQuantity(extendedA, resource.DecimalSI),
 		v1.ResourceEphemeralStorage: *resource.NewQuantity(storage, resource.BinarySI),
 		hugePageResourceA:           *resource.NewQuantity(hugePageA, resource.BinarySI),
 	}
@@ -240,99 +201,99 @@ func TestPodFitsResources(t *testing.T) {
 			test: "equal edge case for init container",
 		},
 		{
-			pod:      newResourcePod(schedulercache.Resource{ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 1}}),
+			pod:      newResourcePod(schedulercache.Resource{ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 1}}),
 			nodeInfo: schedulercache.NewNodeInfo(newResourcePod(schedulercache.Resource{})),
 			fits:     true,
-			test:     "opaque resource fits",
+			test:     "extended resource fits",
 		},
 		{
-			pod:      newResourceInitPod(newResourcePod(schedulercache.Resource{}), schedulercache.Resource{ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 1}}),
+			pod:      newResourceInitPod(newResourcePod(schedulercache.Resource{}), schedulercache.Resource{ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 1}}),
 			nodeInfo: schedulercache.NewNodeInfo(newResourcePod(schedulercache.Resource{})),
 			fits:     true,
-			test:     "opaque resource fits for init container",
+			test:     "extended resource fits for init container",
 		},
 		{
 			pod: newResourcePod(
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 10}}),
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 10}}),
 			nodeInfo: schedulercache.NewNodeInfo(
-				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 0}})),
+				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 0}})),
 			fits:    false,
-			test:    "opaque resource capacity enforced",
-			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(opaqueResourceA, 10, 0, 5)},
+			test:    "extended resource capacity enforced",
+			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(extendedResourceA, 10, 0, 5)},
 		},
 		{
 			pod: newResourceInitPod(newResourcePod(schedulercache.Resource{}),
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 10}}),
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 10}}),
 			nodeInfo: schedulercache.NewNodeInfo(
-				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 0}})),
+				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 0}})),
 			fits:    false,
-			test:    "opaque resource capacity enforced for init container",
-			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(opaqueResourceA, 10, 0, 5)},
+			test:    "extended resource capacity enforced for init container",
+			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(extendedResourceA, 10, 0, 5)},
 		},
 		{
 			pod: newResourcePod(
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 1}}),
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 1}}),
 			nodeInfo: schedulercache.NewNodeInfo(
-				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 5}})),
+				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 5}})),
 			fits:    false,
-			test:    "opaque resource allocatable enforced",
-			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(opaqueResourceA, 1, 5, 5)},
+			test:    "extended resource allocatable enforced",
+			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(extendedResourceA, 1, 5, 5)},
 		},
 		{
 			pod: newResourceInitPod(newResourcePod(schedulercache.Resource{}),
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 1}}),
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 1}}),
 			nodeInfo: schedulercache.NewNodeInfo(
-				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 5}})),
+				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 5}})),
 			fits:    false,
-			test:    "opaque resource allocatable enforced for init container",
-			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(opaqueResourceA, 1, 5, 5)},
+			test:    "extended resource allocatable enforced for init container",
+			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(extendedResourceA, 1, 5, 5)},
 		},
 		{
 			pod: newResourcePod(
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 3}},
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 3}}),
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 3}},
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 3}}),
 			nodeInfo: schedulercache.NewNodeInfo(
-				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 2}})),
+				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 2}})),
 			fits:    false,
-			test:    "opaque resource allocatable enforced for multiple containers",
-			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(opaqueResourceA, 6, 2, 5)},
+			test:    "extended resource allocatable enforced for multiple containers",
+			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(extendedResourceA, 6, 2, 5)},
 		},
 		{
 			pod: newResourceInitPod(newResourcePod(schedulercache.Resource{}),
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 3}},
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 3}}),
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 3}},
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 3}}),
 			nodeInfo: schedulercache.NewNodeInfo(
-				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 2}})),
+				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 2}})),
 			fits: true,
-			test: "opaque resource allocatable admits multiple init containers",
+			test: "extended resource allocatable admits multiple init containers",
 		},
 		{
 			pod: newResourceInitPod(newResourcePod(schedulercache.Resource{}),
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 6}},
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 3}}),
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 6}},
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 3}}),
 			nodeInfo: schedulercache.NewNodeInfo(
-				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{opaqueResourceA: 2}})),
+				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0, ScalarResources: map[v1.ResourceName]int64{extendedResourceA: 2}})),
 			fits:    false,
-			test:    "opaque resource allocatable enforced for multiple init containers",
-			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(opaqueResourceA, 6, 2, 5)},
+			test:    "extended resource allocatable enforced for multiple init containers",
+			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(extendedResourceA, 6, 2, 5)},
 		},
 		{
 			pod: newResourcePod(
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceB: 1}}),
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceB: 1}}),
 			nodeInfo: schedulercache.NewNodeInfo(
 				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0})),
 			fits:    false,
-			test:    "opaque resource allocatable enforced for unknown resource",
-			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(opaqueResourceB, 1, 0, 0)},
+			test:    "extended resource allocatable enforced for unknown resource",
+			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(extendedResourceB, 1, 0, 0)},
 		},
 		{
 			pod: newResourceInitPod(newResourcePod(schedulercache.Resource{}),
-				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{opaqueResourceB: 1}}),
+				schedulercache.Resource{MilliCPU: 1, Memory: 1, ScalarResources: map[v1.ResourceName]int64{extendedResourceB: 1}}),
 			nodeInfo: schedulercache.NewNodeInfo(
 				newResourcePod(schedulercache.Resource{MilliCPU: 0, Memory: 0})),
 			fits:    false,
-			test:    "opaque resource allocatable enforced for unknown resource for init container",
-			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(opaqueResourceB, 1, 0, 0)},
+			test:    "extended resource allocatable enforced for unknown resource for init container",
+			reasons: []algorithm.PredicateFailureReason{NewInsufficientResourceError(extendedResourceB, 1, 0, 0)},
 		},
 		{
 			pod: newResourcePod(
@@ -3834,7 +3795,7 @@ func TestVolumeZonePredicate(t *testing.T) {
 	expectedFailureReasons := []algorithm.PredicateFailureReason{ErrVolumeZoneConflict}
 
 	for _, test := range tests {
-		fit := NewVolumeZonePredicate(pvInfo, pvcInfo)
+		fit := NewVolumeZonePredicate(pvInfo, pvcInfo, nil)
 		node := &schedulercache.NodeInfo{}
 		node.SetNode(test.Node)
 
@@ -3927,7 +3888,7 @@ func TestVolumeZonePredicateMultiZone(t *testing.T) {
 	expectedFailureReasons := []algorithm.PredicateFailureReason{ErrVolumeZoneConflict}
 
 	for _, test := range tests {
-		fit := NewVolumeZonePredicate(pvInfo, pvcInfo)
+		fit := NewVolumeZonePredicate(pvInfo, pvcInfo, nil)
 		node := &schedulercache.NodeInfo{}
 		node.SetNode(test.Node)
 
@@ -3942,6 +3903,130 @@ func TestVolumeZonePredicateMultiZone(t *testing.T) {
 			t.Errorf("%s: expected %v got %v", test.Name, test.Fits, fits)
 		}
 
+	}
+}
+
+func TestVolumeZonePredicateWithVolumeBinding(t *testing.T) {
+	var (
+		modeWait = storagev1.VolumeBindingWaitForFirstConsumer
+
+		class0         = "Class_0"
+		classWait      = "Class_Wait"
+		classImmediate = "Class_Immediate"
+	)
+
+	classInfo := FakeStorageClassInfo{
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: classImmediate},
+		},
+		{
+			ObjectMeta:        metav1.ObjectMeta{Name: classWait},
+			VolumeBindingMode: &modeWait,
+		},
+	}
+
+	pvInfo := FakePersistentVolumeInfo{
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "Vol_1", Labels: map[string]string{kubeletapis.LabelZoneFailureDomain: "us-west1-a"}},
+		},
+	}
+
+	pvcInfo := FakePersistentVolumeClaimInfo{
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "PVC_1", Namespace: "default"},
+			Spec:       v1.PersistentVolumeClaimSpec{VolumeName: "Vol_1"},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "PVC_NoSC", Namespace: "default"},
+			Spec:       v1.PersistentVolumeClaimSpec{StorageClassName: &class0},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "PVC_EmptySC", Namespace: "default"},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "PVC_WaitSC", Namespace: "default"},
+			Spec:       v1.PersistentVolumeClaimSpec{StorageClassName: &classWait},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "PVC_ImmediateSC", Namespace: "default"},
+			Spec:       v1.PersistentVolumeClaimSpec{StorageClassName: &classImmediate},
+		},
+	}
+
+	testNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "host1",
+			Labels: map[string]string{kubeletapis.LabelZoneFailureDomain: "us-west1-a", "uselessLabel": "none"},
+		},
+	}
+
+	tests := []struct {
+		Name          string
+		Pod           *v1.Pod
+		Fits          bool
+		Node          *v1.Node
+		ExpectFailure bool
+	}{
+		{
+			Name: "label zone failure domain matched",
+			Pod:  createPodWithVolume("pod_1", "vol_1", "PVC_1"),
+			Node: testNode,
+			Fits: true,
+		},
+		{
+			Name:          "unbound volume empty storage class",
+			Pod:           createPodWithVolume("pod_1", "vol_1", "PVC_EmptySC"),
+			Node:          testNode,
+			Fits:          false,
+			ExpectFailure: true,
+		},
+		{
+			Name:          "unbound volume no storage class",
+			Pod:           createPodWithVolume("pod_1", "vol_1", "PVC_NoSC"),
+			Node:          testNode,
+			Fits:          false,
+			ExpectFailure: true,
+		},
+		{
+			Name:          "unbound volume immediate binding mode",
+			Pod:           createPodWithVolume("pod_1", "vol_1", "PVC_ImmediateSC"),
+			Node:          testNode,
+			Fits:          false,
+			ExpectFailure: true,
+		},
+		{
+			Name: "unbound volume wait binding mode",
+			Pod:  createPodWithVolume("pod_1", "vol_1", "PVC_WaitSC"),
+			Node: testNode,
+			Fits: true,
+		},
+	}
+
+	err := utilfeature.DefaultFeatureGate.Set("VolumeScheduling=true")
+	if err != nil {
+		t.Fatalf("Failed to enable feature gate for VolumeScheduling: %v", err)
+	}
+
+	for _, test := range tests {
+		fit := NewVolumeZonePredicate(pvInfo, pvcInfo, classInfo)
+		node := &schedulercache.NodeInfo{}
+		node.SetNode(test.Node)
+
+		fits, _, err := fit(test.Pod, nil, node)
+		if !test.ExpectFailure && err != nil {
+			t.Errorf("%s: unexpected error: %v", test.Name, err)
+		}
+		if test.ExpectFailure && err == nil {
+			t.Errorf("%s: expected error, got success", test.Name)
+		}
+		if fits != test.Fits {
+			t.Errorf("%s: expected %v got %v", test.Name, test.Fits, fits)
+		}
+	}
+
+	err = utilfeature.DefaultFeatureGate.Set("VolumeScheduling=false")
+	if err != nil {
+		t.Fatalf("Failed to disable feature gate for VolumeScheduling: %v", err)
 	}
 }
 

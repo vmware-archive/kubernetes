@@ -23,9 +23,10 @@ pkg/api/v1/resource
 pkg/apis/abac
 pkg/apis/abac/latest
 pkg/apis/admission
-pkg/apis/admission/v1alpha1
+pkg/apis/admission/v1beta1
 pkg/apis/admissionregistration
 pkg/apis/admissionregistration/v1alpha1
+pkg/apis/admissionregistration/v1beta1
 pkg/apis/admissionregistration/validation
 pkg/apis/apps
 pkg/apis/apps/validation
@@ -52,6 +53,8 @@ pkg/apis/core/v1/helper
 pkg/apis/core/v1/helper/qos
 pkg/apis/core/v1/validation
 pkg/apis/core/validation
+pkg/apis/events
+pkg/apis/events/v1beta1
 pkg/apis/extensions
 pkg/apis/extensions/validation
 pkg/apis/imagepolicy
@@ -291,6 +294,7 @@ pkg/registry/core/service/portallocator
 pkg/registry/core/service/portallocator/controller
 pkg/registry/core/service/storage
 pkg/registry/core/serviceaccount/storage
+pkg/registry/events/rest
 pkg/registry/extensions/controller/storage
 pkg/registry/extensions/daemonset
 pkg/registry/extensions/daemonset/storage
@@ -431,8 +435,9 @@ plugin/pkg/scheduler/metrics
 plugin/pkg/scheduler/schedulercache
 plugin/pkg/scheduler/testing
 plugin/pkg/scheduler/util
-staging/src/k8s.io/api/admission/v1alpha1
+staging/src/k8s.io/api/admission/v1beta1
 staging/src/k8s.io/api/admissionregistration/v1alpha1
+staging/src/k8s.io/api/admissionregistration/v1beta1
 staging/src/k8s.io/api/apps/v1
 staging/src/k8s.io/api/apps/v1beta1
 staging/src/k8s.io/api/apps/v1beta2
@@ -447,6 +452,7 @@ staging/src/k8s.io/api/batch/v1beta1
 staging/src/k8s.io/api/batch/v2alpha1
 staging/src/k8s.io/api/certificates/v1beta1
 staging/src/k8s.io/api/core/v1
+staging/src/k8s.io/api/events/v1beta1
 staging/src/k8s.io/api/extensions/v1beta1
 staging/src/k8s.io/api/imagepolicy/v1alpha1
 staging/src/k8s.io/api/networking/v1
@@ -504,7 +510,6 @@ staging/src/k8s.io/apimachinery/pkg/apis/meta/v1alpha1
 staging/src/k8s.io/apimachinery/pkg/apis/testapigroup
 staging/src/k8s.io/apimachinery/pkg/apis/testapigroup/v1
 staging/src/k8s.io/apimachinery/pkg/conversion
-staging/src/k8s.io/apimachinery/pkg/conversion/unstructured
 staging/src/k8s.io/apimachinery/pkg/labels
 staging/src/k8s.io/apimachinery/pkg/runtime/schema
 staging/src/k8s.io/apimachinery/pkg/runtime/serializer
@@ -543,6 +548,10 @@ staging/src/k8s.io/apiserver/pkg/admission/configuration
 staging/src/k8s.io/apiserver/pkg/admission/plugin/initialization
 staging/src/k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle
 staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/config
+staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/config/apis/webhookadmission
+staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/config/apis/webhookadmission/v1alpha1
+staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/mutating
+staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/testcerts
 staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/validating
 staging/src/k8s.io/apiserver/pkg/apis/apiserver
 staging/src/k8s.io/apiserver/pkg/apis/apiserver/v1alpha1
@@ -624,6 +633,8 @@ staging/src/k8s.io/client-go/kubernetes/fake
 staging/src/k8s.io/client-go/kubernetes/scheme
 staging/src/k8s.io/client-go/kubernetes/typed/admissionregistration/v1alpha1
 staging/src/k8s.io/client-go/kubernetes/typed/admissionregistration/v1alpha1/fake
+staging/src/k8s.io/client-go/kubernetes/typed/admissionregistration/v1beta1
+staging/src/k8s.io/client-go/kubernetes/typed/admissionregistration/v1beta1/fake
 staging/src/k8s.io/client-go/kubernetes/typed/apps/v1
 staging/src/k8s.io/client-go/kubernetes/typed/apps/v1/fake
 staging/src/k8s.io/client-go/kubernetes/typed/apps/v1beta1
@@ -652,6 +663,8 @@ staging/src/k8s.io/client-go/kubernetes/typed/certificates/v1beta1
 staging/src/k8s.io/client-go/kubernetes/typed/certificates/v1beta1/fake
 staging/src/k8s.io/client-go/kubernetes/typed/core/v1
 staging/src/k8s.io/client-go/kubernetes/typed/core/v1/fake
+staging/src/k8s.io/client-go/kubernetes/typed/events/v1beta1
+staging/src/k8s.io/client-go/kubernetes/typed/events/v1beta1/fake
 staging/src/k8s.io/client-go/kubernetes/typed/extensions/v1beta1
 staging/src/k8s.io/client-go/kubernetes/typed/extensions/v1beta1/fake
 staging/src/k8s.io/client-go/kubernetes/typed/networking/v1

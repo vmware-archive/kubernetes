@@ -1681,7 +1681,7 @@
      },
      "dnsPolicy": {
       "type": "string",
-      "description": "Set DNS policy for containers within the pod. One of 'ClusterFirstWithHostNet', 'ClusterFirst' or 'Default'. Defaults to \"ClusterFirst\". To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'."
+      "description": "Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'. Note that 'None' policy is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it."
      },
      "nodeSelector": {
       "type": "object",
@@ -1764,6 +1764,10 @@
       "type": "integer",
       "format": "int32",
       "description": "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority."
+     },
+     "dnsConfig": {
+      "$ref": "v1.PodDNSConfig",
+      "description": "Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy. This is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it."
      }
     }
    },
@@ -2078,7 +2082,7 @@
     "properties": {
      "targetPortal": {
       "type": "string",
-      "description": "iSCSI target portal. The portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260)."
+      "description": "iSCSI Target Portal. The Portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260)."
      },
      "iqn": {
       "type": "string",
@@ -2087,11 +2091,11 @@
      "lun": {
       "type": "integer",
       "format": "int32",
-      "description": "iSCSI target lun number."
+      "description": "iSCSI Target Lun number."
      },
      "iscsiInterface": {
       "type": "string",
-      "description": "Optional: Defaults to 'default' (tcp). iSCSI interface name that uses an iSCSI transport."
+      "description": "iSCSI Interface Name that uses an iSCSI transport. Defaults to 'default' (tcp)."
      },
      "fsType": {
       "type": "string",
@@ -2106,7 +2110,7 @@
       "items": {
        "type": "string"
       },
-      "description": "iSCSI target portal List. The portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260)."
+      "description": "iSCSI Target Portal List. The portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260)."
      },
      "chapAuthDiscovery": {
       "type": "boolean",
@@ -2118,11 +2122,11 @@
      },
      "secretRef": {
       "$ref": "v1.LocalObjectReference",
-      "description": "CHAP secret for iSCSI target and initiator authentication"
+      "description": "CHAP Secret for iSCSI target and initiator authentication"
      },
      "initiatorName": {
       "type": "string",
-      "description": "Custom iSCSI initiator name. If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface \u003ctarget portal\u003e:\u003cvolume name\u003e will be created for the connection."
+      "description": "Custom iSCSI Initiator Name. If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface \u003ctarget portal\u003e:\u003cvolume name\u003e will be created for the connection."
      }
     }
    },
@@ -2854,6 +2858,13 @@
       },
       "description": "Pod volumes to mount into the container's filesystem. Cannot be updated."
      },
+     "volumeDevices": {
+      "type": "array",
+      "items": {
+       "$ref": "v1.VolumeDevice"
+      },
+      "description": "volumeDevices is the list of block devices to be used by the container. This is an alpha feature and may change in the future."
+     },
      "livenessProbe": {
       "$ref": "v1.Probe",
       "description": "Periodic probe of container liveness. Container will be restarted if the probe fails. Cannot be updated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes"
@@ -3105,6 +3116,24 @@
    "v1.MountPropagationMode": {
     "id": "v1.MountPropagationMode",
     "properties": {}
+   },
+   "v1.VolumeDevice": {
+    "id": "v1.VolumeDevice",
+    "description": "volumeDevice describes a mapping of a raw block device within a container.",
+    "required": [
+     "name",
+     "devicePath"
+    ],
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "name must match the name of a persistentVolumeClaim in the pod"
+     },
+     "devicePath": {
+      "type": "string",
+      "description": "devicePath is the path inside of the container that the device will be mapped to."
+     }
+    }
    },
    "v1.Probe": {
     "id": "v1.Probe",
@@ -3608,6 +3637,46 @@
        "type": "string"
       },
       "description": "Hostnames for the above IP address."
+     }
+    }
+   },
+   "v1.PodDNSConfig": {
+    "id": "v1.PodDNSConfig",
+    "description": "PodDNSConfig defines the DNS parameters of a pod in addition to those generated from DNSPolicy.",
+    "properties": {
+     "nameservers": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "A list of DNS name server IP addresses. This will be appended to the base nameservers generated from DNSPolicy. Duplicated nameservers will be removed."
+     },
+     "searches": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "A list of DNS search domains for host-name lookup. This will be appended to the base search paths generated from DNSPolicy. Duplicated search paths will be removed."
+     },
+     "options": {
+      "type": "array",
+      "items": {
+       "$ref": "v1.PodDNSConfigOption"
+      },
+      "description": "A list of DNS resolver options. This will be merged with the base options generated from DNSPolicy. Duplicated entries will be removed. Resolution options given in Options will override those that appear in the base DNSPolicy."
+     }
+    }
+   },
+   "v1.PodDNSConfigOption": {
+    "id": "v1.PodDNSConfigOption",
+    "description": "PodDNSConfigOption defines DNS resolver options of a pod.",
+    "properties": {
+     "name": {
+      "type": "string",
+      "description": "Required."
+     },
+     "value": {
+      "type": "string"
      }
     }
    },

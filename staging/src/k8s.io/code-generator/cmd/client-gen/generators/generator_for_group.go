@@ -41,13 +41,19 @@ type genGroup struct {
 	imports          namer.ImportTracker
 	inputPackage     string
 	clientsetPackage string
+	// If the genGroup has been called. This generator should only execute once.
+	called bool
 }
 
 var _ generator.Generator = &genGroup{}
 
 // We only want to call GenerateType() once per group.
 func (g *genGroup) Filter(c *generator.Context, t *types.Type) bool {
-	return len(g.types) == 0 || t == g.types[0]
+	if !g.called {
+		g.called = true
+		return true
+	}
+	return false
 }
 
 func (g *genGroup) Namers(c *generator.Context) namer.NameSystems {
@@ -105,7 +111,7 @@ func (g *genGroup) GenerateType(c *generator.Context, t *types.Type, w io.Writer
 	sw.Do(groupInterfaceTemplate, m)
 	sw.Do(groupClientTemplate, m)
 	for _, t := range g.types {
-		tags, err := util.ParseClientGenTags(t.SecondClosestCommentLines)
+		tags, err := util.ParseClientGenTags(append(t.SecondClosestCommentLines, t.CommentLines...))
 		if err != nil {
 			return err
 		}

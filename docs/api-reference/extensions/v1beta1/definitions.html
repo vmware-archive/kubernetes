@@ -1395,7 +1395,7 @@ Examples: <code>/foo</code> would allow <code>/foo</code>, <code>/foo/</code> an
 <div class="sect2">
 <h3 id="_v1beta1_networkpolicylist">v1beta1.NetworkPolicyList</h3>
 <div class="paragraph">
-<p>Network Policy List is a list of NetworkPolicy objects.</p>
+<p>DEPRECATED 1.9 - This group version of NetworkPolicyList is deprecated by networking/v1/NetworkPolicyList. Network Policy List is a list of NetworkPolicy objects.</p>
 </div>
 <table class="tableblock frame-all grid-all" style="width:100%; ">
 <colgroup>
@@ -2510,7 +2510,7 @@ When an object is created, the system will populate this list with the current s
 <tbody>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">targetPortal</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">iSCSI target portal. The portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260).</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">iSCSI Target Portal. The Portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260).</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
 <td class="tableblock halign-left valign-top"></td>
@@ -2524,14 +2524,14 @@ When an object is created, the system will populate this list with the current s
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">lun</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">iSCSI target lun number.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">iSCSI Target Lun number.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">integer (int32)</p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">iscsiInterface</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Optional: Defaults to <em>default</em> (tcp). iSCSI interface name that uses an iSCSI transport.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">iSCSI Interface Name that uses an iSCSI transport. Defaults to <em>default</em> (tcp).</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
 <td class="tableblock halign-left valign-top"></td>
@@ -2552,7 +2552,7 @@ When an object is created, the system will populate this list with the current s
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">portals</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">iSCSI target portal List. The portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260).</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">iSCSI Target Portal List. The portal is either an IP or ip_addr:port if the port is other than default (typically TCP ports 860 and 3260).</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string array</p></td>
 <td class="tableblock halign-left valign-top"></td>
@@ -2573,14 +2573,14 @@ When an object is created, the system will populate this list with the current s
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">secretRef</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">CHAP secret for iSCSI target and initiator authentication</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">CHAP Secret for iSCSI target and initiator authentication</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_localobjectreference">v1.LocalObjectReference</a></p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">initiatorName</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Custom iSCSI initiator name. If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface &lt;target portal&gt;:&lt;volume name&gt; will be created for the connection.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Custom iSCSI Initiator Name. If initiatorName is specified with iscsiInterface simultaneously, new iSCSI interface &lt;target portal&gt;:&lt;volume name&gt; will be created for the connection.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
 <td class="tableblock halign-left valign-top"></td>
@@ -3280,7 +3280,7 @@ When an object is created, the system will populate this list with the current s
 <div class="sect2">
 <h3 id="_v1beta1_ipblock">v1beta1.IPBlock</h3>
 <div class="paragraph">
-<p>IPBlock describes a particular CIDR (Ex. "192.168.1.1/24") that is allowed to the pods matched by a NetworkPolicySpec&#8217;s podSelector. The except entry describes CIDRs that should not be included within this rule.</p>
+<p>DEPRECATED 1.9 - This group version of IPBlock is deprecated by networking/v1/IPBlock. IPBlock describes a particular CIDR (Ex. "192.168.1.1/24") that is allowed to the pods matched by a NetworkPolicySpec&#8217;s podSelector. The except entry describes CIDRs that should not be included within this rule.</p>
 </div>
 <table class="tableblock frame-all grid-all" style="width:100%; ">
 <colgroup>
@@ -4496,7 +4496,7 @@ When an object is created, the system will populate this list with the current s
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">dnsPolicy</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Set DNS policy for containers within the pod. One of <em>ClusterFirstWithHostNet</em>, <em>ClusterFirst</em> or <em>Default</em>. Defaults to "ClusterFirst". To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to <em>ClusterFirstWithHostNet</em>.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Set DNS policy for the pod. Defaults to "ClusterFirst". Valid values are <em>ClusterFirstWithHostNet</em>, <em>ClusterFirst</em>, <em>Default</em> or <em>None</em>. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to <em>ClusterFirstWithHostNet</em>. Note that <em>None</em> policy is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
 <td class="tableblock halign-left valign-top"></td>
@@ -4625,6 +4625,13 @@ When an object is created, the system will populate this list with the current s
 <td class="tableblock halign-left valign-top"><p class="tableblock">The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">integer (int32)</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">dnsConfig</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy. This is an alpha feature introduced in v1.9 and CustomPodDNS feature gate must be enabled to use it.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_poddnsconfig">v1.PodDNSConfig</a></p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
@@ -5322,7 +5329,7 @@ Examples:<br>
 <div class="sect2">
 <h3 id="_v1beta1_networkpolicy">v1beta1.NetworkPolicy</h3>
 <div class="paragraph">
-<p>NetworkPolicy describes what network traffic is allowed for a set of Pods</p>
+<p>DEPRECATED 1.9 - This group version of NetworkPolicy is deprecated by networking/v1/NetworkPolicy. NetworkPolicy describes what network traffic is allowed for a set of Pods</p>
 </div>
 <table class="tableblock frame-all grid-all" style="width:100%; ">
 <colgroup>
@@ -5507,6 +5514,54 @@ Examples:<br>
 
 </div>
 <div class="sect2">
+<h3 id="_v1_poddnsconfig">v1.PodDNSConfig</h3>
+<div class="paragraph">
+<p>PodDNSConfig defines the DNS parameters of a pod in addition to those generated from DNSPolicy.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">nameservers</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">A list of DNS name server IP addresses. This will be appended to the base nameservers generated from DNSPolicy. Duplicated nameservers will be removed.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string array</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">searches</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">A list of DNS search domains for host-name lookup. This will be appended to the base search paths generated from DNSPolicy. Duplicated search paths will be removed.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string array</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">options</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">A list of DNS resolver options. This will be merged with the base options generated from DNSPolicy. Duplicated entries will be removed. Resolution options given in Options will override those that appear in the base DNSPolicy.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_poddnsconfigoption">v1.PodDNSConfigOption</a> array</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
 <h3 id="_v1beta1_scalestatus">v1beta1.ScaleStatus</h3>
 <div class="paragraph">
 <p>represents the current status of a scale subresource.</p>
@@ -5556,6 +5611,9 @@ Examples:<br>
 </div>
 <div class="sect2">
 <h3 id="_v1beta1_networkpolicyspec">v1beta1.NetworkPolicySpec</h3>
+<div class="paragraph">
+<p>DEPRECATED 1.9 - This group version of NetworkPolicySpec is deprecated by networking/v1/NetworkPolicySpec.</p>
+</div>
 <table class="tableblock frame-all grid-all" style="width:100%; ">
 <colgroup>
 <col style="width:20%;">
@@ -6049,6 +6107,9 @@ Both these may change in the future. Incoming requests are matched against the h
 </div>
 <div class="sect2">
 <h3 id="_v1beta1_networkpolicypeer">v1beta1.NetworkPolicyPeer</h3>
+<div class="paragraph">
+<p>DEPRECATED 1.9 - This group version of NetworkPolicyPeer is deprecated by networking/v1/NetworkPolicyPeer.</p>
+</div>
 <table class="tableblock frame-all grid-all" style="width:100%; ">
 <colgroup>
 <col style="width:20%;">
@@ -6351,6 +6412,13 @@ Both these may change in the future. Incoming requests are matched against the h
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 <tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">volumeDevices</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">volumeDevices is the list of block devices to be used by the container. This is an alpha feature and may change in the future.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1_volumedevice">v1.VolumeDevice</a> array</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">livenessProbe</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">Periodic probe of container liveness. Container will be restarted if the probe fails. Cannot be updated. More info: <a href="https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes">https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes</a></p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
@@ -6491,7 +6559,7 @@ Both these may change in the future. Incoming requests are matched against the h
 <div class="sect2">
 <h3 id="_v1beta1_networkpolicyingressrule">v1beta1.NetworkPolicyIngressRule</h3>
 <div class="paragraph">
-<p>This NetworkPolicyIngressRule matches traffic if and only if the traffic matches both ports AND from.</p>
+<p>DEPRECATED 1.9 - This group version of NetworkPolicyIngressRule is deprecated by networking/v1/NetworkPolicyIngressRule. This NetworkPolicyIngressRule matches traffic if and only if the traffic matches both ports AND from.</p>
 </div>
 <table class="tableblock frame-all grid-all" style="width:100%; ">
 <colgroup>
@@ -6668,6 +6736,40 @@ Both these may change in the future. Incoming requests are matched against the h
 
 </div>
 <div class="sect2">
+<h3 id="_v1beta1_allowedflexvolume">v1beta1.AllowedFlexVolume</h3>
+<div class="paragraph">
+<p>AllowedFlexVolume represents a single Flexvolume that is allowed to be used.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">driver</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Driver is the name of the Flexvolume driver.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
 <h3 id="_v1_apiresource">v1.APIResource</h3>
 <div class="paragraph">
 <p>APIResource specifies the name of a resource and whether it is namespaced.</p>
@@ -6751,6 +6853,47 @@ Both these may change in the future. Incoming requests are matched against the h
 <td class="tableblock halign-left valign-top"><p class="tableblock">categories is a list of the grouped resources this resource belongs to (e.g. <em>all</em>)</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string array</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
+<h3 id="_v1_volumedevice">v1.VolumeDevice</h3>
+<div class="paragraph">
+<p>volumeDevice describes a mapping of a raw block device within a container.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">name</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">name must match the name of a persistentVolumeClaim in the pod</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">devicePath</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">devicePath is the path inside of the container that the device will be mapped to.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
@@ -6870,7 +7013,7 @@ Both these may change in the future. Incoming requests are matched against the h
 <div class="sect2">
 <h3 id="_v1beta1_networkpolicyegressrule">v1beta1.NetworkPolicyEgressRule</h3>
 <div class="paragraph">
-<p>NetworkPolicyEgressRule describes a particular set of traffic that is allowed out of pods matched by a NetworkPolicySpec&#8217;s podSelector. The traffic must match both ports and to. This type is beta-level in 1.8</p>
+<p>DEPRECATED 1.9 - This group version of NetworkPolicyEgressRule is deprecated by networking/v1/NetworkPolicyEgressRule. NetworkPolicyEgressRule describes a particular set of traffic that is allowed out of pods matched by a NetworkPolicySpec&#8217;s podSelector. The traffic must match both ports and to. This type is beta-level in 1.8</p>
 </div>
 <table class="tableblock frame-all grid-all" style="width:100%; ">
 <colgroup>
@@ -6995,6 +7138,47 @@ Both these may change in the future. Incoming requests are matched against the h
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">boolean</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
+<h3 id="_v1_poddnsconfigoption">v1.PodDNSConfigOption</h3>
+<div class="paragraph">
+<p>PodDNSConfigOption defines DNS resolver options of a pod.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">name</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Required.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">value</p></td>
+<td class="tableblock halign-left valign-top"></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
 </table>
@@ -7644,6 +7828,9 @@ Both these may change in the future. Incoming requests are matched against the h
 </div>
 <div class="sect2">
 <h3 id="_v1beta1_networkpolicyport">v1beta1.NetworkPolicyPort</h3>
+<div class="paragraph">
+<p>DEPRECATED 1.9 - This group version of NetworkPolicyPort is deprecated by networking/v1/NetworkPolicyPort.</p>
+</div>
 <table class="tableblock frame-all grid-all" style="width:100%; ">
 <colgroup>
 <col style="width:20%;">
@@ -7826,6 +8013,13 @@ Both these may change in the future. Incoming requests are matched against the h
 <td class="tableblock halign-left valign-top"><p class="tableblock">is a white list of allowed host paths. Empty indicates that all host paths may be used.</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1beta1_allowedhostpath">v1beta1.AllowedHostPath</a> array</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">allowedFlexVolumes</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">AllowedFlexVolumes is a whitelist of allowed Flexvolumes.  Empty or nil indicates that all Flexvolumes may be used.  This parameter is effective only when the usage of the Flexvolumes is allowed in the "Volumes" field.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><a href="#_v1beta1_allowedflexvolume">v1beta1.AllowedFlexVolume</a> array</p></td>
 <td class="tableblock halign-left valign-top"></td>
 </tr>
 </tbody>
@@ -8135,54 +8329,6 @@ Both these may change in the future. Incoming requests are matched against the h
 
 </div>
 <div class="sect2">
-<h3 id="_v1_configmapkeyselector">v1.ConfigMapKeySelector</h3>
-<div class="paragraph">
-<p>Selects a key from a ConfigMap.</p>
-</div>
-<table class="tableblock frame-all grid-all" style="width:100%; ">
-<colgroup>
-<col style="width:20%;">
-<col style="width:20%;">
-<col style="width:20%;">
-<col style="width:20%;">
-<col style="width:20%;"> 
-</colgroup>
-<thead>
-<tr>
-<th class="tableblock halign-left valign-top">Name</th>
-<th class="tableblock halign-left valign-top">Description</th>
-<th class="tableblock halign-left valign-top">Required</th>
-<th class="tableblock halign-left valign-top">Schema</th>
-<th class="tableblock halign-left valign-top">Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">name</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Name of the referent. More info: <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names">https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names</a></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
-<td class="tableblock halign-left valign-top"></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">key</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">The key to select.</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
-<td class="tableblock halign-left valign-top"></td>
-</tr>
-<tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">optional</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Specify whether the ConfigMap or it&#8217;s key must be defined</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">boolean</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
-</tr>
-</tbody>
-</table>
-
-</div>
-<div class="sect2">
 <h3 id="_v1beta1_daemonsetcondition">v1beta1.DaemonSetCondition</h3>
 <div class="paragraph">
 <p>DaemonSetCondition describes the state of a DaemonSet at a certain point.</p>
@@ -8239,6 +8385,54 @@ Both these may change in the future. Incoming requests are matched against the h
 <td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
 <td class="tableblock halign-left valign-top"></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+<div class="sect2">
+<h3 id="_v1_configmapkeyselector">v1.ConfigMapKeySelector</h3>
+<div class="paragraph">
+<p>Selects a key from a ConfigMap.</p>
+</div>
+<table class="tableblock frame-all grid-all" style="width:100%; ">
+<colgroup>
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;">
+<col style="width:20%;"> 
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+<th class="tableblock halign-left valign-top">Required</th>
+<th class="tableblock halign-left valign-top">Schema</th>
+<th class="tableblock halign-left valign-top">Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">name</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Name of the referent. More info: <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names">https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names</a></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">key</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The key to select.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">true</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">string</p></td>
+<td class="tableblock halign-left valign-top"></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">optional</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Specify whether the ConfigMap or it&#8217;s key must be defined</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">boolean</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">false</p></td>
 </tr>
 </tbody>
 </table>
