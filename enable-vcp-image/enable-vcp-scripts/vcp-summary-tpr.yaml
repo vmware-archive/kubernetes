@@ -1,0 +1,17 @@
+---
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+metadata:
+  name: vcp-status.vmware.com
+description: "POD status resource"
+versions:
+- name: v1
+---
+apiVersion: extensions/v1beta1
+kind: ThirdPartyResource
+metadata:
+  name: vcp-summary.vmware.com
+description: "Overall Summary of vSphere Cloud Provider configuration operations"
+versions:
+- name: v1
+---

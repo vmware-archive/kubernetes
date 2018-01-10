@@ -7,14 +7,36 @@ source "$(dirname "$0")"/exit_codes.sh
 # read secret keys from volume /secret-volume/ and set values in an environment
 read_secret_keys
 
+create_daemonset () {
+        version=`kubectl version --short --output json`
+        minor=`echo $version | jq '.serverVersion.minor' | sed 's/"//g'`
+        major=`echo $version | jq '.serverVersion.major' | sed 's/"//g'`
+
+        resource_yaml=""
+        if [ $minor -ge 8 ] && [ "$major" -ge 1 ]; then
+                resource_yaml=/opt/enable-vcp-scripts/vcp-summary-crd.yaml
+        else
+                resource_yaml=/opt/enable-vcp-scripts/vcp-summary-tpr.yaml
+        fi
+
+        kubectl create -f "$resource_yaml"
+        if [ $? -eq 0 ]; then
+            echo "[INFO] Executed kubectl create command to create resources through $resource_yaml."
+        else
+            echo "[ERROR] 'kubectl create' failed to create resources through $resource_yaml."
+        fi
+
+        kubectl create -f /opt/enable-vcp-scripts/vcp-daemontset.yaml
+        if [ $? -eq 0 ]; then
+            echo "[INFO] Executed kubectl create command to create vcp-daemontset."
+        else
+            echo "[ERROR] 'kubectl create' failed to create vcp-daemonset."
+        fi
+}
+
 if [ "$K8S_SECRET_ROLL_BACK_SWITCH" == "on" ]; then
   echo "[INFO] POD-MANAGER operations are skipped as K8S_SECRET_ROLL_BACK_SWITCH is set to on"
-  kubectl create -f /opt/enable-vcp-scripts/vcp-daemontset.yaml
-  if [ $? -eq 0 ]; then
-      echo "[INFO] Executed kubectl create command to create vcp-daemontset."
-  else
-      echo "[ERROR] 'kubectl create' failed to create vcp-daemonset."
-  fi
+  create_daemonset
   python -c 'while 1: import ctypes; ctypes.CDLL(None).pause()'
 fi
 
@@ -156,12 +178,7 @@ else
     echo "Skipping Operations for VCP user. VCP user and Administrator user is same."
 fi
 
-kubectl create -f /opt/enable-vcp-scripts/vcp-daemontset.yaml
-if [ $? -eq 0 ]; then
-    echo "[INFO] Executed kubectl create command to create vcp-daemontset."
-else
-    echo "[ERROR] 'kubectl create' failed to create vcp-daemonset."
-fi
+create_daemonset
 
 init_VcpConfigSummaryStatus "$NUMBER_OF_REGISTERED_NODES"
 

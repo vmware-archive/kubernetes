@@ -4,7 +4,7 @@ To enable the vSphere Cloud Provider on Kubernetes Cluster, users need to follow
 
 Some of the steps, for example, creating roles and privileges assignment, enabling advanced properties on the Kubernetes nodes etc. requires vSphere administration skill. To help developers quickly get started with enabling vSphere Cloud Provider we have automated most of the vCenter administration steps. To know detail about automation architecture and design please visit this [link](https://github.com/vmware/kubernetes/issues/224).
 
-Automation takes care of the following tasks: 
+Automation takes care of the following tasks:
 
  * Create working directory VM folders for Kubernetes node VMs if not present.
  * Move node VMs to the working directory VM folder.
@@ -16,19 +16,19 @@ Automation takes care of the following tasks:
  * Reload kubelet service unit and restart Kubelet service on all nodes to apply the configuration.
 
 ## How to kick off auto configuration
-Automation script files are located at [https://github.com/vmware/kubernetes/tree/enable-vcp-uxi](https://github.com/vmware/kubernetes/tree/enable-vcp-uxi). 
+Automation script files are located at [https://github.com/vmware/kubernetes/tree/enable-vcp-uxi](https://github.com/vmware/kubernetes/tree/enable-vcp-uxi).
 
 Scripts are bundled in the docker image located at https://hub.docker.com/r/cnastorage/enablevcp
 
 Following are the Prerequisites for this automation.
- 
+
  * We need a vCenter admin username and password.
  * Separate user for vSphere Cloud Provider needs to be pre-created on the vCenter. This Step is optional but recommended.
  * Daemonset Pods should be allowed to be scheduled on all nodes. If Kubernetes is deployed using kubeadm, we see the taint ```node-role.kubernetes.io/master``` on the master node. Make sure to remove this taint. Taint can be removed using the following command.
 
     ```kubectl taint nodes --all node-role.kubernetes.io/master-```
- 
- 
+
+
 Let's get started with how to use these automation scripts.
 
 **The first step** is to download following YAML files :
@@ -165,7 +165,7 @@ Deploy them in the following sequence.
 **Note:** Make sure kubectl is configured to use `kubernetes-admin` user. When Kubebernetes cluster is deployed using kubeadm, we see couple of config files (`admin.conf`, `kubelet.conf`) at /etc/kubernetes on the master node. Make sure to configure kubectl to use `admin.conf` We need `kubernetes-admin` user to create `serviceaccount` and `clusterrolebinding`.
 
 ```bash
-$ kubectl create -f vcp_namespace_account_and_roles.yaml 
+$ kubectl create -f vcp_namespace_account_and_roles.yaml
 namespace "vmware" created
 serviceaccount "vcpsa" created
 clusterrolebinding "sa-vmware-default-binding" created
@@ -174,7 +174,7 @@ clusterrolebinding "sa-vmware-vcpsa-binding" created
 $ kubectl create --save-config -f vcp_secret.yaml
 secret "vsphere-cloud-provider-secret" created
 
-$ kubectl create -f enable-vsphere-cloud-provider.yaml 
+$ kubectl create -f enable-vsphere-cloud-provider.yaml
 pod "vcp-manager" created
 ```
 
@@ -266,17 +266,18 @@ if you want to perform the cleanup, execute following commands in sequence.
 
 ```bash
 kubectl delete pod vcp-manager --namespace vmware
-
 kubectl delete daemonset vcp-daementset --namespace vmware
 
-kubectl delete ThirdPartyResources vcp-status.vmware.com
+(Kubernetes 1.8 and above)
+kubectl delete customresourcedefinitions vcpstatuses.vmware.com
+kubectl delete customresourcedefinitions vcpsummaries.vmware.com
 
+(Kubernetes 1.7)
+kubectl delete ThirdPartyResources vcp-status.vmware.com
 kubectl delete ThirdPartyResources vcp-summary.vmware.com
 
 kubectl delete secret vsphere-cloud-provider-secret --namespace=vmware
-
 kubectl delete serviceaccount vcpsa --namespace=vmware
-
 kubectl delete clusterrolebinding sa-vmware-default-binding  sa-vmware-vcpsa-binding
 
 kubectl delete namespace vmware
@@ -303,15 +304,22 @@ Delete existing configuration resources.
 ```bash
 kubectl delete pod vcp-manager --namespace vmware
 kubectl delete daemonset vcp-daementset --namespace vmware
+
+(Kubernetes 1.8 and above)
+kubectl delete customresourcedefinitions vcpstatuses.vmware.com
+kubectl delete customresourcedefinitions vcpsummaries.vmware.com
+
+(Kubernetes 1.7)
 kubectl delete ThirdPartyResources vcp-status.vmware.com
 kubectl delete ThirdPartyResources vcp-summary.vmware.com
+
 kubectl delete secret vsphere-cloud-provider-secret --namespace=vmware
 ```
 Re-create Secret and vcp-manager and daemon set pod.
 
 ```
 kubectl create --save-config -f vcp_secret.yaml
-kubectl create -f enable-vsphere-cloud-provider.yaml 
+kubectl create -f enable-vsphere-cloud-provider.yaml
 ```
 
 Roll back progress can be monitored from the logs on the Daemon Pods. Once roll back is finished, you can clean up the configuration resources as mentioned above.
