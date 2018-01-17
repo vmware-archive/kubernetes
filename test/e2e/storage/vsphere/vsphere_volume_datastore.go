@@ -32,11 +32,13 @@ import (
 
 const (
 	InvalidDatastore = "invalidDatastore"
+	LocalDatastore   = "localDatastore" // Pre-exists in the testbed
 	DatastoreSCName  = "datastoresc"
 )
 
 /*
-	Test to verify datastore specified in storage-class is being honored while volume creation.
+	Test case 1: Verify dynamic volume creation with an invalid datastore specified in storage class
+	Test case 2: Verify dynamic volume creation with a local datastore specified in storage class
 
 	Steps
 	1. Create StorageClass with invalid datastore.
@@ -67,17 +69,29 @@ var _ = utils.SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", 
 		By("Invoking Test for invalid datastore")
 		scParameters[Datastore] = InvalidDatastore
 		scParameters[DiskFormat] = ThinDisk
-		err := invokeInvalidDatastoreTestNeg(client, namespace, scParameters)
+		err := invokeDatastoreTestNeg(client, namespace, scParameters)
 		Expect(err).To(HaveOccurred())
 		errorMsg := `Failed to provision volume with StorageClass \"` + DatastoreSCName + `\": The specified datastore ` + InvalidDatastore + ` is not a shared datastore across node VMs`
 		if !strings.Contains(err.Error(), errorMsg) {
 			Expect(err).NotTo(HaveOccurred(), errorMsg)
 		}
 	})
+
+	It("verify dynamically provisioned pv using storageclass fails on a local datastore", func() {
+		By("Invoking Test for local datastore")
+		scParameters[Datastore] = LocalDatastore
+		scParameters[DiskFormat] = ThinDisk
+		err := invokeDatastoreTestNeg(client, namespace, scParameters)
+		Expect(err).To(HaveOccurred())
+		errorMsg := `Failed to provision volume with StorageClass \"` + DatastoreSCName + `\": The specified datastore ` + LocalDatastore + ` is not a shared datastore across node VMs`
+		if !strings.Contains(err.Error(), errorMsg) {
+			Expect(err).NotTo(HaveOccurred(), errorMsg)
+		}
+	})
 })
 
-func invokeInvalidDatastoreTestNeg(client clientset.Interface, namespace string, scParameters map[string]string) error {
-	By("Creating Storage Class With Invalid Datastore")
+func invokeDatastoreTestNeg(client clientset.Interface, namespace string, scParameters map[string]string) error {
+	By("Creating Storage Class with given datastore")
 	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec(DatastoreSCName, scParameters))
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
 	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
