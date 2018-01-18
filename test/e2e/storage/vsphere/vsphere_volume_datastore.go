@@ -18,6 +18,7 @@ package vsphere
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -32,28 +33,29 @@ import (
 
 const (
 	InvalidDatastore = "invalidDatastore"
-	LocalDatastore   = "localDatastore" // Pre-exists in the testbed
 	DatastoreSCName  = "datastoresc"
 )
 
 /*
-	Test case 1: Verify dynamic volume creation with an invalid datastore specified in storage class
-	Test case 2: Verify dynamic volume creation with a local datastore specified in storage class
+	Test case 1: Verify dynamic volume creation with an invalid datastore specified in storage class should fail
+	Test case 2: Verify dynamic volume creation with a local datastore specified in storage class should fail
 
 	Steps
 	1. Create StorageClass with invalid datastore.
 	2. Create PVC which uses the StorageClass created in step 1.
 	3. Expect the PVC to fail.
-	4. Verify the error returned on PVC failure is the correct.
+	4. Verify the error returned on PVC failure is expected.
 */
 
 var _ = utils.SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", func() {
 	f := framework.NewDefaultFramework("volume-datastore")
 	var (
-		client       clientset.Interface
-		namespace    string
-		scParameters map[string]string
+		client         clientset.Interface
+		namespace      string
+		scParameters   map[string]string
+		localDatastore string // Pre-exists in the testbed
 	)
+
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
 		client = f.ClientSet
@@ -79,11 +81,15 @@ var _ = utils.SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", 
 
 	It("verify dynamically provisioned pv using storageclass fails on a local datastore", func() {
 		By("Invoking Test for local datastore")
-		scParameters[Datastore] = LocalDatastore
+		localDatastore = os.Getenv("LOCAL_DATASTORE")
+		if localDatastore == "" {
+			framework.Skipf("Environment variable LOCAL_DATASTORE is not set. Skipping the test.")
+		}
+		scParameters[Datastore] = localDatastore
 		scParameters[DiskFormat] = ThinDisk
 		err := invokeDatastoreTestNeg(client, namespace, scParameters)
 		Expect(err).To(HaveOccurred())
-		errorMsg := `Failed to provision volume with StorageClass \"` + DatastoreSCName + `\": The specified datastore ` + LocalDatastore + ` is not a shared datastore across node VMs`
+		errorMsg := `Failed to provision volume with StorageClass \"` + DatastoreSCName + `\": The specified datastore ` + localDatastore + ` is not a shared datastore across node VMs`
 		if !strings.Contains(err.Error(), errorMsg) {
 			Expect(err).NotTo(HaveOccurred(), errorMsg)
 		}
