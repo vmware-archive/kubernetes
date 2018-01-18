@@ -75,14 +75,14 @@ var _ = SIGDescribe("Volume Disk Format [Feature:vsphere]", func() {
 		if !isNodeLabeled {
 			nodeLabelValue := "vsphere_e2e_" + string(uuid.NewUUID())
 			nodeKeyValueLabel = make(map[string]string)
-			nodeKeyValueLabel["vsphere_e2e_label"] = nodeLabelValue
-			framework.AddOrUpdateLabelOnNode(client, nodeName, "vsphere_e2e_label", nodeLabelValue)
+			nodeKeyValueLabel["vsphere_e2e_label_volume_diskformat"] = nodeLabelValue
+			framework.AddOrUpdateLabelOnNode(client, nodeName, "vsphere_e2e_label_volume_diskformat", nodeLabelValue)
 			isNodeLabeled = true
 		}
 	})
 	framework.AddCleanupAction(func() {
 		if len(nodeLabelValue) > 0 {
-			framework.RemoveLabelOffNode(client, nodeName, "vsphere_e2e_label")
+			framework.RemoveLabelOffNode(client, nodeName, "vsphere_e2e_label_volume_diskformat")
 		}
 	})
 
