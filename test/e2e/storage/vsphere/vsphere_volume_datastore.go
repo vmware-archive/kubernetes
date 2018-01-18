@@ -67,7 +67,7 @@ var _ = utils.SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", 
 		}
 	})
 
-	It("verify dynamically provisioned pv using storageclass fails on an invalid datastore", func() {
+	It("should fail provisioning pv on invalid datastore", func() {
 		By("Invoking Test for invalid datastore")
 		scParameters[Datastore] = InvalidDatastore
 		scParameters[DiskFormat] = ThinDisk
@@ -79,11 +79,13 @@ var _ = utils.SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", 
 		}
 	})
 
-	It("verify dynamically provisioned pv using storageclass fails on a local datastore", func() {
+	It("should fail provisioning pv on local datastore", func() {
 		By("Invoking Test for local datastore")
 		localDatastore = os.Getenv("LOCAL_DATASTORE")
 		if localDatastore == "" {
 			framework.Skipf("Environment variable LOCAL_DATASTORE is not set. Skipping the test.")
+		} else {
+			framework.logf("Running test against configured local datastore: %s", localDatastore)
 		}
 		scParameters[Datastore] = localDatastore
 		scParameters[DiskFormat] = ThinDisk
