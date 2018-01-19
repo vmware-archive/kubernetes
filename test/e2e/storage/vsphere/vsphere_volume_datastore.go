@@ -36,22 +36,25 @@ const (
 )
 
 /*
-	Test to verify datastore specified in storage-class is being honored while volume creation.
+	Test case 1: Verify dynamic volume creation with an invalid datastore specified in storage class should fail
+	Test case 2: Verify dynamic volume creation with a local datastore specified in storage class should fail
 
 	Steps
 	1. Create StorageClass with invalid datastore.
 	2. Create PVC which uses the StorageClass created in step 1.
 	3. Expect the PVC to fail.
-	4. Verify the error returned on PVC failure is the correct.
+	4. Verify the error returned on PVC failure is expected.
 */
 
 var _ = utils.SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", func() {
 	f := framework.NewDefaultFramework("volume-datastore")
 	var (
-		client       clientset.Interface
-		namespace    string
-		scParameters map[string]string
+		client         clientset.Interface
+		namespace      string
+		scParameters   map[string]string
+		localDatastore string // Pre-exists in the testbed
 	)
+
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
 		client = f.ClientSet
@@ -63,21 +66,34 @@ var _ = utils.SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", 
 		}
 	})
 
-	It("verify dynamically provisioned pv using storageclass fails on an invalid datastore", func() {
+	It("should fail provisioning pv on invalid datastore", func() {
 		By("Invoking Test for invalid datastore")
 		scParameters[Datastore] = InvalidDatastore
 		scParameters[DiskFormat] = ThinDisk
-		err := invokeInvalidDatastoreTestNeg(client, namespace, scParameters)
+		err := invokeDatastoreTestNeg(client, namespace, scParameters)
 		Expect(err).To(HaveOccurred())
 		errorMsg := `Failed to provision volume with StorageClass \"` + DatastoreSCName + `\": The specified datastore ` + InvalidDatastore + ` is not a shared datastore across node VMs`
 		if !strings.Contains(err.Error(), errorMsg) {
 			Expect(err).NotTo(HaveOccurred(), errorMsg)
 		}
 	})
+
+	It("should fail provisioning pv on local datastore", func() {
+		By("Invoking Test for local datastore")
+		localDatastore = GetAndExpectStringEnvVar(LocalDatastore)
+		scParameters[Datastore] = localDatastore
+		scParameters[DiskFormat] = ThinDisk
+		err := invokeDatastoreTestNeg(client, namespace, scParameters)
+		Expect(err).To(HaveOccurred())
+		errorMsg := `Failed to provision volume with StorageClass \"` + DatastoreSCName + `\": The specified datastore ` + localDatastore + ` is not a shared datastore across node VMs`
+		if !strings.Contains(err.Error(), errorMsg) {
+			Expect(err).NotTo(HaveOccurred(), errorMsg)
+		}
+	})
 })
 
-func invokeInvalidDatastoreTestNeg(client clientset.Interface, namespace string, scParameters map[string]string) error {
-	By("Creating Storage Class With Invalid Datastore")
+func invokeDatastoreTestNeg(client clientset.Interface, namespace string, scParameters map[string]string) error {
+	By("Creating Storage Class with given datastore")
 	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec(DatastoreSCName, scParameters))
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
 	defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)
