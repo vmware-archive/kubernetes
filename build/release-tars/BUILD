@@ -180,7 +180,6 @@ pkg_tar(
     build_tar = "@io_kubernetes_build//tools/build_tar",
     files = [
         ":kubernetes-manifests.tar.gz",
-        ":kubernetes-salt.tar.gz",
     ],
     package_dir = "server",
     visibility = ["//visibility:private"],
@@ -193,7 +192,6 @@ pkg_tar(
     files = [
         "//:Godeps/LICENSES",
         "//:README.md",
-        "//:Vagrantfile",
         "//:version",
         "//cluster:all-srcs",
         "//docs:all-srcs",
@@ -217,15 +215,6 @@ pkg_tar(
     ],
 )
 
-pkg_tar(
-    name = "kubernetes-salt",
-    build_tar = "@io_kubernetes_build//tools/build_tar",
-    extension = "tar.gz",
-    deps = [
-        "//cluster/saltbase:salt",
-    ],
-)
-
 release_filegroup(
     name = "release-tars",
     srcs = [
@@ -234,7 +223,6 @@ release_filegroup(
         ":kubernetes-node-%s.tar.gz" % PLATFORM_ARCH_STRING,
         ":kubernetes-server-%s.tar.gz" % PLATFORM_ARCH_STRING,
         ":kubernetes-manifests.tar.gz",
-        ":kubernetes-salt.tar.gz",
         ":kubernetes-src.tar.gz",
         ":kubernetes-test.tar.gz",
     ],

@@ -78,7 +78,8 @@ func NewCmdTopPod(f cmdutil.Factory, options *TopPodOptions, out io.Writer) *cob
 	}
 
 	cmd := &cobra.Command{
-		Use:     "pod [NAME | -l label]",
+		Use: "pod [NAME | -l label]",
+		DisableFlagsInUseLine: true,
 		Short:   i18n.T("Display Resource (CPU/Memory/Storage) usage of pods"),
 		Long:    topPodLong,
 		Example: topPodExample,
@@ -118,8 +119,8 @@ func (o *TopPodOptions) Complete(f cmdutil.Factory, cmd *cobra.Command, args []s
 	if err != nil {
 		return err
 	}
-	o.PodClient = clientset.Core()
-	o.Client = metricsutil.NewHeapsterMetricsClient(clientset.Core(), o.HeapsterOptions.Namespace, o.HeapsterOptions.Scheme, o.HeapsterOptions.Service, o.HeapsterOptions.Port)
+	o.PodClient = clientset.CoreV1()
+	o.Client = metricsutil.NewHeapsterMetricsClient(clientset.CoreV1(), o.HeapsterOptions.Namespace, o.HeapsterOptions.Scheme, o.HeapsterOptions.Service, o.HeapsterOptions.Port)
 	o.Printer = metricsutil.NewTopCmdPrinter(out)
 	return nil
 }

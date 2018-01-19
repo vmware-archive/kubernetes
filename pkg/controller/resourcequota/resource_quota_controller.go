@@ -237,15 +237,13 @@ func (rq *ResourceQuotaController) addQuota(obj interface{}) {
 // worker runs a worker thread that just dequeues items, processes them, and marks them done.
 func (rq *ResourceQuotaController) worker(queue workqueue.RateLimitingInterface) func() {
 	workFunc := func() bool {
-
-		rq.workerLock.RLock()
-		defer rq.workerLock.RUnlock()
-
 		key, quit := queue.Get()
 		if quit {
 			return true
 		}
 		defer queue.Done(key)
+		rq.workerLock.RLock()
+		defer rq.workerLock.RUnlock()
 		err := rq.syncHandler(key.(string))
 		if err == nil {
 			queue.Forget(key)
@@ -308,7 +306,6 @@ func (rq *ResourceQuotaController) syncResourceQuotaFromKey(key string) (err err
 	}
 	if err != nil {
 		glog.Infof("Unable to retrieve resource quota %v from store: %v", key, err)
-		rq.queue.Add(key)
 		return err
 	}
 	return rq.syncResourceQuota(quota)
@@ -469,7 +466,7 @@ func GetQuotableResources(discoveryFunc NamespacedResourcesFunc) (map[schema.Gro
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover resources: %v", err)
 	}
-	quotableResources := discovery.FilteredBy(discovery.SupportsAllVerbs{Verbs: []string{"create", "list", "delete"}}, possibleResources)
+	quotableResources := discovery.FilteredBy(discovery.SupportsAllVerbs{Verbs: []string{"create", "list", "watch", "delete"}}, possibleResources)
 	quotableGroupVersionResources, err := discovery.GroupVersionResources(quotableResources)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse resources: %v", err)

@@ -32,6 +32,7 @@ import (
 
 type csiClient interface {
 	AssertSupportedVersion(ctx grpctx.Context, ver *csipb.Version) error
+	NodeProbe(ctx grpctx.Context, ver *csipb.Version) error
 	NodePublishVolume(
 		ctx grpctx.Context,
 		volumeid string,
@@ -135,6 +136,13 @@ func (c *csiDriverClient) AssertSupportedVersion(ctx grpctx.Context, ver *csipb.
 	return nil
 }
 
+func (c *csiDriverClient) NodeProbe(ctx grpctx.Context, ver *csipb.Version) error {
+	glog.V(4).Info(log("sending NodeProbe rpc call to csi driver: [version %v]", ver))
+	req := &csipb.NodeProbeRequest{Version: ver}
+	_, err := c.nodeClient.NodeProbe(ctx, req)
+	return err
+}
+
 func (c *csiDriverClient) NodePublishVolume(
 	ctx grpctx.Context,
 	volID string,
@@ -145,7 +153,7 @@ func (c *csiDriverClient) NodePublishVolume(
 	volumeAttribs map[string]string,
 	fsType string,
 ) error {
-
+	glog.V(4).Info(log("calling NodePublishVolume rpc [volid=%s,target_path=%s]", volID, targetPath))
 	if volID == "" {
 		return errors.New("missing volume id")
 	}
@@ -182,7 +190,7 @@ func (c *csiDriverClient) NodePublishVolume(
 }
 
 func (c *csiDriverClient) NodeUnpublishVolume(ctx grpctx.Context, volID string, targetPath string) error {
-
+	glog.V(4).Info(log("calling NodeUnpublishVolume rpc: [volid=%s, target_path=%s", volID, targetPath))
 	if volID == "" {
 		return errors.New("missing volume id")
 	}
@@ -209,7 +217,7 @@ func asCSIAccessMode(am api.PersistentVolumeAccessMode) csipb.VolumeCapability_A
 	case api.ReadWriteOnce:
 		return csipb.VolumeCapability_AccessMode_SINGLE_NODE_WRITER
 	case api.ReadOnlyMany:
-		return csipb.VolumeCapability_AccessMode_MULTI_NODE_SINGLE_WRITER
+		return csipb.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY
 	case api.ReadWriteMany:
 		return csipb.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER
 	}

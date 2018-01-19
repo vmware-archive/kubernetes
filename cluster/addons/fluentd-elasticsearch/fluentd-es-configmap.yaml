@@ -105,7 +105,7 @@ data:
       path /var/log/containers/*.log
       pos_file /var/log/es-containers.log.pos
       time_format %Y-%m-%dT%H:%M:%S.%NZ
-      tag kubernetes.*
+      tag raw.kubernetes.*
       read_from_head true
       format multi_format
       <pattern>
@@ -118,18 +118,17 @@ data:
         time_format %Y-%m-%dT%H:%M:%S.%N%:z
       </pattern>
     </source>
+    # Detect exceptions in the log output and forward them as one log entry.
+    <match raw.kubernetes.**>
+      @type detect_exceptions
+      remove_tag_prefix raw
+      message log
+      stream stream
+      multiline_flush_interval 5
+      max_bytes 500000
+      max_lines 1000
+    </match>
   system.input.conf: |-
-    # Example:
-    # 2015-12-21 23:17:22,066 [salt.state       ][INFO    ] Completed state [net.ipv4.ip_forward] at time 23:17:22.066081
-    <source>
-      type tail
-      format /^(?<time>[^ ]* [^ ,]*)[^\[]*\[[^\]]*\]\[(?<severity>[^ \]]*) *\] (?<message>.*)$/
-      time_format %Y-%m-%d %H:%M:%S
-      path /var/log/salt/minion
-      pos_file /var/log/es-salt.pos
-      tag salt
-    </source>
-
     # Example:
     # Dec 21 23:17:22 gke-foo-1-1-4b5cbd14-node-4eoj startupscript: Finished running startup script /var/run/google.startup.script
     <source>
@@ -367,7 +366,7 @@ data:
        num_threads 2
     </match>
 metadata:
-  name: fluentd-es-config-v0.1.1
+  name: fluentd-es-config-v0.1.2
   namespace: kube-system
   labels:
     addonmanager.kubernetes.io/mode: Reconcile
