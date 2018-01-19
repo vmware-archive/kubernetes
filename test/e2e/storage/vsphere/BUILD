@@ -27,6 +27,8 @@ go_library(
         "vsphere_volume_perf.go",
         "vsphere_volume_placement.go",
         "vsphere_volume_vsan_policy.go",
+        "bootstrap/context.go",
+        "bootstrap/bootstrap.go",
     ],
     importpath = "k8s.io/kubernetes/test/e2e/storage/vsphere",
     deps = [
