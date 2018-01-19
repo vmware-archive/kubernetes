@@ -85,7 +85,7 @@ var _ = utils.SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", 
 		if localDatastore == "" {
 			framework.Skipf("Environment variable LOCAL_DATASTORE is not set. Skipping the test.")
 		} else {
-			framework.logf("Running test against configured local datastore: %s", localDatastore)
+			framework.Logf("Running test against configured local datastore: %s", localDatastore)
 		}
 		scParameters[Datastore] = localDatastore
 		scParameters[DiskFormat] = ThinDisk
