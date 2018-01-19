@@ -17,15 +17,17 @@ limitations under the License.
 package vsphere
 
 import (
-	. "github.com/onsi/gomega"
 	"os"
 	"strconv"
+
+	"k8s.io/kubernetes/test/e2e/framework"
 )
 
 const (
 	SPBMPolicyName            = "VSPHERE_SPBM_POLICY_NAME"
 	StorageClassDatastoreName = "VSPHERE_DATASTORE"
 	SecondSharedDatastore     = "VSPHERE_SECOND_SHARED_DATASTORE"
+	LocalDatastore            = "VSPHERE_LOCAL_DATASTORE"
 	KubernetesClusterName     = "VSPHERE_KUBERNETES_CLUSTER"
 	SPBMTagPolicy             = "VSPHERE_SPBM_TAG_POLICY"
 )
@@ -54,13 +56,17 @@ const (
 
 func GetAndExpectStringEnvVar(varName string) string {
 	varValue := os.Getenv(varName)
-	Expect(varValue).NotTo(BeEmpty(), "ENV "+varName+" is not set")
+	if varValue == "" {
+		framework.Skipf("Environment variable " + varName + " is not set. Skipping the test.")
+	}
 	return varValue
 }
 
 func GetAndExpectIntEnvVar(varName string) int {
 	varValue := GetAndExpectStringEnvVar(varName)
 	varIntValue, err := strconv.Atoi(varValue)
-	Expect(err).NotTo(HaveOccurred(), "Error Parsing "+varName)
+	if err != nil {
+		framework.Skipf("Error parsing " + varName + ", which is expected to be an integer value. Skipping the test.")
+	}
 	return varIntValue
 }

@@ -18,7 +18,6 @@ package vsphere
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -81,12 +80,7 @@ var _ = utils.SIGDescribe("Volume Provisioning on Datastore [Feature:vsphere]", 
 
 	It("should fail provisioning pv on local datastore", func() {
 		By("Invoking Test for local datastore")
-		localDatastore = os.Getenv("LOCAL_DATASTORE")
-		if localDatastore == "" {
-			framework.Skipf("Environment variable LOCAL_DATASTORE is not set. Skipping the test.")
-		} else {
-			framework.Logf("Running test against configured local datastore: %s", localDatastore)
-		}
+		localDatastore = GetAndExpectStringEnvVar(LocalDatastore)
 		scParameters[Datastore] = localDatastore
 		scParameters[DiskFormat] = ThinDisk
 		err := invokeDatastoreTestNeg(client, namespace, scParameters)
