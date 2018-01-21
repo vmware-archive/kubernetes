@@ -1112,7 +1112,7 @@ func (vs *VSphere) DisksAreAttached(volPaths []string, nodeName k8stypes.NodeNam
 func checkDiskAttached(volPath string, vmdevices object.VirtualDeviceList, dc *object.Datacenter, client *govmomi.Client) (bool, error) {
 	_, err := getVirtualDiskControllerKey(volPath, vmdevices, dc, client)
 	if err != nil {
-		if err == ErrNoDevicesFound {
+		if err == ErrNoDevicesFound || err == ErrNoDiskUUIDFound {
 			return false, nil
 		}
 		glog.Errorf("Failed to check whether disk is attached. err: %s", err)
