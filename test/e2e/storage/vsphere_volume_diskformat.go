@@ -28,8 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stype "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	"k8s.io/kubernetes/pkg/api/v1"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/clientset"
 	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/kubernetes/test/e2e/framework"
 )
@@ -75,14 +75,14 @@ var _ = framework.KubeDescribe("Volume Disk Format [Feature:vsphere]", func() {
 		if !isNodeLabeled {
 			nodeLabelValue := "vsphere_e2e_" + string(uuid.NewUUID())
 			nodeKeyValueLabel = make(map[string]string)
-			nodeKeyValueLabel["vsphere_e2e_label"] = nodeLabelValue
-			framework.AddOrUpdateLabelOnNode(client, nodeName, "vsphere_e2e_label", nodeLabelValue)
+			nodeKeyValueLabel["vsphere_e2e_label_volume_diskformat"] = nodeLabelValue
+			framework.AddOrUpdateLabelOnNode(client, nodeName, "vsphere_e2e_label_volume_diskformat", nodeLabelValue)
 			isNodeLabeled = true
 		}
 	})
 	framework.AddCleanupAction(func() {
 		if len(nodeLabelValue) > 0 {
-			framework.RemoveLabelOffNode(client, nodeName, "vsphere_e2e_label")
+			framework.RemoveLabelOffNode(client, nodeName, "vsphere_e2e_label_volume_diskformat")
 		}
 	})
 

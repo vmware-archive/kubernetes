@@ -77,10 +77,10 @@ var _ = framework.KubeDescribe("Volume Placement", func() {
 	*/
 	framework.AddCleanupAction(func() {
 		if len(node1KeyValueLabel) > 0 {
-			framework.RemoveLabelOffNode(c, node1Name, "vsphere_e2e_label")
+			framework.RemoveLabelOffNode(c, node1Name, "vsphere_e2e_label_volume_placement")
 		}
 		if len(node2KeyValueLabel) > 0 {
-			framework.RemoveLabelOffNode(c, node2Name, "vsphere_e2e_label")
+			framework.RemoveLabelOffNode(c, node2Name, "vsphere_e2e_label_volume_placement")
 		}
 	})
 	/*
@@ -335,13 +335,13 @@ func testSetupVolumePlacement(client clientset.Interface, namespace string) (nod
 	node2Name = nodes.Items[1].Name
 	node1LabelValue := "vsphere_e2e_" + string(uuid.NewUUID())
 	node1KeyValueLabel = make(map[string]string)
-	node1KeyValueLabel["vsphere_e2e_label"] = node1LabelValue
-	framework.AddOrUpdateLabelOnNode(client, node1Name, "vsphere_e2e_label", node1LabelValue)
+	node1KeyValueLabel["vsphere_e2e_label_volume_placement"] = node1LabelValue
+	framework.AddOrUpdateLabelOnNode(client, node1Name, "vsphere_e2e_label_volume_placement", node1LabelValue)
 
 	node2LabelValue := "vsphere_e2e_" + string(uuid.NewUUID())
 	node2KeyValueLabel = make(map[string]string)
-	node2KeyValueLabel["vsphere_e2e_label"] = node2LabelValue
-	framework.AddOrUpdateLabelOnNode(client, node2Name, "vsphere_e2e_label", node2LabelValue)
+	node2KeyValueLabel["vsphere_e2e_label_volume_placement"] = node2LabelValue
+	framework.AddOrUpdateLabelOnNode(client, node2Name, "vsphere_e2e_label_volume_placement", node2LabelValue)
 	return node1Name, node1KeyValueLabel, node2Name, node2KeyValueLabel
 }
 
