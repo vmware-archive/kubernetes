@@ -23,6 +23,7 @@ import (
 var once sync.Once
 var waiting = make(chan bool)
 
+// Bootstrap takes care of initializing necessary test context for vSphere tests
 func Bootstrap() {
 	done := make(chan bool)
 	go func() {

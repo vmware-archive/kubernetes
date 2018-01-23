@@ -16,6 +16,7 @@ limitations under the License.
 
 package bootstrap
 
+// Context holds common information for vSphere tests
 type Context struct {
 	// NodeMapper and other instances, common to vSphere tests
 }
