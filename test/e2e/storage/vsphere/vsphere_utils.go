@@ -37,6 +37,13 @@ import (
 	"k8s.io/kubernetes/pkg/volume/util/volumehelper"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
+	"github.com/vmware/govmomi/vim25/mo"
+	"github.com/vmware/govmomi/object"
+
+	"context"
+	"github.com/vmware/govmomi/find"
+	vimtypes "github.com/vmware/govmomi/vim25/types"
+
 )
 
 const (
@@ -467,4 +474,65 @@ func getVSphere(c clientset.Interface) (*vsphere.VSphere, error) {
 // GetVSphere returns vsphere cloud provider
 func GetVSphere(c clientset.Interface) (*vsphere.VSphere, error) {
 	return getVSphere(c)
+}
+
+
+// get .vmx file path for a virtual machine
+func getVMXFilePath(vmObject *object.VirtualMachine) string {
+	ctx, _ := context.WithCancel(context.Background())
+
+	var nodeVM mo.VirtualMachine
+	err := vmObject.Properties(ctx, vmObject.Reference(), []string{"config.files"}, &nodeVM)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(nodeVM.Config).NotTo(BeNil())
+	return nodeVM.Config.Files.VmPathName
+}
+
+// verify ready node count. Try upto 3 minutes. If count is expected count, return the nodeList
+func verifyReadyNodeCount(client clientset.Interface, expectedNodes int) (nodeList *v1.NodeList) {
+	numNodes := 0
+	for i := 0; i < 31; i++ {
+		nodeList = framework.GetReadySchedulableNodesOrDie(client)
+		Expect(nodeList.Items).NotTo(BeEmpty(), "Unable to find ready and schedulable Node")
+
+		numNodes = len(nodeList.Items)
+		if numNodes == expectedNodes {
+			break
+		}
+		time.Sleep(5*time.Second)
+	}
+	Expect(numNodes).To(Equal(expectedNodes))
+	return nodeList
+}
+
+func unregisterNodeVM(nodeName string, vm *object.VirtualMachine) {
+	ctx, _ := context.WithCancel(context.Background())
+
+	_, err := vm.PowerOff(ctx)
+	Expect(err).NotTo(HaveOccurred())
+	err = vm.WaitForPowerState(ctx, vimtypes.VirtualMachinePowerStatePoweredOff)
+	Expect(err).NotTo(HaveOccurred(), "Unable to power off the node")
+
+	err = vm.Unregister(ctx)
+	Expect(err).NotTo(HaveOccurred(), "Unable to unregister the node")
+}
+
+func registerNodeVM(nodeName, workingDir, vmxFilePath string, finder *find.Finder, rpool *object.ResourcePool, host *object.HostSystem){
+	ctx, _ := context.WithCancel(context.Background())
+
+	vmFolder, err := finder.FolderOrDefault(ctx, workingDir)
+	Expect(err).NotTo(HaveOccurred())
+
+	registerTask, err := vmFolder.RegisterVM(ctx, vmxFilePath, nodeName, false, rpool, host)
+	Expect(err).NotTo(HaveOccurred())
+	err = registerTask.Wait(ctx)
+	Expect(err).NotTo(HaveOccurred())
+
+	vmPath := filepath.Join(workingDir, nodeName)
+	vm, err := finder.VirtualMachine(ctx, vmPath)
+	Expect(err).NotTo(HaveOccurred())
+
+	vm.PowerOn(ctx)
+	err = vm.WaitForPowerState(ctx, vimtypes.VirtualMachinePowerStatePoweredOn)
+	Expect(err).NotTo(HaveOccurred(), "Unable to power on the node")
 }

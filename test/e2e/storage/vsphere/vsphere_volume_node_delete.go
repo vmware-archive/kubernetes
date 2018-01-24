@@ -17,7 +17,6 @@ limitations under the License.
 package vsphere
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -26,16 +25,14 @@ import (
 	"github.com/vmware/govmomi/find"
 	"golang.org/x/net/context"
 
-	vimtypes "github.com/vmware/govmomi/vim25/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
-	"time"
-	"github.com/vmware/govmomi/vim25/mo"
+
 )
 
-var _ = utils.SIGDescribe("Node Delete [Feature:vsphere] [Slow] [Disruptive]", func() {
+var _ = utils.SIGDescribe("Node Unregister [Feature:vsphere] [Slow] [Disruptive]", func() {
 	f := framework.NewDefaultFramework("node-unregister")
 	var (
 		client     clientset.Interface
@@ -58,71 +55,60 @@ var _ = utils.SIGDescribe("Node Delete [Feature:vsphere] [Slow] [Disruptive]", f
 	})
 
 	It("node unregister", func() {
-
 		By("Get total Ready nodes")
 		nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
 		Expect(nodeList.Items).NotTo(BeEmpty(), "Unable to find ready and schedulable Node")
 		Expect(len(nodeList.Items) > 1).To(BeTrue(), "At least 2 nodes are required for this test")
 
-		totalNodes := len(nodeList.Items)
+		totalNodesCount := len(nodeList.Items)
+		nodeVM := nodeList.Items[0]
 
-		node1 := nodeList.Items[0]
-
-		govMoMiClient, err := vsphere.GetgovmomiClient(nil)
+		goVmomiClient, err := vsphere.GetgovmomiClient(nil)
 		Expect(err).NotTo(HaveOccurred())
 
-		finder := find.NewFinder(govMoMiClient.Client, true)
+		finder := find.NewFinder(goVmomiClient.Client, true)
 		ctx, _ := context.WithCancel(context.Background())
 
-		vmPath := filepath.Join(workingDir, string(node1.ObjectMeta.Name))
-		vm, err := finder.VirtualMachine(ctx, vmPath)
+		// Find VM .vmx file path, host, resource pool. They are required to register a node VM to VC
+		vmPath := filepath.Join(workingDir, nodeVM.ObjectMeta.Name)
+		vmObject, err := finder.VirtualMachine(ctx, vmPath)
+		Expect(err).NotTo(HaveOccurred())
+		vmxFilePath := getVMXFilePath(vmObject)
+
+		vmHost, err  := vmObject.HostSystem(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Find .vmx file path to be used to re register the node
-		var nodeVM mo.VirtualMachine
-		err = vm.Properties(ctx, vm.Reference(), []string{"config.files"}, &nodeVM)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(nodeVM.Config).NotTo(BeNil())
-
-		vmFolder, err := finder.FolderOrDefault(ctx, workingDir)
-		Expect(err).NotTo(HaveOccurred())
-		host, err  := vm.HostSystem(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		rpool ,err := vm.ResourcePool(ctx)
+		vmPool ,err := vmObject.ResourcePool(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		By(fmt.Sprintf("Power off the node: %v", node1.ObjectMeta.Name))
-		_, err = vm.PowerOff(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		err = vm.WaitForPowerState(ctx, vimtypes.VirtualMachinePowerStatePoweredOff)
-		Expect(err).NotTo(HaveOccurred(), "Unable to power off the node")
-
-		By(fmt.Sprintf("Unregister the node: %v", node1.ObjectMeta.Name))
-		err = vm.Unregister(ctx)
-		Expect(err).NotTo(HaveOccurred(), "Unable to unregister the node")
+		// Unregister Node VM
+		By("Unregister a node VM")
+		unregisterNodeVM(nodeVM.ObjectMeta.Name, vmObject)
 
 		// Ready nodes should be 1 less
-		verifyReadyNodes(f.ClientSet, totalNodes - 1)
+		By("Verifying the ready node counts")
+		nodeList = verifyReadyNodeCount(f.ClientSet, totalNodesCount - 1)
+		var nodeNameList []string
+		for _, node := range nodeList.Items {
+			nodeNameList = append(nodeNameList, node.ObjectMeta.Name)
+		}
+		Expect(nodeNameList).NotTo(ContainElement(nodeVM.ObjectMeta.Name))
 
-		By(fmt.Sprintf("Register the node: %v", node1.ObjectMeta.Name))
-		registerTask, err := vmFolder.RegisterVM(ctx, nodeVM.Config.Files.VmPathName, node1.ObjectMeta.Name, false, rpool, host)
-		Expect(err).NotTo(HaveOccurred())
-		err = registerTask.Wait(ctx)
-		Expect(err).NotTo(HaveOccurred())
-
-		vm, err = finder.VirtualMachine(ctx, vmPath)
-		Expect(err).NotTo(HaveOccurred())
-
-		By(fmt.Sprintf("Power on the node: %v", node1.ObjectMeta.Name))
-		vm.PowerOn(ctx)
-		err = vm.WaitForPowerState(ctx, vimtypes.VirtualMachinePowerStatePoweredOn)
-		Expect(err).NotTo(HaveOccurred(), "Unable to power on the node")
+		// Register Node VM
+		By("Register back the node VM")
+		registerNodeVM(nodeVM.ObjectMeta.Name, workingDir, vmxFilePath, finder, vmPool, vmHost)
 
 		// Ready nodes should be equal to earlier count
-		verifyReadyNodes(f.ClientSet, totalNodes)
-
+		By("Verifying the ready node counts")
+		nodeList = verifyReadyNodeCount(f.ClientSet, totalNodesCount)
+		nodeNameList = nodeNameList[:0]
+		for _, node := range nodeList.Items {
+			nodeNameList = append(nodeNameList, node.ObjectMeta.Name)
+		}
+		Expect(nodeNameList).To(ContainElement(nodeVM.ObjectMeta.Name))
 
 		// Sanity test that pod provisioning works
+		By("Sanity check for volume lifecycle")
 		scParameters := make(map[string]string)
 		storagePolicy := os.Getenv("VSPHERE_SPBM_GOLD_POLICY")
 		Expect(storagePolicy).NotTo(BeEmpty(), "Please set VSPHERE_SPBM_GOLD_POLICY system environment")
@@ -130,19 +116,3 @@ var _ = utils.SIGDescribe("Node Delete [Feature:vsphere] [Slow] [Disruptive]", f
 		invokeValidPolicyTest(f, client, namespace, scParameters)
 	})
 })
-
-// verify ready status of nodes upto 1 minute
-func verifyReadyNodes(client clientset.Interface, expectedNodes int){
-	numNodes := 0
-	for i := 0; i < 31; i++ {
-		nodeList := framework.GetReadySchedulableNodesOrDie(client)
-		Expect(nodeList.Items).NotTo(BeEmpty(), "Unable to find ready and schedulable Node")
-		numNodes = len(nodeList.Items)
-		if numNodes == expectedNodes {
-			break
-		}
-		time.Sleep(5*time.Second)
-	}
-
-	Expect(numNodes).To(Equal(expectedNodes))
-}
