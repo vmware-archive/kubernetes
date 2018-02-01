@@ -8,9 +8,15 @@ load(
 go_library(
     name = "go_default_library",
     srcs = [
+        "bootstrap.go",
+        "config.go",
+        "connection.go",
+        "context.go",
+        "nodemapper.go",
         "persistent_volumes-vsphere.go",
         "pv_reclaimpolicy.go",
         "pvc_label_selector.go",
+        "vsphere.go",
         "vsphere_common.go",
         "vsphere_scale.go",
         "vsphere_statefulsets.go",
@@ -35,10 +41,17 @@ go_library(
         "//pkg/volume/util/volumehelper:go_default_library",
         "//test/e2e/framework:go_default_library",
         "//test/e2e/storage/utils:go_default_library",
+        "//vendor/github.com/golang/glog:go_default_library",
         "//vendor/github.com/onsi/ginkgo:go_default_library",
         "//vendor/github.com/onsi/gomega:go_default_library",
+        "//vendor/github.com/vmware/govmomi:go_default_library",
+        "//vendor/github.com/vmware/govmomi/find:go_default_library",
+        "//vendor/github.com/vmware/govmomi/object:go_default_library",
+        "//vendor/github.com/vmware/govmomi/session:go_default_library",
+        "//vendor/github.com/vmware/govmomi/vim25:go_default_library",
         "//vendor/github.com/vmware/govmomi/vim25/types:go_default_library",
         "//vendor/golang.org/x/net/context:go_default_library",
+        "//vendor/gopkg.in/gcfg.v1:go_default_library",
         "//vendor/k8s.io/api/core/v1:go_default_library",
         "//vendor/k8s.io/api/extensions/v1beta1:go_default_library",
         "//vendor/k8s.io/api/storage/v1:go_default_library",
@@ -62,9 +75,6 @@ filegroup(
 
 filegroup(
     name = "all-srcs",
-    srcs = [
-        ":package-srcs",
-        "//test/e2e/storage/vsphere/bootstrap:all-srcs",
-    ],
+    srcs = [":package-srcs"],
     tags = ["automanaged"],
 )

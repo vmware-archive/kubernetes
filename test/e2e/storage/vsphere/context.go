@@ -14,31 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package bootstrap
+package vsphere
 
-import (
-	"sync"
-)
-
-var once sync.Once
-var waiting = make(chan bool)
-
-// Bootstrap takes care of initializing necessary test context for vSphere tests
-func Bootstrap() {
-	done := make(chan bool)
-	go func() {
-		once.Do(bootstrapOnce)
-		<-waiting
-		done <- true
-	}()
-	<-done
+// Context holds common information for vSphere tests
+type VSphereContext struct {
+	NodeMapper *NodeMapper
 }
 
-func bootstrapOnce() {
-	// TBD
-	// 1. Read vSphere conf and get VSphere instances
-	// 2. Get Node to VSphere mapping
-	// 3. Set NodeMapper in vSphere context
-	TestContext = Context{}
-	close(waiting)
-}
+// TestContext should be used by all tests to access common context data. It should be initialized only once, during bootstrapping the tests.
+var TestContext VSphereContext
