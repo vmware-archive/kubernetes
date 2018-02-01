@@ -65,11 +65,16 @@ var _ = utils.SIGDescribe("Volume Disk Format [Feature:vsphere]", func() {
 	)
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
+		Bootstrap(f)
 		client = f.ClientSet
 		namespace = f.Namespace.Name
 		nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
 		if len(nodeList.Items) != 0 {
 			nodeName = nodeList.Items[0].Name
+			// This is for testing and will be removed before merge
+			for _, node := range nodeList.Items {
+				framework.Logf("NodeMap : %v\n", TestContext.NodeMapper.GetNodeInfo(node.Name))
+			}
 		} else {
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
