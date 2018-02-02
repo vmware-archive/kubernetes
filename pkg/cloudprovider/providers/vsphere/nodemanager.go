@@ -74,7 +74,7 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 	var globalErr *error
 
 	queueChannel = make(chan *VmSearch, QUEUE_SIZE)
-	nodeUUID := node.Status.NodeInfo.SystemUUID
+	nodeUUID := node.Spec.ProviderID
 	vmFound := false
 	globalErr = nil
 

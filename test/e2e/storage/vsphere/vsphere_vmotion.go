@@ -23,11 +23,15 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/apimachinery/pkg/types"
+	k8s_types "k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
+	"github.com/vmware/govmomi/vim25/types"
+	"golang.org/x/net/context"
+	"github.com/vmware/govmomi/object"
 )
 
 const (
@@ -109,8 +113,34 @@ var _ = utils.SIGDescribe("VM vMotion [Feature:vsphere]", func() {
 })
 
 func migrateVM(vsp *vsphere.VSphere, nodeName string) {
-	// nodeInfo, err := vsp.NodeManager().GetNodeInfo(k8stypes.NodeName(nodeName))
-	// migrate utility
+	 nodeInfo, err := vsp.NodeManager().GetNodeInfo(k8stypes.NodeName(nodeName))
+		nodeInfo.VM().Relocate()
+
+	 // migrate utility
+}
+
+func migrateVMUtil(destination_vc string, username string, password string, destination_resource_pool object.ResourcePool, vm *vclib.VirtualMachine) {
+	var priority types.VirtualMachineMovePriority
+	var spec     types.VirtualMachineRelocateSpec
+	var serviceLocator types.ServiceLocator
+	var creds types.ServiceLocatorNamePassword
+
+	priority = types.VirtualMachineMovePriorityDefaultPriority
+
+	creds.Username = username
+	creds.Password = password
+	serviceLocator.Url = destination_vc
+	serviceLocator.Credential = creds.GetServiceLocatorCredential()
+	serviceLocator.InstanceUuid = vm.Client().ServiceContent.About.InstanceUuid
+
+	pool := destination_resource_pool.Reference()
+	// spec.Host
+	spec.Pool = &pool
+	spec.Service = &serviceLocator
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vm.Relocate(ctx, spec, priority)
 }
 
 func invokeVMotionTest(f *framework.Framework, c clientset.Interface, ns string, nodeKeyValueLabel map[string]string, vsp *vsphere.VSphere) {
@@ -129,7 +159,7 @@ func invokeVMotionTest(f *framework.Framework, c clientset.Interface, ns string,
 	framework.ExpectNoError(framework.DeletePodWithWait(f, c, pod), "Failed to delete pod ", pod.Name)
 
 	By("Verify volume is detached from the node after Pod is deleted")
-	Expect(waitForVSphereDiskToDetach(c, vsp, pv.Spec.VsphereVolume.VolumePath, types.NodeName(pod.Spec.NodeName))).NotTo(HaveOccurred())
+	Expect(waitForVSphereDiskToDetach(c, vsp, pv.Spec.VsphereVolume.VolumePath, k8s_types.NodeName(pod.Spec.NodeName))).NotTo(HaveOccurred())
 
 	By("Deleting the Claim")
 	framework.ExpectNoError(framework.DeletePersistentVolumeClaim(c, pvc.Name, ns), "Failed to delete PVC ", pvc.Name)
