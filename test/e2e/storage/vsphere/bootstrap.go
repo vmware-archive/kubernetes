@@ -45,7 +45,7 @@ func bootstrapOnce() {
 	}
 	// 2. Get all ready nodes
 	nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
-	TestContext = VSphereContext{NodeMapper: &NodeMapper{}}
+	TestContext = VSphereContext{NodeMapper: &NodeMapper{}, VSphereInstances: vsphereInstances}
 
 	// 3. Get Node to VSphere mapping
 	err = TestContext.NodeMapper.GenerateNodeMap(vsphereInstances, *nodeList)

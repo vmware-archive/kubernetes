@@ -19,6 +19,7 @@ package vsphere
 import (
 	"errors"
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -30,9 +31,10 @@ type NodeMapper struct {
 }
 
 type NodeInfo struct {
-	Name          string
-	DataCenterRef object.Reference
-	VSphere       *VSphere
+	Name              string
+	DataCenterRef     types.ManagedObjectReference
+	VirtualMachineRef types.ManagedObjectReference
+	VSphere           *VSphere
 }
 
 var (
@@ -104,7 +106,7 @@ func (nm *NodeMapper) GenerateNodeMap(vSphereInstances map[string]*VSphere, node
 				if vm != nil {
 					framework.Logf("Found node %s as vm=%+v in vc=%s and datacenter=%s",
 						n.Name, vm, res.vs.Config.Hostname, res.datacenter.Name())
-					nodeInfo := &NodeInfo{Name: n.Name, DataCenterRef: res.datacenter.Reference(), VSphere: res.vs}
+					nodeInfo := &NodeInfo{Name: n.Name, DataCenterRef: res.datacenter.Reference(), VirtualMachineRef: vm.Reference(), VSphere: res.vs}
 					nameToNodeInfo[n.Name] = nodeInfo
 					break
 				}
