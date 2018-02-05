@@ -41,6 +41,7 @@ type Config struct {
 	Port              string
 	Datacenters       string
 	RoundTripperCount uint
+	DefaultDatastore  string
 }
 
 // ConfigFile represents the content of vsphere.conf file.
@@ -124,7 +125,7 @@ func readConfig(config io.Reader) (ConfigFile, error) {
 func populateInstanceMap(cfg *ConfigFile) (map[string]*VSphere, error) {
 	vsphereInstances := make(map[string]*VSphere)
 
-	if cfg.Workspace.VCenterIP == "" || cfg.Workspace.Folder == "" || cfg.Workspace.Datacenter == "" {
+	if cfg.Workspace.VCenterIP == "" || cfg.Workspace.DefaultDatastore == "" || cfg.Workspace.Folder == "" || cfg.Workspace.Datacenter == "" {
 		msg := fmt.Sprintf("All fields in workspace are mandatory."+
 			" vsphere.conf does not have the workspace specified correctly. cfg.Workspace: %+v", cfg.Workspace)
 		framework.Logf(msg)
@@ -163,6 +164,8 @@ func populateInstanceMap(cfg *ConfigFile) (map[string]*VSphere, error) {
 		if vcConfig.RoundTripperCount == 0 {
 			vcConfig.RoundTripperCount = cfg.Global.RoundTripperCount
 		}
+
+		vcConfig.DefaultDatastore = cfg.Workspace.DefaultDatastore
 
 		vsphereIns := VSphere{
 			Config: vcConfig,
