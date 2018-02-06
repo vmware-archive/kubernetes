@@ -53,7 +53,6 @@ var _ = utils.SIGDescribe("Node Unregister [Feature:vsphere] [Slow] [Disruptive]
 	It("node unregister", func() {
 		By("Get total Ready nodes")
 		nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
-		Expect(nodeList.Items).NotTo(BeEmpty(), "Unable to find ready and schedulable Node")
 		Expect(len(nodeList.Items) > 1).To(BeTrue(), "At least 2 nodes are required for this test")
 
 		totalNodesCount := len(nodeList.Items)
@@ -81,7 +80,11 @@ var _ = utils.SIGDescribe("Node Unregister [Feature:vsphere] [Slow] [Disruptive]
 
 		// Ready nodes should be 1 less
 		By("Verifying the ready node counts")
-		nodeList = verifyReadyNodeCount(f.ClientSet, totalNodesCount-1)
+		Expect(verifyReadyNodeCount(f.ClientSet, totalNodesCount-1)).To(BeTrue(), "Unable to verify expected ready node count")
+
+		nodeList = framework.GetReadySchedulableNodesOrDie(client)
+		Expect(nodeList.Items).NotTo(BeEmpty(), "Unable to find ready and schedulable Node")
+
 		var nodeNameList []string
 		for _, node := range nodeList.Items {
 			nodeNameList = append(nodeNameList, node.ObjectMeta.Name)
@@ -94,7 +97,11 @@ var _ = utils.SIGDescribe("Node Unregister [Feature:vsphere] [Slow] [Disruptive]
 
 		// Ready nodes should be equal to earlier count
 		By("Verifying the ready node counts")
-		nodeList = verifyReadyNodeCount(f.ClientSet, totalNodesCount)
+		Expect(verifyReadyNodeCount(f.ClientSet, totalNodesCount)).To(BeTrue(), "Unable to verify expected ready node count")
+
+		nodeList = framework.GetReadySchedulableNodesOrDie(client)
+		Expect(nodeList.Items).NotTo(BeEmpty(), "Unable to find ready and schedulable Node")
+
 		nodeNameList = nodeNameList[:0]
 		for _, node := range nodeList.Items {
 			nodeNameList = append(nodeNameList, node.ObjectMeta.Name)

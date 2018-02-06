@@ -490,11 +490,11 @@ func getVMXFilePath(vmObject *object.VirtualMachine) (vmxPath string) {
 	return vmxPath
 }
 
-// verify ready node count. Try upto 3 minutes. If count is expected count, return the nodeList
-func verifyReadyNodeCount(client clientset.Interface, expectedNodes int) (nodeList *v1.NodeList) {
+// verify ready node count. Try upto 3 minutes. Return true if count is expected count
+func verifyReadyNodeCount(client clientset.Interface, expectedNodes int) bool {
 	numNodes := 0
-	for i := 0; i < 31; i++ {
-		nodeList = framework.GetReadySchedulableNodesOrDie(client)
+	for i := 0; i < 36; i++ {
+		nodeList := framework.GetReadySchedulableNodesOrDie(client)
 		Expect(nodeList.Items).NotTo(BeEmpty(), "Unable to find ready and schedulable Node")
 
 		numNodes = len(nodeList.Items)
@@ -503,8 +503,7 @@ func verifyReadyNodeCount(client clientset.Interface, expectedNodes int) (nodeLi
 		}
 		time.Sleep(5 * time.Second)
 	}
-	Expect(numNodes).To(Equal(expectedNodes))
-	return nodeList
+	return (numNodes == expectedNodes)
 }
 
 // poweroff nodeVM and confirm the poweroff state
@@ -549,7 +548,7 @@ func registerNodeVM(nodeName, workingDir, vmxFilePath string, rpool *object.Reso
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	framework.Logf("Registering node VM %s", nodeName)
+	framework.Logf("Registering node VM %s with vmx file path %s", nodeName, vmxFilePath)
 
 	nodeInfo := TestContext.NodeMapper.GetNodeInfo(nodeName)
 	finder := find.NewFinder(nodeInfo.VSphere.Client.Client, true)
