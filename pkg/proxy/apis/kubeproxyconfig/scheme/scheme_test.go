@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,6 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package versioned exists solely to make godep happy; it will be removed when all external
-// dependencies that rely on this package are updated to use its new location.
-package versioned
+package scheme
+
+import (
+	"testing"
+
+	"k8s.io/apimachinery/pkg/api/testing/roundtrip"
+	"k8s.io/kubernetes/pkg/proxy/apis/kubeproxyconfig/fuzzer"
+)
+
+func TestRoundTripTypes(t *testing.T) {
+	roundtrip.RoundTripTestForScheme(t, Scheme, fuzzer.Funcs)
+}

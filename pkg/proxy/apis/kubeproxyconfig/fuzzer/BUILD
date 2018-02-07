@@ -2,13 +2,15 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["util.go"],
-    importpath = "k8s.io/kubernetes/pkg/controller/volume/expand/util",
+    srcs = ["fuzzer.go"],
+    importpath = "k8s.io/kubernetes/pkg/proxy/apis/kubeproxyconfig/fuzzer",
     visibility = ["//visibility:public"],
     deps = [
-        "//vendor/github.com/golang/glog:go_default_library",
-        "//vendor/k8s.io/api/core/v1:go_default_library",
-        "//vendor/k8s.io/client-go/kubernetes:go_default_library",
+        "//pkg/proxy/apis/kubeproxyconfig:go_default_library",
+        "//pkg/util/pointer:go_default_library",
+        "//vendor/github.com/google/gofuzz:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/apis/meta/v1:go_default_library",
+        "//vendor/k8s.io/apimachinery/pkg/runtime/serializer:go_default_library",
     ],
 )
 

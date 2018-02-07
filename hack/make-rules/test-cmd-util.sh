@@ -1156,14 +1156,26 @@ run_kubectl_apply_deployments_tests() {
   kubectl apply -f hack/testdata/deployment-label-change1.yaml "${kube_flags[@]}"
   # check right deployment exists
   kube::test::get_object_assert 'deployment nginx' "{{${id_field}}}" 'nginx'
-  # apply deployment with wrong labels mismatch selector throws errors
+  # apply deployment with new labels and a conflicting resourceVersion
   output_message=$(! kubectl apply -f hack/testdata/deployment-label-change2.yaml 2>&1 "${kube_flags[@]}")
-  kube::test::if_has_string "${output_message}" 'Invalid value'
-  # apply deployment with --force and --overwrite will success
+  kube::test::if_has_string "${output_message}" 'Error from server (Conflict)'
+  # apply deployment with --force and --overwrite will succeed
   kubectl apply -f hack/testdata/deployment-label-change2.yaml --overwrite=true  --force=true --grace-period=10
   # check the changed deployment
   output_message=$(kubectl apply view-last-applied deploy/nginx -o json 2>&1 "${kube_flags[@]}" |grep nginx2)
   kube::test::if_has_string "${output_message}" '"name": "nginx2"'
+  # applying a resource (with --force) that is both conflicting and invalid will
+  # cause the server to only return a "Conflict" error when we attempt to patch.
+  # This means that we will delete the existing resource after receiving 5 conflict
+  # errors in a row from the server, and will attempt to create the modified
+  # resource that we are passing to "apply". Since the modified resource is also
+  # invalid, we will receive an invalid error when we attempt to create it, after
+  # having deleted the old resource. Ensure that when this case is reached, the
+  # old resource is restored once again, and the validation error is printed.
+  output_message=$(! kubectl apply -f hack/testdata/deployment-label-change3.yaml --force 2>&1 "${kube_flags[@]}")
+  kube::test::if_has_string "${output_message}" 'Invalid value'
+  # Ensure that the old object has been restored
+  kube::test::get_object_assert 'deployment nginx' "{{${template_labels}}}" 'nginx2'
   # cleanup
   kubectl delete deployments --all --grace-period=10
 
@@ -3732,7 +3744,7 @@ run_cmd_with_img_tests() {
 
   # Test that a valid image reference value is provided as the value of --image in `kubectl run <name> --image`
   output_message=$(kubectl run test1 --image=validname)
-  kube::test::if_has_string "${output_message}" 'deployment "test1" created'
+  kube::test::if_has_string "${output_message}" 'deployments "test1" created'
   kubectl delete deployments test1
   # test invalid image name
   output_message=$(! kubectl run test2 --image=InvalidImageName 2>&1)
@@ -4410,7 +4422,7 @@ __EOF__
   kube::test::if_has_string "${response}" 'must provide one or more resources'
   # test=label matches our node
   response=$(kubectl cordon --selector test=label)
-  kube::test::if_has_string "${response}" 'node "127.0.0.1" cordoned'
+  kube::test::if_has_string "${response}" 'nodes "127.0.0.1" cordoned'
   # invalid=label does not match any nodes
   response=$(kubectl cordon --selector invalid=label)
   kube::test::if_has_not_string "${response}" 'cordoned'
@@ -4590,6 +4602,7 @@ runTests() {
   hpa_min_field=".spec.minReplicas"
   hpa_max_field=".spec.maxReplicas"
   hpa_cpu_field=".spec.targetCPUUtilizationPercentage"
+  template_labels=".spec.template.metadata.labels.name"
   statefulset_replicas_field=".spec.replicas"
   statefulset_observed_generation=".status.observedGeneration"
   job_parallelism_field=".spec.parallelism"

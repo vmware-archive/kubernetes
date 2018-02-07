@@ -737,6 +737,29 @@ func testVolumeClaimAnnotation(name string, namespace string, ann string, annval
 	}
 }
 
+func testVolumeClaimStorageClassInSpec(name, namespace, scName string, spec core.PersistentVolumeClaimSpec) *core.PersistentVolumeClaim {
+	spec.StorageClassName = &scName
+	return &core.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: spec,
+	}
+}
+
+func testVolumeClaimStorageClassInAnnotationAndSpec(name, namespace, scNameInAnn, scName string, spec core.PersistentVolumeClaimSpec) *core.PersistentVolumeClaim {
+	spec.StorageClassName = &scName
+	return &core.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Annotations: map[string]string{v1.BetaStorageClassAnnotation: scNameInAnn},
+		},
+		Spec: spec,
+	}
+}
+
 func TestValidatePersistentVolumeClaim(t *testing.T) {
 	invalidClassName := "-invalid-"
 	validClassName := "valid"
@@ -1252,6 +1275,52 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 		Phase: core.ClaimPending,
 	})
 
+	validClaimStorageClassInSpec := testVolumeClaimStorageClassInSpec("foo", "ns", "fast", core.PersistentVolumeClaimSpec{
+		AccessModes: []core.PersistentVolumeAccessMode{
+			core.ReadOnlyMany,
+		},
+		Resources: core.ResourceRequirements{
+			Requests: core.ResourceList{
+				core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+			},
+		},
+	})
+
+	invalidClaimStorageClassInSpec := testVolumeClaimStorageClassInSpec("foo", "ns", "fast2", core.PersistentVolumeClaimSpec{
+		AccessModes: []core.PersistentVolumeAccessMode{
+			core.ReadOnlyMany,
+		},
+		Resources: core.ResourceRequirements{
+			Requests: core.ResourceList{
+				core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+			},
+		},
+	})
+
+	validClaimStorageClassInAnnotationAndSpec := testVolumeClaimStorageClassInAnnotationAndSpec(
+		"foo", "ns", "fast", "fast", core.PersistentVolumeClaimSpec{
+			AccessModes: []core.PersistentVolumeAccessMode{
+				core.ReadOnlyMany,
+			},
+			Resources: core.ResourceRequirements{
+				Requests: core.ResourceList{
+					core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+				},
+			},
+		})
+
+	invalidClaimStorageClassInAnnotationAndSpec := testVolumeClaimStorageClassInAnnotationAndSpec(
+		"foo", "ns", "fast2", "fast", core.PersistentVolumeClaimSpec{
+			AccessModes: []core.PersistentVolumeAccessMode{
+				core.ReadOnlyMany,
+			},
+			Resources: core.ResourceRequirements{
+				Requests: core.ResourceList{
+					core.ResourceName(core.ResourceStorage): resource.MustParse("10G"),
+				},
+			},
+		})
+
 	scenarios := map[string]struct {
 		isExpectedFailure bool
 		oldClaim          *core.PersistentVolumeClaim
@@ -1411,6 +1480,48 @@ func TestValidatePersistentVolumeClaimUpdate(t *testing.T) {
 			oldClaim:          validClaim,
 			newClaim:          unboundSizeUpdate,
 			enableResize:      true,
+			enableBlock:       false,
+		},
+		"valid-upgrade-storage-class-annotation-to-spec": {
+			isExpectedFailure: false,
+			oldClaim:          validClaimStorageClass,
+			newClaim:          validClaimStorageClassInSpec,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"invalid-upgrade-storage-class-annotation-to-spec": {
+			isExpectedFailure: true,
+			oldClaim:          validClaimStorageClass,
+			newClaim:          invalidClaimStorageClassInSpec,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"valid-upgrade-storage-class-annotation-to-annotation-and-spec": {
+			isExpectedFailure: false,
+			oldClaim:          validClaimStorageClass,
+			newClaim:          validClaimStorageClassInAnnotationAndSpec,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"invalid-upgrade-storage-class-annotation-to-annotation-and-spec": {
+			isExpectedFailure: true,
+			oldClaim:          validClaimStorageClass,
+			newClaim:          invalidClaimStorageClassInAnnotationAndSpec,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"invalid-upgrade-storage-class-in-spec": {
+			isExpectedFailure: true,
+			oldClaim:          validClaimStorageClassInSpec,
+			newClaim:          invalidClaimStorageClassInSpec,
+			enableResize:      false,
+			enableBlock:       false,
+		},
+		"invalid-downgrade-storage-class-spec-to-annotation": {
+			isExpectedFailure: true,
+			oldClaim:          validClaimStorageClassInSpec,
+			newClaim:          validClaimStorageClass,
+			enableResize:      false,
 			enableBlock:       false,
 		},
 	}
@@ -1663,6 +1774,74 @@ func TestValidateCSIVolumeSource(t *testing.T) {
 			csi:      &core.CSIPersistentVolumeSource{Driver: "my-driver"},
 			errtype:  field.ErrorTypeRequired,
 			errfield: "volumeHandle",
+		},
+		{
+			name: "driver name: ok no punctuations",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "comgooglestoragecsigcepd", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok dot only",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io.kubernetes.storage.csi.flex", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok dash only",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io-kubernetes-storage-csi-flex", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok underscore only",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io_kubernetes_storage_csi_flex", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok dot underscores",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io.kubernetes.storage_csi.flex", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok beginnin with number",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "2io.kubernetes.storage_csi.flex", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok ending with number",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io.kubernetes.storage_csi.flex2", VolumeHandle: "test-123"},
+		},
+		{
+			name: "driver name: ok dot dash underscores",
+			csi:  &core.CSIPersistentVolumeSource{Driver: "io.kubernetes-storage.csi_flex", VolumeHandle: "test-123"},
+		},
+		{
+			name:     "driver name: invalid length 0",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeRequired,
+			errfield: "driver",
+		},
+		{
+			name:     "driver name: invalid length 1",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "a", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeInvalid,
+			errfield: "driver",
+		},
+		{
+			name:     "driver name: invalid length > 63",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "comgooglestoragecsigcepdcomgooglestoragecsigcepdcomgooglestoragecsigcepdcomgooglestoragecsigcepd", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeTooLong,
+			errfield: "driver",
+		},
+		{
+			name:     "driver name: invalid start char",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "_comgooglestoragecsigcepd", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeInvalid,
+			errfield: "driver",
+		},
+		{
+			name:     "driver name: invalid end char",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "comgooglestoragecsigcepd/", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeInvalid,
+			errfield: "driver",
+		},
+		{
+			name:     "driver name: invalid separators",
+			csi:      &core.CSIPersistentVolumeSource{Driver: "com/google/storage/csi~gcepd", VolumeHandle: "test-123"},
+			errtype:  field.ErrorTypeInvalid,
+			errfield: "driver",
 		},
 	}
 

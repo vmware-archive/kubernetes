@@ -43,7 +43,7 @@ func TestGetStaticPodSpecs(t *testing.T) {
 
 	// Creates a Master Configuration
 	cfg := &kubeadmapi.MasterConfiguration{
-		KubernetesVersion: "v1.8.0",
+		KubernetesVersion: "v1.9.0",
 	}
 
 	// Executes GetStaticPodSpecs
@@ -115,7 +115,7 @@ func TestCreateStaticPodFilesAndWrappers(t *testing.T) {
 
 		// Creates a Master Configuration
 		cfg := &kubeadmapi.MasterConfiguration{
-			KubernetesVersion: "v1.8.0",
+			KubernetesVersion: "v1.9.0",
 		}
 
 		// Execute createStaticPodFunction
@@ -197,12 +197,12 @@ func TestGetAPIServerCommand(t *testing.T) {
 				API:               kubeadmapi.API{BindPort: 123, AdvertiseAddress: "1.2.3.4"},
 				Networking:        kubeadmapi.Networking{ServiceSubnet: "bar"},
 				CertificatesDir:   testCertsDir,
-				KubernetesVersion: "v1.8.0",
+				KubernetesVersion: "v1.9.0",
 			},
 			expected: []string{
 				"kube-apiserver",
 				"--insecure-port=0",
-				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,ResourceQuota",
+				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota",
 				"--service-cluster-ip-range=bar",
 				"--service-account-key-file=" + testCertsDir + "/sa.pub",
 				"--client-ca-file=" + testCertsDir + "/ca.crt",
@@ -231,12 +231,12 @@ func TestGetAPIServerCommand(t *testing.T) {
 				API:               kubeadmapi.API{BindPort: 123, AdvertiseAddress: "1.2.3.4"},
 				Networking:        kubeadmapi.Networking{ServiceSubnet: "bar"},
 				CertificatesDir:   testCertsDir,
-				KubernetesVersion: "v1.8.0-beta.0",
+				KubernetesVersion: "v1.9.0-beta.0",
 			},
 			expected: []string{
 				"kube-apiserver",
 				"--insecure-port=0",
-				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,ResourceQuota",
+				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota",
 				"--service-cluster-ip-range=bar",
 				"--service-account-key-file=" + testCertsDir + "/sa.pub",
 				"--client-ca-file=" + testCertsDir + "/ca.crt",
@@ -265,12 +265,12 @@ func TestGetAPIServerCommand(t *testing.T) {
 				API:               kubeadmapi.API{BindPort: 123, AdvertiseAddress: "4.3.2.1"},
 				Networking:        kubeadmapi.Networking{ServiceSubnet: "bar"},
 				CertificatesDir:   testCertsDir,
-				KubernetesVersion: "v1.8.1",
+				KubernetesVersion: "v1.9.1",
 			},
 			expected: []string{
 				"kube-apiserver",
 				"--insecure-port=0",
-				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,ResourceQuota",
+				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota",
 				"--service-cluster-ip-range=bar",
 				"--service-account-key-file=" + testCertsDir + "/sa.pub",
 				"--client-ca-file=" + testCertsDir + "/ca.crt",
@@ -300,12 +300,12 @@ func TestGetAPIServerCommand(t *testing.T) {
 				Networking:        kubeadmapi.Networking{ServiceSubnet: "bar"},
 				Etcd:              kubeadmapi.Etcd{CertFile: "fiz", KeyFile: "faz"},
 				CertificatesDir:   testCertsDir,
-				KubernetesVersion: "v1.8.0",
+				KubernetesVersion: "v1.9.0",
 			},
 			expected: []string{
 				"kube-apiserver",
 				"--insecure-port=0",
-				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,ResourceQuota",
+				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota",
 				"--service-cluster-ip-range=bar",
 				"--service-account-key-file=" + testCertsDir + "/sa.pub",
 				"--client-ca-file=" + testCertsDir + "/ca.crt",
@@ -337,12 +337,12 @@ func TestGetAPIServerCommand(t *testing.T) {
 				Networking:        kubeadmapi.Networking{ServiceSubnet: "bar"},
 				Etcd:              kubeadmapi.Etcd{CertFile: "fiz", KeyFile: "faz"},
 				CertificatesDir:   testCertsDir,
-				KubernetesVersion: "v1.8.3",
+				KubernetesVersion: "v1.9.3",
 			},
 			expected: []string{
 				"kube-apiserver",
 				"--insecure-port=0",
-				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,ResourceQuota",
+				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota",
 				"--service-cluster-ip-range=bar",
 				"--service-account-key-file=" + testCertsDir + "/sa.pub",
 				"--client-ca-file=" + testCertsDir + "/ca.crt",
@@ -374,12 +374,12 @@ func TestGetAPIServerCommand(t *testing.T) {
 				Networking:        kubeadmapi.Networking{ServiceSubnet: "bar"},
 				Etcd:              kubeadmapi.Etcd{CertFile: "fiz", KeyFile: "faz"},
 				CertificatesDir:   testCertsDir,
-				KubernetesVersion: "v1.8.0",
+				KubernetesVersion: "v1.9.0",
 			},
 			expected: []string{
 				"kube-apiserver",
 				"--insecure-port=0",
-				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,ResourceQuota",
+				"--admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota",
 				"--service-cluster-ip-range=bar",
 				"--service-account-key-file=" + testCertsDir + "/sa.pub",
 				"--client-ca-file=" + testCertsDir + "/ca.crt",
@@ -629,7 +629,7 @@ func TestGetControllerManagerCommand(t *testing.T) {
 		},
 		{
 			cfg: &kubeadmapi.MasterConfiguration{
-				Networking:        kubeadmapi.Networking{PodSubnet: "2001:101:115::/48"},
+				Networking:        kubeadmapi.Networking{PodSubnet: "2001:db8::/64"},
 				CertificatesDir:   testCertsDir,
 				KubernetesVersion: "v1.7.0",
 			},
@@ -645,8 +645,8 @@ func TestGetControllerManagerCommand(t *testing.T) {
 				"--use-service-account-credentials=true",
 				"--controllers=*,bootstrapsigner,tokencleaner",
 				"--allocate-node-cidrs=true",
-				"--cluster-cidr=2001:101:115::/48",
-				"--node-cidr-mask-size=64",
+				"--cluster-cidr=2001:db8::/64",
+				"--node-cidr-mask-size=80",
 			},
 		},
 	}
@@ -661,6 +661,77 @@ func TestGetControllerManagerCommand(t *testing.T) {
 	}
 }
 
+func TestCalcNodeCidrSize(t *testing.T) {
+	tests := []struct {
+		name           string
+		podSubnet      string
+		expectedPrefix string
+	}{
+		{
+			name:           "Malformed pod subnet",
+			podSubnet:      "10.10.10/160",
+			expectedPrefix: "24",
+		},
+		{
+			name:           "V4: Always uses 24",
+			podSubnet:      "10.10.10.10/16",
+			expectedPrefix: "24",
+		},
+		{
+			name:           "V6: Use pod subnet size, when not enough space",
+			podSubnet:      "2001:db8::/128",
+			expectedPrefix: "128",
+		},
+		{
+			name:           "V6: Use pod subnet size, when not enough space",
+			podSubnet:      "2001:db8::/113",
+			expectedPrefix: "113",
+		},
+		{
+			name:           "V6: Special case with 256 nodes",
+			podSubnet:      "2001:db8::/112",
+			expectedPrefix: "120",
+		},
+		{
+			name:           "V6: Using /120 for node CIDR",
+			podSubnet:      "2001:db8::/104",
+			expectedPrefix: "120",
+		},
+		{
+			name:           "V6: Using /112 for node CIDR",
+			podSubnet:      "2001:db8::/103",
+			expectedPrefix: "112",
+		},
+		{
+			name:           "V6: Using /112 for node CIDR",
+			podSubnet:      "2001:db8::/96",
+			expectedPrefix: "112",
+		},
+		{
+			name:           "V6: Using /104 for node CIDR",
+			podSubnet:      "2001:db8::/95",
+			expectedPrefix: "104",
+		},
+		{
+			name:           "V6: Largest subnet currently supported",
+			podSubnet:      "2001:db8::/66",
+			expectedPrefix: "80",
+		},
+		{
+			name:           "V6: For /64 pod net, use /80",
+			podSubnet:      "2001:db8::/64",
+			expectedPrefix: "80",
+		},
+	}
+	for _, test := range tests {
+		actualPrefix := calcNodeCidrSize(test.podSubnet)
+		if actualPrefix != test.expectedPrefix {
+			t.Errorf("Case [%s]\nCalc of node CIDR size for pod subnet %q failed: Expected %q, saw %q",
+				test.name, test.podSubnet, test.expectedPrefix, actualPrefix)
+		}
+	}
+
+}
 func TestGetControllerManagerCommandExternalCA(t *testing.T) {
 
 	tests := []struct {
