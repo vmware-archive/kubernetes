@@ -28,6 +28,7 @@ go_library(
         "vsphere_volume_disksize.go",
         "vsphere_volume_fstype.go",
         "vsphere_volume_master_restart.go",
+        "vsphere_volume_node_delete.go",
         "vsphere_volume_node_poweroff.go",
         "vsphere_volume_ops_storm.go",
         "vsphere_volume_perf.go",
