@@ -57,7 +57,6 @@ var _ = utils.SIGDescribe("Volume Operations Storm [Feature:vsphere]", func() {
 		persistentvolumes []*v1.PersistentVolume
 		err               error
 		volume_ops_scale  int
-		nodeInfo          *NodeInfo
 	)
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
@@ -68,8 +67,6 @@ var _ = utils.SIGDescribe("Volume Operations Storm [Feature:vsphere]", func() {
 		if len(nodeList.Items) == 0 {
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
-		nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodeList.Items[0].Name)
-
 		if os.Getenv("VOLUME_OPS_SCALE") != "" {
 			volume_ops_scale, err = strconv.Atoi(os.Getenv("VOLUME_OPS_SCALE"))
 			Expect(err).NotTo(HaveOccurred())
@@ -113,14 +110,14 @@ var _ = utils.SIGDescribe("Volume Operations Storm [Feature:vsphere]", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Verify all volumes are accessible and available in the pod")
-		verifyVSphereVolumesAccessible(client, pod, persistentvolumes, nodeInfo.VSphere)
+		verifyVSphereVolumesAccessible(client, pod, persistentvolumes)
 
 		By("Deleting pod")
 		framework.ExpectNoError(framework.DeletePodWithWait(f, client, pod))
 
 		By("Waiting for volumes to be detached from the node")
 		for _, pv := range persistentvolumes {
-			waitForVSphereDiskToDetach(client, nodeInfo.VSphere, pv.Spec.VsphereVolume.VolumePath, pod.Spec.NodeName)
+			waitForVSphereDiskToDetach(pv.Spec.VsphereVolume.VolumePath, pod.Spec.NodeName)
 		}
 	})
 })

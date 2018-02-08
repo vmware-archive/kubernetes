@@ -51,7 +51,6 @@ var _ = utils.SIGDescribe("vsphere cloud provider stress [Feature:vsphere]", fun
 		datastoreName string
 		err           error
 		scNames       = []string{storageclass1, storageclass2, storageclass3, storageclass4}
-		nodeInfo      *NodeInfo
 	)
 
 	BeforeEach(func() {
@@ -61,7 +60,6 @@ var _ = utils.SIGDescribe("vsphere cloud provider stress [Feature:vsphere]", fun
 
 		nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
 		Expect(nodeList.Items).NotTo(BeEmpty(), "Unable to find ready and schedulable Node")
-		nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodeList.Items[0].Name)
 
 		// if VCP_STRESS_INSTANCES = 12 and VCP_STRESS_ITERATIONS is 10. 12 threads will run in parallel for 10 times.
 		// Resulting 120 Volumes and POD Creation. Volumes will be provisioned with each different types of Storage Class,
@@ -115,7 +113,7 @@ var _ = utils.SIGDescribe("vsphere cloud provider stress [Feature:vsphere]", fun
 		wg.Add(instances)
 		for instanceCount := 0; instanceCount < instances; instanceCount++ {
 			instanceId := fmt.Sprintf("Thread:%v", instanceCount+1)
-			go PerformVolumeLifeCycleInParallel(f, client, nodeInfo.VSphere, namespace, instanceId, scArrays[instanceCount%len(scArrays)], iterations, &wg)
+			go PerformVolumeLifeCycleInParallel(f, client, namespace, instanceId, scArrays[instanceCount%len(scArrays)], iterations, &wg)
 		}
 		wg.Wait()
 	})
@@ -123,7 +121,7 @@ var _ = utils.SIGDescribe("vsphere cloud provider stress [Feature:vsphere]", fun
 })
 
 // goroutine to perform volume lifecycle operations in parallel
-func PerformVolumeLifeCycleInParallel(f *framework.Framework, client clientset.Interface, vsp *VSphere, namespace string, instanceId string, sc *storageV1.StorageClass, iterations int, wg *sync.WaitGroup) {
+func PerformVolumeLifeCycleInParallel(f *framework.Framework, client clientset.Interface, namespace string, instanceId string, sc *storageV1.StorageClass, iterations int, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer GinkgoRecover()
 
@@ -153,19 +151,19 @@ func PerformVolumeLifeCycleInParallel(f *framework.Framework, client clientset.I
 		Expect(err).NotTo(HaveOccurred())
 
 		By(fmt.Sprintf("%v Verifing the volume: %v is attached to the node VM: %v", logPrefix, persistentvolumes[0].Spec.VsphereVolume.VolumePath, pod.Spec.NodeName))
-		isVolumeAttached, verifyDiskAttachedError := verifyVSphereDiskAttached(client, vsp, persistentvolumes[0].Spec.VsphereVolume.VolumePath, pod.Spec.NodeName)
+		isVolumeAttached, verifyDiskAttachedError := diskIsAttached(persistentvolumes[0].Spec.VsphereVolume.VolumePath, pod.Spec.NodeName)
 		Expect(isVolumeAttached).To(BeTrue())
 		Expect(verifyDiskAttachedError).NotTo(HaveOccurred())
 
 		By(fmt.Sprintf("%v Verifing the volume: %v is accessible in the pod: %v", logPrefix, persistentvolumes[0].Spec.VsphereVolume.VolumePath, pod.Name))
-		verifyVSphereVolumesAccessible(client, pod, persistentvolumes, vsp)
+		verifyVSphereVolumesAccessible(client, pod, persistentvolumes)
 
 		By(fmt.Sprintf("%v Deleting pod: %v", logPrefix, pod.Name))
 		err = framework.DeletePodWithWait(f, client, pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		By(fmt.Sprintf("%v Waiting for volume: %v to be detached from the node: %v", logPrefix, persistentvolumes[0].Spec.VsphereVolume.VolumePath, pod.Spec.NodeName))
-		err = waitForVSphereDiskToDetach(client, vsp, persistentvolumes[0].Spec.VsphereVolume.VolumePath, pod.Spec.NodeName)
+		err = waitForVSphereDiskToDetach(persistentvolumes[0].Spec.VsphereVolume.VolumePath, pod.Spec.NodeName)
 		Expect(err).NotTo(HaveOccurred())
 
 		By(fmt.Sprintf("%v Deleting the Claim: %v", logPrefix, pvclaim.Name))

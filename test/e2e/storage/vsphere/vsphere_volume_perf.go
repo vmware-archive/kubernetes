@@ -58,7 +58,6 @@ var _ = utils.SIGDescribe("vcp-performance [Feature:vsphere]", func() {
 		volumeCount      int
 		volumesPerPod    int
 		iterations       int
-		nodeInfo         *NodeInfo
 	)
 
 	BeforeEach(func() {
@@ -77,7 +76,6 @@ var _ = utils.SIGDescribe("vcp-performance [Feature:vsphere]", func() {
 
 		nodes := framework.GetReadySchedulableNodesOrDie(client)
 		Expect(len(nodes.Items)).To(BeNumerically(">=", 1), "Requires at least %d nodes (not %d)", 2, len(nodes.Items))
-		nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodes.Items[0].Name)
 
 		msg := fmt.Sprintf("Cannot attach %d volumes to %d nodes. Maximum volumes that can be attached on %d nodes is %d", volumeCount, len(nodes.Items), len(nodes.Items), SCSIUnitsAvailablePerNode*len(nodes.Items))
 		Expect(volumeCount).To(BeNumerically("<=", SCSIUnitsAvailablePerNode*len(nodes.Items)), msg)
@@ -98,7 +96,7 @@ var _ = utils.SIGDescribe("vcp-performance [Feature:vsphere]", func() {
 
 		sumLatency := make(map[string]float64)
 		for i := 0; i < iterations; i++ {
-			latency := invokeVolumeLifeCyclePerformance(f, client, nodeInfo.VSphere, namespace, scList, volumesPerPod, volumeCount, nodeSelectorList)
+			latency := invokeVolumeLifeCyclePerformance(f, client, namespace, scList, volumesPerPod, volumeCount, nodeSelectorList)
 			for key, val := range latency {
 				sumLatency[key] += val
 			}
@@ -156,7 +154,7 @@ func getTestStorageClasses(client clientset.Interface, policyName, datastoreName
 }
 
 // invokeVolumeLifeCyclePerformance peforms full volume life cycle management and records latency for each operation
-func invokeVolumeLifeCyclePerformance(f *framework.Framework, client clientset.Interface, vsp *VSphere, namespace string, sc []*storageV1.StorageClass, volumesPerPod int, volumeCount int, nodeSelectorList []*NodeSelector) (latency map[string]float64) {
+func invokeVolumeLifeCyclePerformance(f *framework.Framework, client clientset.Interface, namespace string, sc []*storageV1.StorageClass, volumesPerPod int, volumeCount int, nodeSelectorList []*NodeSelector) (latency map[string]float64) {
 	var (
 		totalpvclaims [][]*v1.PersistentVolumeClaim
 		totalpvs      [][]*v1.PersistentVolume
@@ -200,7 +198,7 @@ func invokeVolumeLifeCyclePerformance(f *framework.Framework, client clientset.I
 	latency[AttachOp] = elapsed.Seconds()
 
 	for i, pod := range totalpods {
-		verifyVSphereVolumesAccessible(client, pod, totalpvs[i], vsp)
+		verifyVSphereVolumesAccessible(client, pod, totalpvs[i])
 	}
 
 	By("Deleting pods")
@@ -218,7 +216,7 @@ func invokeVolumeLifeCyclePerformance(f *framework.Framework, client clientset.I
 		}
 	}
 
-	err := waitForVSphereDisksToDetach(client, vsp, nodeVolumeMap)
+	err := waitForVSphereDisksToDetach(nodeVolumeMap)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("Deleting the PVCs")

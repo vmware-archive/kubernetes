@@ -179,7 +179,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions, dataCenterRef type
 		return "", err
 	}
 	volumePath := taskInfo.Result.(string)
-	canonicalDiskPath, err := getcanonicalVolumePath(ctx, datacenter, volumePath)
+	canonicalDiskPath, err := getCanonicalVolumePath(ctx, datacenter, volumePath)
 	if err != nil {
 		return "", err
 	}
@@ -208,26 +208,6 @@ func (vs *VSphere) DeleteVolume(volumePath string, dataCenterRef types.ManagedOb
 	return nil
 }
 
-// DiskIsAttached returns if disk is attached to the VM using controllers supported by the plugin.
-func (vs *VSphere) DiskIsAttached(volPath string, nodeName string) (bool, error) {
-	// Create context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	Connect(ctx, vs)
-
-	nodeInfo := TestContext.NodeMapper.GetNodeInfo(nodeName)
-	vm := object.NewVirtualMachine(nodeInfo.VSphere.Client.Client, nodeInfo.VirtualMachineRef)
-	volPath = removeStorageClusterORFolderNameFromVDiskPath(volPath)
-	attached, err := isDiskAttached(ctx, vm, volPath)
-	if err != nil {
-		glog.Errorf("DiskIsAttached failed to determine whether disk %q is still attached on node %q",
-			volPath,
-			nodeName)
-	}
-	glog.V(4).Infof("DiskIsAttached result: %q and error: %q, for volume: %q", attached, err, volPath)
-	return attached, err
-}
-
 func (vs *VSphere) IsVMPresent(vmName string, dataCenterRef types.ManagedObjectReference) (isVMPresent bool, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -250,33 +230,4 @@ func (vs *VSphere) IsVMPresent(vmName string, dataCenterRef types.ManagedObjectR
 		}
 	}
 	return
-}
-
-func (vs *VSphere) DisksAreAttached(nm *NodeMapper, nodeVolumes map[string][]string) (nodeVolumesAttachMap map[string]map[string]bool, err error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	Connect(ctx, vs)
-
-	disksAttached := make(map[string]map[string]bool)
-	if len(nodeVolumes) == 0 {
-		return disksAttached, nil
-	}
-	// Convert VolPaths into canonical form so that it can be compared with the VM device path.
-	vmVolumes, err := convertVolPathsToDevicePaths(ctx, nm, nodeVolumes)
-	if err != nil {
-		glog.Errorf("Failed to convert volPaths to devicePaths: %+v. err: %+v", nodeVolumes, err)
-		return nil, err
-	}
-	for vm, volumes := range vmVolumes {
-		volumeAttachedMap := make(map[string]bool)
-		for _, volume := range volumes {
-			attached, err := vs.DiskIsAttached(volume, vm)
-			if err != nil {
-				return nil, err
-			}
-			volumeAttachedMap[volume] = attached
-		}
-		nodeVolumesAttachMap[vm] = volumeAttachedMap
-	}
-	return disksAttached, nil
 }

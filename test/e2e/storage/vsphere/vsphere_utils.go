@@ -63,29 +63,16 @@ const (
 	volumeStateAttached volumeState = 2
 )
 
-// Sanity check for vSphere testing.  Verify the persistent disk attached to the node.
-func verifyVSphereDiskAttached(c clientset.Interface, vsp *VSphere, volumePath string, nodeName string) (bool, error) {
-	var (
-		isAttached bool
-		err        error
-	)
-	Expect(vsp).NotTo(BeNil())
-	isAttached, err = vsp.DiskIsAttached(volumePath, nodeName)
-	Expect(err).NotTo(HaveOccurred())
-	return isAttached, err
-}
-
 // Wait until vsphere volumes are detached from the list of nodes or time out after 5 minutes
-func waitForVSphereDisksToDetach(c clientset.Interface, vsp *VSphere, nodeVolumes map[string][]string) error {
+func waitForVSphereDisksToDetach(nodeVolumes map[string][]string) error {
 	var (
 		err            error
 		disksAttached  = true
 		detachTimeout  = 5 * time.Minute
 		detachPollTime = 10 * time.Second
 	)
-	Expect(vsp).NotTo(BeNil())
 	err = wait.Poll(detachPollTime, detachTimeout, func() (bool, error) {
-		attachedResult, err := vsp.DisksAreAttached(TestContext.NodeMapper, nodeVolumes)
+		attachedResult, err := disksAreAttached(nodeVolumes)
 		if err != nil {
 			return false, err
 		}
@@ -111,7 +98,7 @@ func waitForVSphereDisksToDetach(c clientset.Interface, vsp *VSphere, nodeVolume
 }
 
 // Wait until vsphere vmdk moves to expected state on the given node, or time out after 6 minutes
-func waitForVSphereDiskStatus(c clientset.Interface, vsp *VSphere, volumePath string, nodeName string, expectedState volumeState) error {
+func waitForVSphereDiskStatus(volumePath string, nodeName string, expectedState volumeState) error {
 	var (
 		err          error
 		diskAttached bool
@@ -131,7 +118,7 @@ func waitForVSphereDiskStatus(c clientset.Interface, vsp *VSphere, volumePath st
 	}
 
 	err = wait.Poll(pollTime, timeout, func() (bool, error) {
-		diskAttached, err = verifyVSphereDiskAttached(c, vsp, volumePath, nodeName)
+		diskAttached, err = diskIsAttached(volumePath, nodeName)
 		if err != nil {
 			return true, err
 		}
@@ -155,13 +142,13 @@ func waitForVSphereDiskStatus(c clientset.Interface, vsp *VSphere, volumePath st
 }
 
 // Wait until vsphere vmdk is attached from the given node or time out after 6 minutes
-func waitForVSphereDiskToAttach(c clientset.Interface, vsp *VSphere, volumePath string, nodeName string) error {
-	return waitForVSphereDiskStatus(c, vsp, volumePath, nodeName, volumeStateAttached)
+func waitForVSphereDiskToAttach(volumePath string, nodeName string) error {
+	return waitForVSphereDiskStatus(volumePath, nodeName, volumeStateAttached)
 }
 
 // Wait until vsphere vmdk is detached from the given node or time out after 6 minutes
-func waitForVSphereDiskToDetach(c clientset.Interface, vsp *VSphere, volumePath string, nodeName string) error {
-	return waitForVSphereDiskStatus(c, vsp, volumePath, nodeName, volumeStateDetached)
+func waitForVSphereDiskToDetach(volumePath string, nodeName string) error {
+	return waitForVSphereDiskStatus(volumePath, nodeName, volumeStateDetached)
 }
 
 // function to create vsphere volume spec with given VMDK volume path, Reclaim Policy and labels
@@ -399,12 +386,12 @@ func createEmptyFilesOnVSphereVolume(namespace string, podName string, filePaths
 }
 
 // verify volumes are attached to the node and are accessible in pod
-func verifyVSphereVolumesAccessible(c clientset.Interface, pod *v1.Pod, persistentvolumes []*v1.PersistentVolume, vsp *VSphere) {
+func verifyVSphereVolumesAccessible(c clientset.Interface, pod *v1.Pod, persistentvolumes []*v1.PersistentVolume) {
 	nodeName := pod.Spec.NodeName
 	namespace := pod.Namespace
 	for index, pv := range persistentvolumes {
 		// Verify disks are attached to the node
-		isAttached, err := verifyVSphereDiskAttached(c, vsp, pv.Spec.VsphereVolume.VolumePath, nodeName)
+		isAttached, err := diskIsAttached(pv.Spec.VsphereVolume.VolumePath, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isAttached).To(BeTrue(), fmt.Sprintf("disk %v is not attached with the node", pv.Spec.VsphereVolume.VolumePath))
 		// Verify Volumes are accessible
@@ -426,7 +413,7 @@ func getvSphereVolumePathFromClaim(client clientset.Interface, namespace string,
 // Get canonical volume path for volume Path.
 // Example1: The canonical path for volume path - [vsanDatastore] kubevols/volume.vmdk will be [vsanDatastore] 25d8b159-948c-4b73-e499-02001ad1b044/volume.vmdk
 // Example2: The canonical path for volume path - [vsanDatastore] 25d8b159-948c-4b73-e499-02001ad1b044/volume.vmdk will be same as volume Path.
-func getcanonicalVolumePath(ctx context.Context, dc *object.Datacenter, volumePath string) (string, error) {
+func getCanonicalVolumePath(ctx context.Context, dc *object.Datacenter, volumePath string) (string, error) {
 	var folderID string
 	canonicalVolumePath := volumePath
 	dsPathObj, err := getDatastorePathObjFromVMDiskPath(volumePath)
@@ -568,10 +555,10 @@ func matchVirtualDiskAndVolPath(diskPath, volPath string) bool {
 }
 
 // convertVolPathsToDevicePaths removes cluster or folder path from volPaths and convert to canonicalPath
-func convertVolPathsToDevicePaths(ctx context.Context, nm *NodeMapper, nodeVolumes map[string][]string) (map[string][]string, error) {
+func convertVolPathsToDevicePaths(ctx context.Context, nodeVolumes map[string][]string) (map[string][]string, error) {
 	vmVolumes := make(map[string][]string)
 	for nodeName, volPaths := range nodeVolumes {
-		nodeInfo := nm.GetNodeInfo(nodeName)
+		nodeInfo := TestContext.NodeMapper.GetNodeInfo(nodeName)
 		datacenter := nodeInfo.VSphere.GetDatacenterFromObjectReference(ctx, nodeInfo.DataCenterRef)
 		for i, volPath := range volPaths {
 			deviceVolPath, err := convertVolPathToDevicePath(ctx, datacenter, volPath)
@@ -589,7 +576,7 @@ func convertVolPathsToDevicePaths(ctx context.Context, nm *NodeMapper, nodeVolum
 func convertVolPathToDevicePath(ctx context.Context, dc *object.Datacenter, volPath string) (string, error) {
 	volPath = removeStorageClusterORFolderNameFromVDiskPath(volPath)
 	// Get the canonical volume path for volPath.
-	canonicalVolumePath, err := getcanonicalVolumePath(ctx, dc, volPath)
+	canonicalVolumePath, err := getCanonicalVolumePath(ctx, dc, volPath)
 	if err != nil {
 		glog.Errorf("Failed to get canonical vsphere volume path for volume: %s. err: %+v", volPath, err)
 		return "", err
@@ -692,4 +679,52 @@ func registerNodeVM(nodeName, workingDir, vmxFilePath string, rpool *object.Reso
 	Expect(err).NotTo(HaveOccurred())
 
 	poweronNodeVM(nodeName, vm)
+}
+
+func disksAreAttached(nodeVolumes map[string][]string) (nodeVolumesAttachMap map[string]map[string]bool, err error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	disksAttached := make(map[string]map[string]bool)
+	if len(nodeVolumes) == 0 {
+		return disksAttached, nil
+	}
+	// Convert VolPaths into canonical form so that it can be compared with the VM device path.
+	vmVolumes, err := convertVolPathsToDevicePaths(ctx, nodeVolumes)
+	if err != nil {
+		glog.Errorf("Failed to convert volPaths to devicePaths: %+v. err: %+v", nodeVolumes, err)
+		return nil, err
+	}
+	for vm, volumes := range vmVolumes {
+		volumeAttachedMap := make(map[string]bool)
+		for _, volume := range volumes {
+			attached, err := diskIsAttached(volume, vm)
+			if err != nil {
+				return nil, err
+			}
+			volumeAttachedMap[volume] = attached
+		}
+		nodeVolumesAttachMap[vm] = volumeAttachedMap
+	}
+	return disksAttached, nil
+}
+
+// diskIsAttached returns if disk is attached to the VM using controllers supported by the plugin.
+func diskIsAttached(volPath string, nodeName string) (bool, error) {
+	// Create context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	nodeInfo := TestContext.NodeMapper.GetNodeInfo(nodeName)
+	Connect(ctx, nodeInfo.VSphere)
+	vm := object.NewVirtualMachine(nodeInfo.VSphere.Client.Client, nodeInfo.VirtualMachineRef)
+	volPath = removeStorageClusterORFolderNameFromVDiskPath(volPath)
+	attached, err := isDiskAttached(ctx, vm, volPath)
+	if err != nil {
+		glog.Errorf("diskIsAttached failed to determine whether disk %q is still attached on node %q",
+			volPath,
+			nodeName)
+	}
+	glog.V(4).Infof("diskIsAttached result: %q and error: %q, for volume: %q", attached, err, volPath)
+	return attached, err
 }

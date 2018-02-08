@@ -127,19 +127,19 @@ var _ = utils.SIGDescribe("PersistentVolumes [Feature:ReclaimPolicy]", func() {
 			Expect(framework.WaitForPersistentVolumePhase(v1.VolumeFailed, c, pv.Name, 1*time.Second, 60*time.Second)).NotTo(HaveOccurred())
 
 			By("Verify the volume is attached to the node")
-			isVolumeAttached, verifyDiskAttachedError := verifyVSphereDiskAttached(c, nodeInfo.VSphere, pv.Spec.VsphereVolume.VolumePath, pod.Spec.NodeName)
+			isVolumeAttached, verifyDiskAttachedError := diskIsAttached(pv.Spec.VsphereVolume.VolumePath, pod.Spec.NodeName)
 			Expect(verifyDiskAttachedError).NotTo(HaveOccurred())
 			Expect(isVolumeAttached).To(BeTrue())
 
 			By("Verify the volume is accessible and available in the pod")
-			verifyVSphereVolumesAccessible(c, pod, []*v1.PersistentVolume{pv}, nodeInfo.VSphere)
+			verifyVSphereVolumesAccessible(c, pod, []*v1.PersistentVolume{pv})
 			framework.Logf("Verified that Volume is accessible in the POD after deleting PV claim")
 
 			By("Deleting the Pod")
 			framework.ExpectNoError(framework.DeletePodWithWait(f, c, pod), "Failed to delete pod ", pod.Name)
 
 			By("Verify PV is detached from the node after Pod is deleted")
-			Expect(waitForVSphereDiskToDetach(c, nodeInfo.VSphere, pv.Spec.VsphereVolume.VolumePath, pod.Spec.NodeName)).NotTo(HaveOccurred())
+			Expect(waitForVSphereDiskToDetach(pv.Spec.VsphereVolume.VolumePath, pod.Spec.NodeName)).NotTo(HaveOccurred())
 
 			By("Verify PV should be deleted automatically")
 			framework.ExpectNoError(framework.WaitForPersistentVolumeDeleted(c, pv.Name, 1*time.Second, 30*time.Second))

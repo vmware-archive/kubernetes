@@ -108,24 +108,24 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 
 	It("should create and delete pod with the same volume source on the same worker node", func() {
 		var volumeFiles []string
-		pod := createPodWithVolumeAndNodeSelector(c, ns, vsp, node1Name, node1KeyValueLabel, volumePaths)
+		pod := createPodWithVolumeAndNodeSelector(c, ns, node1Name, node1KeyValueLabel, volumePaths)
 
 		// Create empty files on the mounted volumes on the pod to verify volume is writable
 		// Verify newly and previously created files present on the volume mounted on the pod
 		newEmptyFileName := fmt.Sprintf("/mnt/volume1/%v_1.txt", ns)
 		volumeFiles = append(volumeFiles, newEmptyFileName)
 		createAndVerifyFilesOnVolume(ns, pod.Name, []string{newEmptyFileName}, volumeFiles)
-		deletePodAndWaitForVolumeToDetach(f, c, pod, vsp, node1Name, volumePaths)
+		deletePodAndWaitForVolumeToDetach(f, c, pod, node1Name, volumePaths)
 
 		By(fmt.Sprintf("Creating pod on the same node: %v", node1Name))
-		pod = createPodWithVolumeAndNodeSelector(c, ns, vsp, node1Name, node1KeyValueLabel, volumePaths)
+		pod = createPodWithVolumeAndNodeSelector(c, ns, node1Name, node1KeyValueLabel, volumePaths)
 
 		// Create empty files on the mounted volumes on the pod to verify volume is writable
 		// Verify newly and previously created files present on the volume mounted on the pod
 		newEmptyFileName = fmt.Sprintf("/mnt/volume1/%v_2.txt", ns)
 		volumeFiles = append(volumeFiles, newEmptyFileName)
 		createAndVerifyFilesOnVolume(ns, pod.Name, []string{newEmptyFileName}, volumeFiles)
-		deletePodAndWaitForVolumeToDetach(f, c, pod, vsp, node1Name, volumePaths)
+		deletePodAndWaitForVolumeToDetach(f, c, pod, node1Name, volumePaths)
 	})
 
 	/*
@@ -148,23 +148,23 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 
 	It("should create and delete pod with the same volume source attach/detach to different worker nodes", func() {
 		var volumeFiles []string
-		pod := createPodWithVolumeAndNodeSelector(c, ns, vsp, node1Name, node1KeyValueLabel, volumePaths)
+		pod := createPodWithVolumeAndNodeSelector(c, ns, node1Name, node1KeyValueLabel, volumePaths)
 		// Create empty files on the mounted volumes on the pod to verify volume is writable
 		// Verify newly and previously created files present on the volume mounted on the pod
 		newEmptyFileName := fmt.Sprintf("/mnt/volume1/%v_1.txt", ns)
 		volumeFiles = append(volumeFiles, newEmptyFileName)
 		createAndVerifyFilesOnVolume(ns, pod.Name, []string{newEmptyFileName}, volumeFiles)
-		deletePodAndWaitForVolumeToDetach(f, c, pod, vsp, node1Name, volumePaths)
+		deletePodAndWaitForVolumeToDetach(f, c, pod, node1Name, volumePaths)
 
 		By(fmt.Sprintf("Creating pod on the another node: %v", node2Name))
-		pod = createPodWithVolumeAndNodeSelector(c, ns, vsp, node2Name, node2KeyValueLabel, volumePaths)
+		pod = createPodWithVolumeAndNodeSelector(c, ns, node2Name, node2KeyValueLabel, volumePaths)
 
 		newEmptyFileName = fmt.Sprintf("/mnt/volume1/%v_2.txt", ns)
 		volumeFiles = append(volumeFiles, newEmptyFileName)
 		// Create empty files on the mounted volumes on the pod to verify volume is writable
 		// Verify newly and previously created files present on the volume mounted on the pod
 		createAndVerifyFilesOnVolume(ns, pod.Name, []string{newEmptyFileName}, volumeFiles)
-		deletePodAndWaitForVolumeToDetach(f, c, pod, vsp, node2Name, volumePaths)
+		deletePodAndWaitForVolumeToDetach(f, c, pod, node2Name, volumePaths)
 	})
 
 	/*
@@ -188,7 +188,7 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 		volumePaths = append(volumePaths, volumePath)
 
 		By(fmt.Sprintf("Creating pod on the node: %v with volume: %v and volume: %v", node1Name, volumePaths[0], volumePaths[1]))
-		pod := createPodWithVolumeAndNodeSelector(c, ns, vsp, node1Name, node1KeyValueLabel, volumePaths)
+		pod := createPodWithVolumeAndNodeSelector(c, ns, node1Name, node1KeyValueLabel, volumePaths)
 		// Create empty files on the mounted volumes on the pod to verify volume is writable
 		// Verify newly and previously created files present on the volume mounted on the pod
 		volumeFiles := []string{
@@ -196,9 +196,9 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 			fmt.Sprintf("/mnt/volume2/%v_1.txt", ns),
 		}
 		createAndVerifyFilesOnVolume(ns, pod.Name, volumeFiles, volumeFiles)
-		deletePodAndWaitForVolumeToDetach(f, c, pod, vsp, node1Name, volumePaths)
+		deletePodAndWaitForVolumeToDetach(f, c, pod, node1Name, volumePaths)
 		By(fmt.Sprintf("Creating pod on the node: %v with volume :%v and volume: %v", node1Name, volumePaths[0], volumePaths[1]))
-		pod = createPodWithVolumeAndNodeSelector(c, ns, vsp, node1Name, node1KeyValueLabel, volumePaths)
+		pod = createPodWithVolumeAndNodeSelector(c, ns, node1Name, node1KeyValueLabel, volumePaths)
 		// Create empty files on the mounted volumes on the pod to verify volume is writable
 		// Verify newly and previously created files present on the volume mounted on the pod
 		newEmptyFilesNames := []string{
@@ -236,7 +236,7 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 		volumePaths = append(volumePaths, volumePath)
 
 		By(fmt.Sprintf("Creating pod on the node: %v with volume :%v  and volume: %v", node1Name, volumePaths[0], volumePaths[1]))
-		pod := createPodWithVolumeAndNodeSelector(c, ns, vsp, node1Name, node1KeyValueLabel, volumePaths)
+		pod := createPodWithVolumeAndNodeSelector(c, ns, node1Name, node1KeyValueLabel, volumePaths)
 
 		// Create empty files on the mounted volumes on the pod to verify volume is writable
 		// Verify newly and previously created files present on the volume mounted on the pod
@@ -245,10 +245,10 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 			fmt.Sprintf("/mnt/volume2/%v_1.txt", ns),
 		}
 		createAndVerifyFilesOnVolume(ns, pod.Name, volumeFiles, volumeFiles)
-		deletePodAndWaitForVolumeToDetach(f, c, pod, vsp, node1Name, volumePaths)
+		deletePodAndWaitForVolumeToDetach(f, c, pod, node1Name, volumePaths)
 
 		By(fmt.Sprintf("Creating pod on the node: %v with volume :%v  and volume: %v", node1Name, volumePaths[0], volumePaths[1]))
-		pod = createPodWithVolumeAndNodeSelector(c, ns, vsp, node1Name, node1KeyValueLabel, volumePaths)
+		pod = createPodWithVolumeAndNodeSelector(c, ns, node1Name, node1KeyValueLabel, volumePaths)
 		// Create empty files on the mounted volumes on the pod to verify volume is writable
 		// Verify newly and previously created files present on the volume mounted on the pod
 		newEmptyFileNames := []string{
@@ -258,7 +258,7 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 		volumeFiles = append(volumeFiles, newEmptyFileNames[0])
 		volumeFiles = append(volumeFiles, newEmptyFileNames[1])
 		createAndVerifyFilesOnVolume(ns, pod.Name, newEmptyFileNames, volumeFiles)
-		deletePodAndWaitForVolumeToDetach(f, c, pod, vsp, node1Name, volumePaths)
+		deletePodAndWaitForVolumeToDetach(f, c, pod, node1Name, volumePaths)
 	})
 
 	/*
@@ -291,7 +291,7 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 			framework.ExpectNoError(framework.DeletePodWithWait(f, c, podB), "defer: Failed to delete pod ", podB.Name)
 			By(fmt.Sprintf("wait for volumes to be detached from the node: %v", node1Name))
 			for _, volumePath := range volumePaths {
-				framework.ExpectNoError(waitForVSphereDiskToDetach(c, vsp, volumePath, node1Name))
+				framework.ExpectNoError(waitForVSphereDiskToDetach(volumePath, node1Name))
 			}
 		}()
 
@@ -305,10 +305,10 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 
 		for index := 0; index < 5; index++ {
 			By(fmt.Sprintf("Creating pod-A on the node: %v with volume: %v", node1Name, testvolumePathsPodA[0]))
-			podA = createPodWithVolumeAndNodeSelector(c, ns, vsp, node1Name, node1KeyValueLabel, testvolumePathsPodA)
+			podA = createPodWithVolumeAndNodeSelector(c, ns, node1Name, node1KeyValueLabel, testvolumePathsPodA)
 
 			By(fmt.Sprintf("Creating pod-B on the node: %v with volume: %v", node1Name, testvolumePathsPodB[0]))
-			podB = createPodWithVolumeAndNodeSelector(c, ns, vsp, node1Name, node1KeyValueLabel, testvolumePathsPodB)
+			podB = createPodWithVolumeAndNodeSelector(c, ns, node1Name, node1KeyValueLabel, testvolumePathsPodB)
 
 			podAFileName := fmt.Sprintf("/mnt/volume1/podA_%v_%v.txt", ns, index+1)
 			podBFileName := fmt.Sprintf("/mnt/volume1/podB_%v_%v.txt", ns, index+1)
@@ -355,7 +355,7 @@ func testSetupVolumePlacement(client clientset.Interface, namespace string) (nod
 	return node1Name, node1KeyValueLabel, node2Name, node2KeyValueLabel
 }
 
-func createPodWithVolumeAndNodeSelector(client clientset.Interface, namespace string, vsp *VSphere, nodeName string, nodeKeyValueLabel map[string]string, volumePaths []string) *v1.Pod {
+func createPodWithVolumeAndNodeSelector(client clientset.Interface, namespace string, nodeName string, nodeKeyValueLabel map[string]string, volumePaths []string) *v1.Pod {
 	var pod *v1.Pod
 	var err error
 	By(fmt.Sprintf("Creating pod on the node: %v", nodeName))
@@ -368,7 +368,7 @@ func createPodWithVolumeAndNodeSelector(client clientset.Interface, namespace st
 
 	By(fmt.Sprintf("Verify volume is attached to the node:%v", nodeName))
 	for _, volumePath := range volumePaths {
-		isAttached, err := verifyVSphereDiskAttached(client, vsp, volumePath, nodeName)
+		isAttached, err := diskIsAttached(volumePath, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isAttached).To(BeTrue(), "disk:"+volumePath+" is not attached with the node")
 	}
@@ -385,12 +385,12 @@ func createAndVerifyFilesOnVolume(namespace string, podname string, newEmptyfile
 	verifyFilesExistOnVSphereVolume(namespace, podname, filesToCheck)
 }
 
-func deletePodAndWaitForVolumeToDetach(f *framework.Framework, c clientset.Interface, pod *v1.Pod, vsp *VSphere, nodeName string, volumePaths []string) {
+func deletePodAndWaitForVolumeToDetach(f *framework.Framework, c clientset.Interface, pod *v1.Pod, nodeName string, volumePaths []string) {
 	By("Deleting pod")
 	framework.ExpectNoError(framework.DeletePodWithWait(f, c, pod), "Failed to delete pod ", pod.Name)
 
 	By("Waiting for volume to be detached from the node")
 	for _, volumePath := range volumePaths {
-		framework.ExpectNoError(waitForVSphereDiskToDetach(c, vsp, volumePath, nodeName))
+		framework.ExpectNoError(waitForVSphereDiskToDetach(volumePath, nodeName))
 	}
 }

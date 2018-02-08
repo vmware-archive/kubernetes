@@ -103,7 +103,7 @@ var _ = utils.SIGDescribe("Volume Attach Verify [Feature:vsphere][Serial][Disrup
 
 			nodeName := pod.Spec.NodeName
 			By(fmt.Sprintf("Verify volume %s is attached to the pod %s", volumePath, nodeName))
-			isAttached, err := verifyVSphereDiskAttached(client, nodeInfo.VSphere, volumePath, nodeName)
+			isAttached, err := diskIsAttached(volumePath, nodeName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(isAttached).To(BeTrue(), fmt.Sprintf("disk: %s is not attached with the node", volumePath))
 
@@ -122,7 +122,7 @@ var _ = utils.SIGDescribe("Volume Attach Verify [Feature:vsphere][Serial][Disrup
 			volumePath := volumePaths[i]
 			nodeName := pod.Spec.NodeName
 			By(fmt.Sprintf("After master restart, verify volume %v is attached to the pod %v", volumePath, nodeName))
-			isAttached, err := verifyVSphereDiskAttached(client, nodeInfo.VSphere, volumePaths[i], nodeName)
+			isAttached, err := diskIsAttached(volumePaths[i], nodeName)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(isAttached).To(BeTrue(), fmt.Sprintf("disk: %s is not attached with the node", volumePath))
 
@@ -131,7 +131,7 @@ var _ = utils.SIGDescribe("Volume Attach Verify [Feature:vsphere][Serial][Disrup
 			Expect(err).NotTo(HaveOccurred())
 
 			By(fmt.Sprintf("Waiting for volume %s to be detached from the node %s", volumePath, nodeName))
-			err = waitForVSphereDiskToDetach(client, nodeInfo.VSphere, volumePath, nodeName)
+			err = waitForVSphereDiskToDetach(volumePath, nodeName)
 			Expect(err).NotTo(HaveOccurred())
 
 			By(fmt.Sprintf("Deleting volume %s", volumePath))

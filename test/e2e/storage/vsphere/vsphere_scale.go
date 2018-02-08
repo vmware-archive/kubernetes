@@ -65,11 +65,11 @@ var _ = utils.SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		nodeVolumeMapChan chan map[string][]string
 		nodes             *v1.NodeList
 		scNames           = []string{storageclass1, storageclass2, storageclass3, storageclass4}
-		nodeInfo          *NodeInfo
 	)
 
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
+		Bootstrap(f)
 		client = f.ClientSet
 		namespace = f.Namespace.Name
 		nodeVolumeMapChan = make(chan map[string][]string)
@@ -89,7 +89,7 @@ var _ = utils.SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 		if len(nodes.Items) < 2 {
 			framework.Skipf("Requires at least %d nodes (not %d)", 2, len(nodes.Items))
 		}
-		nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodes.Items[0].Name)
+		//nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodes.Items[0].Name)
 		// Verify volume count specified by the user can be satisfied
 		if volumeCount > volumesPerNode*len(nodes.Items) {
 			framework.Skipf("Cannot attach %d volumes to %d nodes. Maximum volumes that can be attached on %d nodes is %d", volumeCount, len(nodes.Items), len(nodes.Items), volumesPerNode*len(nodes.Items))
@@ -143,7 +143,7 @@ var _ = utils.SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 				volumeCountPerInstance = volumeCount
 			}
 			volumeCount = volumeCount - volumeCountPerInstance
-			go VolumeCreateAndAttach(client, namespace, scArrays, volumeCountPerInstance, volumesPerPod, nodeSelectorList, nodeVolumeMapChan, nodeInfo.VSphere)
+			go VolumeCreateAndAttach(client, namespace, scArrays, volumeCountPerInstance, volumesPerPod, nodeSelectorList, nodeVolumeMapChan)
 		}
 
 		// Get the list of all volumes attached to each node from the go routines by reading the data from the channel
@@ -160,7 +160,7 @@ var _ = utils.SIGDescribe("vcp at scale [Feature:vsphere] ", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 		By("Waiting for volumes to be detached from the node")
-		err = waitForVSphereDisksToDetach(client, nodeInfo.VSphere, nodeVolumeMap)
+		err = waitForVSphereDisksToDetach(nodeVolumeMap)
 		Expect(err).NotTo(HaveOccurred())
 
 		for _, pvcClaim := range pvcClaimList {
@@ -182,7 +182,7 @@ func getClaimsForPod(pod *v1.Pod, volumesPerPod int) []string {
 }
 
 // VolumeCreateAndAttach peforms create and attach operations of vSphere persistent volumes at scale
-func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*storageV1.StorageClass, volumeCountPerInstance int, volumesPerPod int, nodeSelectorList []*NodeSelector, nodeVolumeMapChan chan map[string][]string, vsp *VSphere) {
+func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*storageV1.StorageClass, volumeCountPerInstance int, volumesPerPod int, nodeSelectorList []*NodeSelector, nodeVolumeMapChan chan map[string][]string) {
 	defer GinkgoRecover()
 	nodeVolumeMap := make(map[string][]string)
 	nodeSelectorIndex := 0
@@ -212,7 +212,7 @@ func VolumeCreateAndAttach(client clientset.Interface, namespace string, sc []*s
 			nodeVolumeMap[pod.Spec.NodeName] = append(nodeVolumeMap[pod.Spec.NodeName], pv.Spec.VsphereVolume.VolumePath)
 		}
 		By("Verify the volume is accessible and available in the pod")
-		verifyVSphereVolumesAccessible(client, pod, persistentvolumes, vsp)
+		verifyVSphereVolumesAccessible(client, pod, persistentvolumes)
 		nodeSelectorIndex++
 	}
 	nodeVolumeMapChan <- nodeVolumeMap

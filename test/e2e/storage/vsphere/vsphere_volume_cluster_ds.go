@@ -101,7 +101,7 @@ var _ = utils.SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:v
 		nodeName := pod.Spec.NodeName
 
 		By("Verifying volume is attached")
-		isAttached, err := verifyVSphereDiskAttached(client, nodeInfo.VSphere, volumePath, nodeName)
+		isAttached, err := diskIsAttached(volumePath, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isAttached).To(BeTrue(), fmt.Sprintf("disk: %s is not attached with the node: %v", volumePath, nodeName))
 
@@ -110,7 +110,7 @@ var _ = utils.SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:v
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for volumes to be detached from the node")
-		err = waitForVSphereDiskToDetach(client, nodeInfo.VSphere, volumePath, nodeName)
+		err = waitForVSphereDiskToDetach(volumePath, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -121,7 +121,7 @@ var _ = utils.SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:v
 	*/
 	It("verify dynamic provision with default parameter on clustered datastore", func() {
 		scParameters[Datastore] = clusterDatastore
-		invokeValidPolicyTest(f, client, nodeInfo.VSphere, namespace, scParameters)
+		invokeValidPolicyTest(f, client, namespace, scParameters)
 	})
 
 	/*
@@ -132,6 +132,6 @@ var _ = utils.SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:v
 	It("verify dynamic provision with spbm policy on clustered datastore", func() {
 		policyDatastoreCluster := GetAndExpectStringEnvVar(SPBMPolicyDataStoreCluster)
 		scParameters[SpbmStoragePolicy] = policyDatastoreCluster
-		invokeValidPolicyTest(f, client, nodeInfo.VSphere, namespace, scParameters)
+		invokeValidPolicyTest(f, client, namespace, scParameters)
 	})
 })

@@ -105,7 +105,7 @@ var _ = utils.SIGDescribe("PersistentVolumes:vsphere", func() {
 		node = clientPod.Spec.NodeName
 
 		By("Verify disk should be attached to the node")
-		isAttached, err := verifyVSphereDiskAttached(c, nodeInfo.VSphere, volumePath, node)
+		isAttached, err := diskIsAttached(volumePath, node)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isAttached).To(BeTrue(), "disk is not attached with the node")
 	})
@@ -133,11 +133,7 @@ var _ = utils.SIGDescribe("PersistentVolumes:vsphere", func() {
 	framework.AddCleanupAction(func() {
 		// Cleanup actions will be called even when the tests are skipped and leaves namespace unset.
 		if len(ns) > 0 && len(volumePath) > 0 {
-			client, err := framework.LoadClientset()
-			if err != nil {
-				return
-			}
-			framework.ExpectNoError(waitForVSphereDiskToDetach(client, nodeInfo.VSphere, volumePath, node))
+			framework.ExpectNoError(waitForVSphereDiskToDetach(volumePath, node))
 			nodeInfo.VSphere.DeleteVolume(volumePath, nodeInfo.DataCenterRef)
 		}
 	})
@@ -217,6 +213,6 @@ var _ = utils.SIGDescribe("PersistentVolumes:vsphere", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Verifying Persistent Disk detaches")
-		waitForVSphereDiskToDetach(c, nodeInfo.VSphere, volumePath, node)
+		waitForVSphereDiskToDetach(volumePath, node)
 	})
 })

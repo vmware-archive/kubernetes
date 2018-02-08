@@ -114,6 +114,6 @@ var _ = utils.SIGDescribe("Node Unregister [Feature:vsphere] [Slow] [Disruptive]
 		storagePolicy := os.Getenv("VSPHERE_SPBM_GOLD_POLICY")
 		Expect(storagePolicy).NotTo(BeEmpty(), "Please set VSPHERE_SPBM_GOLD_POLICY system environment")
 		scParameters[SpbmStoragePolicy] = storagePolicy
-		invokeValidPolicyTest(f, client, nodeInfo.VSphere, namespace, scParameters)
+		invokeValidPolicyTest(f, client, namespace, scParameters)
 	})
 })
