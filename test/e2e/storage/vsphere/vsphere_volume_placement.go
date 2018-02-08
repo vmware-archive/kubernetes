@@ -24,11 +24,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
-	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
-	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
 )
@@ -41,14 +38,14 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 	var (
 		c                  clientset.Interface
 		ns                 string
-		vsp                *vsphere.VSphere
 		volumePaths        []string
 		node1Name          string
 		node1KeyValueLabel map[string]string
 		node2Name          string
 		node2KeyValueLabel map[string]string
 		isNodeLabeled      bool
-		err                error
+		nodeInfo           *NodeInfo
+		vsp                *VSphere
 	)
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
@@ -60,17 +57,21 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 			node1Name, node1KeyValueLabel, node2Name, node2KeyValueLabel = testSetupVolumePlacement(c, ns)
 			isNodeLabeled = true
 		}
+		nodes := framework.GetReadySchedulableNodesOrDie(c)
+		if len(nodes.Items) == 0 {
+			framework.Failf("Unable to find ready and schedulable Node")
+		}
+		nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodes.Items[0].Name)
+		vsp = nodeInfo.VSphere
 		By("creating vmdk")
-		vsp, err = getVSphere(c)
-		Expect(err).NotTo(HaveOccurred())
-		volumePath, err := createVSphereVolume(vsp, nil)
+		volumePath, err := vsp.CreateVolume(&VolumeOptions{}, nodeInfo.DataCenterRef)
 		Expect(err).NotTo(HaveOccurred())
 		volumePaths = append(volumePaths, volumePath)
 	})
 
 	AfterEach(func() {
 		for _, volumePath := range volumePaths {
-			vsp.DeleteVolume(volumePath)
+			vsp.DeleteVolume(volumePath, nodeInfo.DataCenterRef)
 		}
 		volumePaths = nil
 	})
@@ -182,7 +183,7 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 
 	It("should create and delete pod with multiple volumes from same datastore", func() {
 		By("creating another vmdk")
-		volumePath, err := createVSphereVolume(vsp, nil)
+		volumePath, err := vsp.CreateVolume(&VolumeOptions{}, nodeInfo.DataCenterRef)
 		Expect(err).NotTo(HaveOccurred())
 		volumePaths = append(volumePaths, volumePath)
 
@@ -224,12 +225,13 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 	*/
 	It("should create and delete pod with multiple volumes from different datastore", func() {
 		By("creating another vmdk on non default shared datastore")
-		var volumeOptions *vclib.VolumeOptions
-		volumeOptions = new(vclib.VolumeOptions)
+		var volumeOptions *VolumeOptions
+		volumeOptions = new(VolumeOptions)
 		volumeOptions.CapacityKB = 2097152
 		volumeOptions.Name = "e2e-vmdk-" + strconv.FormatInt(time.Now().UnixNano(), 10)
 		volumeOptions.Datastore = GetAndExpectStringEnvVar(SecondSharedDatastore)
-		volumePath, err := createVSphereVolume(vsp, volumeOptions)
+		volumePath, err := vsp.CreateVolume(volumeOptions, nodeInfo.DataCenterRef)
+
 		Expect(err).NotTo(HaveOccurred())
 		volumePaths = append(volumePaths, volumePath)
 
@@ -289,14 +291,14 @@ var _ = utils.SIGDescribe("Volume Placement", func() {
 			framework.ExpectNoError(framework.DeletePodWithWait(f, c, podB), "defer: Failed to delete pod ", podB.Name)
 			By(fmt.Sprintf("wait for volumes to be detached from the node: %v", node1Name))
 			for _, volumePath := range volumePaths {
-				framework.ExpectNoError(waitForVSphereDiskToDetach(c, vsp, volumePath, types.NodeName(node1Name)))
+				framework.ExpectNoError(waitForVSphereDiskToDetach(c, vsp, volumePath, node1Name))
 			}
 		}()
 
 		testvolumePathsPodA = append(testvolumePathsPodA, volumePaths[0])
 		// Create another VMDK Volume
 		By("creating another vmdk")
-		volumePath, err := createVSphereVolume(vsp, nil)
+		volumePath, err := vsp.CreateVolume(&VolumeOptions{}, nodeInfo.DataCenterRef)
 		Expect(err).NotTo(HaveOccurred())
 		volumePaths = append(volumePaths, volumePath)
 		testvolumePathsPodB = append(testvolumePathsPodA, volumePath)
@@ -353,7 +355,7 @@ func testSetupVolumePlacement(client clientset.Interface, namespace string) (nod
 	return node1Name, node1KeyValueLabel, node2Name, node2KeyValueLabel
 }
 
-func createPodWithVolumeAndNodeSelector(client clientset.Interface, namespace string, vsp *vsphere.VSphere, nodeName string, nodeKeyValueLabel map[string]string, volumePaths []string) *v1.Pod {
+func createPodWithVolumeAndNodeSelector(client clientset.Interface, namespace string, vsp *VSphere, nodeName string, nodeKeyValueLabel map[string]string, volumePaths []string) *v1.Pod {
 	var pod *v1.Pod
 	var err error
 	By(fmt.Sprintf("Creating pod on the node: %v", nodeName))
@@ -366,7 +368,7 @@ func createPodWithVolumeAndNodeSelector(client clientset.Interface, namespace st
 
 	By(fmt.Sprintf("Verify volume is attached to the node:%v", nodeName))
 	for _, volumePath := range volumePaths {
-		isAttached, err := verifyVSphereDiskAttached(client, vsp, volumePath, types.NodeName(nodeName))
+		isAttached, err := verifyVSphereDiskAttached(client, vsp, volumePath, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isAttached).To(BeTrue(), "disk:"+volumePath+" is not attached with the node")
 	}
@@ -383,12 +385,12 @@ func createAndVerifyFilesOnVolume(namespace string, podname string, newEmptyfile
 	verifyFilesExistOnVSphereVolume(namespace, podname, filesToCheck)
 }
 
-func deletePodAndWaitForVolumeToDetach(f *framework.Framework, c clientset.Interface, pod *v1.Pod, vsp *vsphere.VSphere, nodeName string, volumePaths []string) {
+func deletePodAndWaitForVolumeToDetach(f *framework.Framework, c clientset.Interface, pod *v1.Pod, vsp *VSphere, nodeName string, volumePaths []string) {
 	By("Deleting pod")
 	framework.ExpectNoError(framework.DeletePodWithWait(f, c, pod), "Failed to delete pod ", pod.Name)
 
 	By("Waiting for volume to be detached from the node")
 	for _, volumePath := range volumePaths {
-		framework.ExpectNoError(waitForVSphereDiskToDetach(c, vsp, volumePath, types.NodeName(nodeName)))
+		framework.ExpectNoError(waitForVSphereDiskToDetach(c, vsp, volumePath, nodeName))
 	}
 }

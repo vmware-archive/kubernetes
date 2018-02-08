@@ -24,9 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8stype "k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
-	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
 )
@@ -69,6 +67,7 @@ var _ = utils.SIGDescribe("Volume FStype [Feature:vsphere]", func() {
 	var (
 		client    clientset.Interface
 		namespace string
+		nodeInfo  *NodeInfo
 	)
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
@@ -76,31 +75,31 @@ var _ = utils.SIGDescribe("Volume FStype [Feature:vsphere]", func() {
 		client = f.ClientSet
 		namespace = f.Namespace.Name
 		nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
+		Expect(nodeList.Items).NotTo(BeEmpty(), "Unable to find ready and schedulable Node")
+		nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodeList.Items[0].Name)
 		Expect(len(nodeList.Items)).NotTo(BeZero(), "Unable to find ready and schedulable Node")
 	})
 
 	It("verify fstype - ext3 formatted volume", func() {
 		By("Invoking Test for fstype: ext3")
-		invokeTestForFstype(f, client, namespace, Ext3FSType, Ext3FSType)
+		invokeTestForFstype(f, client, nodeInfo.VSphere, namespace, Ext3FSType, Ext3FSType)
 	})
 
 	It("verify fstype - default value should be ext4", func() {
 		By("Invoking Test for fstype: Default Value - ext4")
-		invokeTestForFstype(f, client, namespace, "", Ext4FSType)
+		invokeTestForFstype(f, client, nodeInfo.VSphere, namespace, "", Ext4FSType)
 	})
 
 	It("verify invalid fstype", func() {
 		By("Invoking Test for fstype: invalid Value")
-		invokeTestForInvalidFstype(f, client, namespace, InvalidFSType)
+		invokeTestForInvalidFstype(f, client, nodeInfo.VSphere, namespace, InvalidFSType)
 	})
 })
 
-func invokeTestForFstype(f *framework.Framework, client clientset.Interface, namespace string, fstype string, expectedContent string) {
+func invokeTestForFstype(f *framework.Framework, client clientset.Interface, vsp *VSphere, namespace string, fstype string, expectedContent string) {
 	framework.Logf("Invoking Test for fstype: %s", fstype)
 	scParameters := make(map[string]string)
 	scParameters["fstype"] = fstype
-	vsp, err := getVSphere(client)
-	Expect(err).NotTo(HaveOccurred())
 
 	// Create Persistent Volume
 	By("Creating Storage Class With Fstype")
@@ -108,7 +107,7 @@ func invokeTestForFstype(f *framework.Framework, client clientset.Interface, nam
 
 	// Create Pod and verify the persistent volume is accessible
 	pod := createPodAndVerifyVolumeAccessible(client, namespace, pvclaim, persistentvolumes, vsp)
-	_, err = framework.LookForStringInPodExec(namespace, pod.Name, []string{"/bin/cat", "/mnt/volume1/fstype"}, expectedContent, time.Minute)
+	_, err := framework.LookForStringInPodExec(namespace, pod.Name, []string{"/bin/cat", "/mnt/volume1/fstype"}, expectedContent, time.Minute)
 	Expect(err).NotTo(HaveOccurred())
 
 	// Detach and delete volume
@@ -116,11 +115,9 @@ func invokeTestForFstype(f *framework.Framework, client clientset.Interface, nam
 	deleteVolume(client, pvclaim.Name, namespace)
 }
 
-func invokeTestForInvalidFstype(f *framework.Framework, client clientset.Interface, namespace string, fstype string) {
+func invokeTestForInvalidFstype(f *framework.Framework, client clientset.Interface, vsp *VSphere, namespace string, fstype string) {
 	scParameters := make(map[string]string)
 	scParameters["fstype"] = fstype
-	vsp, err := getVSphere(client)
-	Expect(err).NotTo(HaveOccurred())
 
 	// Create Persistent Volume
 	By("Creating Storage Class With Invalid Fstype")
@@ -167,7 +164,7 @@ func createVolume(client clientset.Interface, namespace string, scParameters map
 	return pvclaim, persistentvolumes
 }
 
-func createPodAndVerifyVolumeAccessible(client clientset.Interface, namespace string, pvclaim *v1.PersistentVolumeClaim, persistentvolumes []*v1.PersistentVolume, vsp *vsphere.VSphere) *v1.Pod {
+func createPodAndVerifyVolumeAccessible(client clientset.Interface, namespace string, pvclaim *v1.PersistentVolumeClaim, persistentvolumes []*v1.PersistentVolume, vsp *VSphere) *v1.Pod {
 	var pvclaims []*v1.PersistentVolumeClaim
 	pvclaims = append(pvclaims, pvclaim)
 	By("Creating pod to attach PV to the node")
@@ -181,12 +178,12 @@ func createPodAndVerifyVolumeAccessible(client clientset.Interface, namespace st
 	return pod
 }
 
-func detachVolume(f *framework.Framework, client clientset.Interface, vsp *vsphere.VSphere, pod *v1.Pod, volPath string) {
+func detachVolume(f *framework.Framework, client clientset.Interface, vsp *VSphere, pod *v1.Pod, volPath string) {
 	By("Deleting pod")
 	framework.DeletePodWithWait(f, client, pod)
 
 	By("Waiting for volumes to be detached from the node")
-	waitForVSphereDiskToDetach(client, vsp, volPath, k8stype.NodeName(pod.Spec.NodeName))
+	waitForVSphereDiskToDetach(client, vsp, volPath, pod.Spec.NodeName)
 }
 
 func deleteVolume(client clientset.Interface, pvclaimName string, namespace string) {

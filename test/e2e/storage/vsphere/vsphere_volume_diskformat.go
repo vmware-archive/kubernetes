@@ -21,11 +21,11 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8stype "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -62,6 +62,7 @@ var _ = utils.SIGDescribe("Volume Disk Format [Feature:vsphere]", func() {
 		isNodeLabeled     bool
 		nodeKeyValueLabel map[string]string
 		nodeLabelValue    string
+		nodeInfo          *NodeInfo
 	)
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
@@ -71,6 +72,7 @@ var _ = utils.SIGDescribe("Volume Disk Format [Feature:vsphere]", func() {
 		nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
 		if len(nodeList.Items) != 0 {
 			nodeName = nodeList.Items[0].Name
+			nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodeName)
 			// This is for testing and will be removed before merge
 			for _, node := range nodeList.Items {
 				framework.Logf("NodeMap : %v\n", TestContext.NodeMapper.GetNodeInfo(node.Name))
@@ -95,19 +97,19 @@ var _ = utils.SIGDescribe("Volume Disk Format [Feature:vsphere]", func() {
 
 	It("verify disk format type - eagerzeroedthick is honored for dynamically provisioned pv using storageclass", func() {
 		By("Invoking Test for diskformat: eagerzeroedthick")
-		invokeTest(f, client, namespace, nodeName, nodeKeyValueLabel, "eagerzeroedthick")
+		invokeTest(f, client, namespace, nodeInfo, nodeKeyValueLabel, "eagerzeroedthick")
 	})
 	It("verify disk format type - zeroedthick is honored for dynamically provisioned pv using storageclass", func() {
 		By("Invoking Test for diskformat: zeroedthick")
-		invokeTest(f, client, namespace, nodeName, nodeKeyValueLabel, "zeroedthick")
+		invokeTest(f, client, namespace, nodeInfo, nodeKeyValueLabel, "zeroedthick")
 	})
 	It("verify disk format type - thin is honored for dynamically provisioned pv using storageclass", func() {
 		By("Invoking Test for diskformat: thin")
-		invokeTest(f, client, namespace, nodeName, nodeKeyValueLabel, "thin")
+		invokeTest(f, client, namespace, nodeInfo, nodeKeyValueLabel, "thin")
 	})
 })
 
-func invokeTest(f *framework.Framework, client clientset.Interface, namespace string, nodeName string, nodeKeyValueLabel map[string]string, diskFormat string) {
+func invokeTest(f *framework.Framework, client clientset.Interface, namespace string, nodeInfo *NodeInfo, nodeKeyValueLabel map[string]string, diskFormat string) {
 
 	framework.Logf("Invoking Test for DiskFomat: %s", diskFormat)
 	scParameters := make(map[string]string)
@@ -151,23 +153,21 @@ func invokeTest(f *framework.Framework, client clientset.Interface, namespace st
 	pod, err := client.CoreV1().Pods(namespace).Create(podSpec)
 	Expect(err).NotTo(HaveOccurred())
 
-	vsp, err := getVSphere(client)
-	Expect(err).NotTo(HaveOccurred())
-	verifyVSphereDiskAttached(client, vsp, pv.Spec.VsphereVolume.VolumePath, k8stype.NodeName(nodeName))
+	verifyVSphereDiskAttached(client, nodeInfo.VSphere, pv.Spec.VsphereVolume.VolumePath, nodeInfo.Name)
 
 	By("Waiting for pod to be running")
 	Expect(framework.WaitForPodNameRunningInNamespace(client, pod.Name, namespace)).To(Succeed())
-	Expect(verifyDiskFormat(client, nodeName, pv.Spec.VsphereVolume.VolumePath, diskFormat)).To(BeTrue(), "DiskFormat Verification Failed")
+	Expect(verifyDiskFormat(client, nodeInfo, pv.Spec.VsphereVolume.VolumePath, diskFormat)).To(BeTrue(), "DiskFormat Verification Failed")
 
 	var volumePaths []string
 	volumePaths = append(volumePaths, pv.Spec.VsphereVolume.VolumePath)
 
 	By("Delete pod and wait for volume to be detached from node")
-	deletePodAndWaitForVolumeToDetach(f, client, pod, vsp, nodeName, volumePaths)
+	deletePodAndWaitForVolumeToDetach(f, client, pod, nodeInfo.VSphere, nodeInfo.Name, volumePaths)
 
 }
 
-func verifyDiskFormat(client clientset.Interface, nodeName string, pvVolumePath string, diskFormat string) bool {
+func verifyDiskFormat(client clientset.Interface, nodeInfo *NodeInfo, pvVolumePath string, diskFormat string) bool {
 	By("Verifing disk format")
 	eagerlyScrub := false
 	thinProvisioned := false
@@ -177,12 +177,8 @@ func verifyDiskFormat(client clientset.Interface, nodeName string, pvVolumePath 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	vsp, err := getVSphere(client)
-	Expect(err).NotTo(HaveOccurred())
-	nodeInfo, err := vsp.NodeManager().GetNodeInfo(k8stype.NodeName(nodeName))
-	Expect(err).NotTo(HaveOccurred())
-
-	vmDevices, err := nodeInfo.VM().Device(ctx)
+	vm := object.NewVirtualMachine(nodeInfo.VSphere.Client.Client, nodeInfo.VirtualMachineRef)
+	vmDevices, err := vm.Device(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
 	disks := vmDevices.SelectByType((*types.VirtualDisk)(nil))

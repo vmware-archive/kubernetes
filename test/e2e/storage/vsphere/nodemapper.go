@@ -89,10 +89,8 @@ func (nm *NodeMapper) GenerateNodeMap(vSphereInstances map[string]*VSphere, node
 	}
 
 	for _, node := range nodeList.Items {
-		n := node
-
 		go func() {
-			nodeUUID := n.Status.NodeInfo.SystemUUID
+			nodeUUID := node.Status.NodeInfo.SystemUUID
 			framework.Logf("Searching for node with UUID: %s", nodeUUID)
 			for _, res := range queueChannel {
 				ctx, cancel := context.WithCancel(context.Background())
@@ -100,14 +98,14 @@ func (nm *NodeMapper) GenerateNodeMap(vSphereInstances map[string]*VSphere, node
 				vm, err := res.vs.GetVMByUUID(ctx, nodeUUID, res.datacenter)
 				if err != nil {
 					framework.Logf("Error %q while looking for vm=%+v in vc=%s and datacenter=%s",
-						err, n.Name, vm, res.vs.Config.Hostname, res.datacenter.Name())
+						err, node.Name, vm, res.vs.Config.Hostname, res.datacenter.Name())
 					continue
 				}
 				if vm != nil {
 					framework.Logf("Found node %s as vm=%+v in vc=%s and datacenter=%s",
-						n.Name, vm, res.vs.Config.Hostname, res.datacenter.Name())
-					nodeInfo := &NodeInfo{Name: n.Name, DataCenterRef: res.datacenter.Reference(), VirtualMachineRef: vm.Reference(), VSphere: res.vs}
-					nameToNodeInfo[n.Name] = nodeInfo
+						node.Name, vm, res.vs.Config.Hostname, res.datacenter.Name())
+					nodeInfo := &NodeInfo{Name: node.Name, DataCenterRef: res.datacenter.Reference(), VirtualMachineRef: vm.Reference()}
+					nameToNodeInfo[node.Name] = nodeInfo
 					break
 				}
 			}

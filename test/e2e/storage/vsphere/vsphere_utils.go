@@ -19,30 +19,31 @@ package vsphere
 import (
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"time"
 
+	"github.com/golang/glog"
 	. "github.com/onsi/gomega"
 	"github.com/vmware/govmomi/object"
+
 	"github.com/vmware/govmomi/vim25/mo"
+
+	vim25types "github.com/vmware/govmomi/vim25/types"
+	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	storage "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	vsphere "k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
-	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/volume/util/volumehelper"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
 
-	"context"
-
 	"github.com/vmware/govmomi/find"
 	vimtypes "github.com/vmware/govmomi/vim25/types"
+	"regexp"
+	"strings"
 )
 
 const (
@@ -51,6 +52,7 @@ const (
 	storageclass2  = "sc-vsan"
 	storageclass3  = "sc-spbm"
 	storageclass4  = "sc-user-specified-ds"
+	DummyDiskName  = "kube-dummyDisk.vmdk"
 )
 
 // volumeState represents the state of a volume.
@@ -62,36 +64,28 @@ const (
 )
 
 // Sanity check for vSphere testing.  Verify the persistent disk attached to the node.
-func verifyVSphereDiskAttached(c clientset.Interface, vsp *vsphere.VSphere, volumePath string, nodeName types.NodeName) (bool, error) {
+func verifyVSphereDiskAttached(c clientset.Interface, vsp *VSphere, volumePath string, nodeName string) (bool, error) {
 	var (
 		isAttached bool
 		err        error
 	)
-	if vsp == nil {
-		vsp, err = getVSphere(c)
-		Expect(err).NotTo(HaveOccurred())
-	}
+	Expect(vsp).NotTo(BeNil())
 	isAttached, err = vsp.DiskIsAttached(volumePath, nodeName)
 	Expect(err).NotTo(HaveOccurred())
 	return isAttached, err
 }
 
 // Wait until vsphere volumes are detached from the list of nodes or time out after 5 minutes
-func waitForVSphereDisksToDetach(c clientset.Interface, vsp *vsphere.VSphere, nodeVolumes map[types.NodeName][]string) error {
+func waitForVSphereDisksToDetach(c clientset.Interface, vsp *VSphere, nodeVolumes map[string][]string) error {
 	var (
 		err            error
 		disksAttached  = true
 		detachTimeout  = 5 * time.Minute
 		detachPollTime = 10 * time.Second
 	)
-	if vsp == nil {
-		vsp, err = getVSphere(c)
-		if err != nil {
-			return err
-		}
-	}
+	Expect(vsp).NotTo(BeNil())
 	err = wait.Poll(detachPollTime, detachTimeout, func() (bool, error) {
-		attachedResult, err := vsp.DisksAreAttached(nodeVolumes)
+		attachedResult, err := vsp.DisksAreAttached(TestContext.NodeMapper, nodeVolumes)
 		if err != nil {
 			return false, err
 		}
@@ -117,7 +111,7 @@ func waitForVSphereDisksToDetach(c clientset.Interface, vsp *vsphere.VSphere, no
 }
 
 // Wait until vsphere vmdk moves to expected state on the given node, or time out after 6 minutes
-func waitForVSphereDiskStatus(c clientset.Interface, vsp *vsphere.VSphere, volumePath string, nodeName types.NodeName, expectedState volumeState) error {
+func waitForVSphereDiskStatus(c clientset.Interface, vsp *VSphere, volumePath string, nodeName string, expectedState volumeState) error {
 	var (
 		err          error
 		diskAttached bool
@@ -161,12 +155,12 @@ func waitForVSphereDiskStatus(c clientset.Interface, vsp *vsphere.VSphere, volum
 }
 
 // Wait until vsphere vmdk is attached from the given node or time out after 6 minutes
-func waitForVSphereDiskToAttach(c clientset.Interface, vsp *vsphere.VSphere, volumePath string, nodeName types.NodeName) error {
+func waitForVSphereDiskToAttach(c clientset.Interface, vsp *VSphere, volumePath string, nodeName string) error {
 	return waitForVSphereDiskStatus(c, vsp, volumePath, nodeName, volumeStateAttached)
 }
 
 // Wait until vsphere vmdk is detached from the given node or time out after 6 minutes
-func waitForVSphereDiskToDetach(c clientset.Interface, vsp *vsphere.VSphere, volumePath string, nodeName types.NodeName) error {
+func waitForVSphereDiskToDetach(c clientset.Interface, vsp *VSphere, volumePath string, nodeName string) error {
 	return waitForVSphereDiskStatus(c, vsp, volumePath, nodeName, volumeStateDetached)
 }
 
@@ -239,27 +233,6 @@ func getVSpherePersistentVolumeClaimSpec(namespace string, labels map[string]str
 	}
 
 	return pvc
-}
-
-// function to create vmdk volume
-func createVSphereVolume(vsp *vsphere.VSphere, volumeOptions *vclib.VolumeOptions) (string, error) {
-	var (
-		volumePath string
-		err        error
-	)
-	if volumeOptions == nil {
-		volumeOptions = new(vclib.VolumeOptions)
-		volumeOptions.CapacityKB = 2097152
-		volumeOptions.Name = "e2e-vmdk-" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	}
-	volumePath, err = vsp.CreateVolume(volumeOptions)
-	Expect(err).NotTo(HaveOccurred())
-	return volumePath, nil
-}
-
-// CreateVSphereVolume creates a vmdk volume
-func CreateVSphereVolume(vsp *vsphere.VSphere, volumeOptions *vclib.VolumeOptions) (string, error) {
-	return createVSphereVolume(vsp, volumeOptions)
 }
 
 // function to write content to the volume backed by given PVC
@@ -426,12 +399,12 @@ func createEmptyFilesOnVSphereVolume(namespace string, podName string, filePaths
 }
 
 // verify volumes are attached to the node and are accessible in pod
-func verifyVSphereVolumesAccessible(c clientset.Interface, pod *v1.Pod, persistentvolumes []*v1.PersistentVolume, vsp *vsphere.VSphere) {
+func verifyVSphereVolumesAccessible(c clientset.Interface, pod *v1.Pod, persistentvolumes []*v1.PersistentVolume, vsp *VSphere) {
 	nodeName := pod.Spec.NodeName
 	namespace := pod.Namespace
 	for index, pv := range persistentvolumes {
 		// Verify disks are attached to the node
-		isAttached, err := verifyVSphereDiskAttached(c, vsp, pv.Spec.VsphereVolume.VolumePath, types.NodeName(nodeName))
+		isAttached, err := verifyVSphereDiskAttached(c, vsp, pv.Spec.VsphereVolume.VolumePath, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isAttached).To(BeTrue(), fmt.Sprintf("disk %v is not attached with the node", pv.Spec.VsphereVolume.VolumePath))
 		// Verify Volumes are accessible
@@ -450,29 +423,182 @@ func getvSphereVolumePathFromClaim(client clientset.Interface, namespace string,
 	return pv.Spec.VsphereVolume.VolumePath
 }
 
-func addNodesToVCP(vsp *vsphere.VSphere, c clientset.Interface) error {
-	nodes, err := c.CoreV1().Nodes().List(metav1.ListOptions{})
+// Get canonical volume path for volume Path.
+// Example1: The canonical path for volume path - [vsanDatastore] kubevols/volume.vmdk will be [vsanDatastore] 25d8b159-948c-4b73-e499-02001ad1b044/volume.vmdk
+// Example2: The canonical path for volume path - [vsanDatastore] 25d8b159-948c-4b73-e499-02001ad1b044/volume.vmdk will be same as volume Path.
+func getcanonicalVolumePath(ctx context.Context, dc *object.Datacenter, volumePath string) (string, error) {
+	var folderID string
+	canonicalVolumePath := volumePath
+	dsPathObj, err := getDatastorePathObjFromVMDiskPath(volumePath)
 	if err != nil {
-		return err
+		return "", err
 	}
-	for _, node := range nodes.Items {
-		vsp.NodeAdded(&node)
+	dsPath := strings.Split(strings.TrimSpace(dsPathObj.Path), "/")
+	if len(dsPath) <= 1 {
+		return canonicalVolumePath, nil
 	}
-	return nil
+	datastore := dsPathObj.Datastore
+	dsFolder := dsPath[0]
+	// Get the datastore folder ID if datastore or folder doesn't exist in datastoreFolderIDMap
+	if !isValidUUID(dsFolder) {
+		dummyDiskVolPath := "[" + datastore + "] " + dsFolder + "/" + DummyDiskName
+		// Querying a non-existent dummy disk on the datastore folder.
+		// It would fail and return an folder ID in the error message.
+		_, err := getVirtualDiskPage83Data(ctx, dc, dummyDiskVolPath)
+		if err != nil {
+			re := regexp.MustCompile("File (.*?) was not found")
+			match := re.FindStringSubmatch(err.Error())
+			canonicalVolumePath = match[1]
+		}
+	}
+	diskPath := getPathFromVMDiskPath(canonicalVolumePath)
+	if diskPath == "" {
+		return "", fmt.Errorf("Failed to parse canonicalVolumePath: %s in getcanonicalVolumePath method", canonicalVolumePath)
+	}
+	folderID = strings.Split(strings.TrimSpace(diskPath), "/")[0]
+	canonicalVolumePath = strings.Replace(volumePath, dsFolder, folderID, 1)
+	return canonicalVolumePath, nil
 }
 
-func getVSphere(c clientset.Interface) (*vsphere.VSphere, error) {
-	vsp, err := vsphere.GetVSphere()
+// GetPathFromVMDiskPath retrieves the path from VM Disk Path.
+// Example: For vmDiskPath - [vsanDatastore] kubevols/volume.vmdk, the path is kubevols/volume.vmdk
+func getPathFromVMDiskPath(vmDiskPath string) string {
+	datastorePathObj := new(object.DatastorePath)
+	isSuccess := datastorePathObj.FromString(vmDiskPath)
+	if !isSuccess {
+		glog.Errorf("Failed to parse vmDiskPath: %s", vmDiskPath)
+		return ""
+	}
+	return datastorePathObj.Path
+}
+
+//GetDatastorePathObjFromVMDiskPath gets the datastorePathObj from VM disk path.
+func getDatastorePathObjFromVMDiskPath(vmDiskPath string) (*object.DatastorePath, error) {
+	datastorePathObj := new(object.DatastorePath)
+	isSuccess := datastorePathObj.FromString(vmDiskPath)
+	if !isSuccess {
+		glog.Errorf("Failed to parse volPath: %s", vmDiskPath)
+		return nil, fmt.Errorf("Failed to parse volPath: %s", vmDiskPath)
+	}
+	return datastorePathObj, nil
+}
+
+// GetVirtualDiskPage83Data gets the virtual disk UUID by diskPath
+func getVirtualDiskPage83Data(ctx context.Context, dc *object.Datacenter, diskPath string) (string, error) {
+	if len(diskPath) > 0 && filepath.Ext(diskPath) != ".vmdk" {
+		diskPath += ".vmdk"
+	}
+	vdm := object.NewVirtualDiskManager(dc.Client())
+	// Returns uuid of vmdk virtual disk
+	diskUUID, err := vdm.QueryVirtualDiskUuid(ctx, diskPath, dc)
+
 	if err != nil {
+		glog.Warningf("QueryVirtualDiskUuid failed for diskPath: %q. err: %+v", diskPath, err)
+		return "", err
+	}
+	diskUUID = formatVirtualDiskUUID(diskUUID)
+	return diskUUID, nil
+}
+
+// formatVirtualDiskUUID removes any spaces and hyphens in UUID
+// Example UUID input is 42375390-71f9-43a3-a770-56803bcd7baa and output after format is 4237539071f943a3a77056803bcd7baa
+func formatVirtualDiskUUID(uuid string) string {
+	uuidwithNoSpace := strings.Replace(uuid, " ", "", -1)
+	uuidWithNoHypens := strings.Replace(uuidwithNoSpace, "-", "", -1)
+	return strings.ToLower(uuidWithNoHypens)
+}
+
+//IsValidUUID checks if the string is a valid UUID.
+func isValidUUID(uuid string) bool {
+	r := regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$")
+	return r.MatchString(uuid)
+}
+
+// RemoveStorageClusterORFolderNameFromVDiskPath removes the cluster or folder path from the vDiskPath
+// for vDiskPath [DatastoreCluster/sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk, return value is [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk
+// for vDiskPath [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk, return value remains same [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk
+func removeStorageClusterORFolderNameFromVDiskPath(vDiskPath string) string {
+	datastore := regexp.MustCompile("\\[(.*?)\\]").FindStringSubmatch(vDiskPath)[1]
+	if filepath.Base(datastore) != datastore {
+		vDiskPath = strings.Replace(vDiskPath, datastore, filepath.Base(datastore), 1)
+	}
+	return vDiskPath
+}
+
+// IsDiskAttached checks if disk is attached to the VM.
+func isDiskAttached(ctx context.Context, vm *object.VirtualMachine, diskPath string) (bool, error) {
+	device, err := getVirtualDeviceByPath(ctx, vm, diskPath)
+	if err != nil {
+		return false, err
+	}
+	if device != nil {
+		return true, nil
+	}
+	return false, nil
+}
+
+// getVirtualDeviceByPath gets the virtual device by path
+func getVirtualDeviceByPath(ctx context.Context, vm *object.VirtualMachine, diskPath string) (vim25types.BaseVirtualDevice, error) {
+	vmDevices, err := vm.Device(ctx)
+	if err != nil {
+		glog.Errorf("Failed to get the devices for VM: %q. err: %+v", vm.InventoryPath, err)
 		return nil, err
 	}
-	addNodesToVCP(vsp, c)
-	return vsp, nil
+
+	// filter vm devices to retrieve device for the given vmdk file identified by disk path
+	for _, device := range vmDevices {
+		if vmDevices.TypeName(device) == "VirtualDisk" {
+			virtualDevice := device.GetVirtualDevice()
+			if backing, ok := virtualDevice.Backing.(*vim25types.VirtualDiskFlatVer2BackingInfo); ok {
+				if matchVirtualDiskAndVolPath(backing.FileName, diskPath) {
+					glog.V(4).Infof("Found VirtualDisk backing with filename %q for diskPath %q", backing.FileName, diskPath)
+					return device, nil
+				}
+			}
+		}
+	}
+	return nil, nil
 }
 
-// GetVSphere returns vsphere cloud provider
-func GetVSphere(c clientset.Interface) (*vsphere.VSphere, error) {
-	return getVSphere(c)
+func matchVirtualDiskAndVolPath(diskPath, volPath string) bool {
+	fileExt := ".vmdk"
+	diskPath = strings.TrimSuffix(diskPath, fileExt)
+	volPath = strings.TrimSuffix(volPath, fileExt)
+	return diskPath == volPath
+}
+
+// convertVolPathsToDevicePaths removes cluster or folder path from volPaths and convert to canonicalPath
+func convertVolPathsToDevicePaths(ctx context.Context, nm *NodeMapper, nodeVolumes map[string][]string) (map[string][]string, error) {
+	vmVolumes := make(map[string][]string)
+	for nodeName, volPaths := range nodeVolumes {
+		nodeInfo := nm.GetNodeInfo(nodeName)
+		datacenter := nodeInfo.VSphere.GetDatacenterFromObjectReference(ctx, nodeInfo.DataCenterRef)
+		for i, volPath := range volPaths {
+			deviceVolPath, err := convertVolPathToDevicePath(ctx, datacenter, volPath)
+			if err != nil {
+				glog.Errorf("Failed to convert vsphere volume path %s to device path for volume %s. err: %+v", volPath, deviceVolPath, err)
+				return nil, err
+			}
+			volPaths[i] = deviceVolPath
+		}
+		vmVolumes[nodeName] = volPaths
+	}
+	return vmVolumes, nil
+}
+
+func convertVolPathToDevicePath(ctx context.Context, dc *object.Datacenter, volPath string) (string, error) {
+	volPath = removeStorageClusterORFolderNameFromVDiskPath(volPath)
+	// Get the canonical volume path for volPath.
+	canonicalVolumePath, err := getcanonicalVolumePath(ctx, dc, volPath)
+	if err != nil {
+		glog.Errorf("Failed to get canonical vsphere volume path for volume: %s. err: %+v", volPath, err)
+		return "", err
+	}
+	// Check if the volume path contains .vmdk extension. If not, add the extension and update the nodeVolumes Map
+	if len(canonicalVolumePath) > 0 && filepath.Ext(canonicalVolumePath) != ".vmdk" {
+		canonicalVolumePath += ".vmdk"
+	}
+	return canonicalVolumePath, nil
 }
 
 // get .vmx file path for a virtual machine

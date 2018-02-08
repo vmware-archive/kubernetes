@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/gomega"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
@@ -55,11 +54,18 @@ var _ = utils.SIGDescribe("vsphere statefulset", func() {
 	var (
 		namespace string
 		client    clientset.Interface
+		nodeInfo  *NodeInfo
 	)
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
 		namespace = f.Namespace.Name
 		client = f.ClientSet
+		Bootstrap(f)
+		nodes := framework.GetReadySchedulableNodesOrDie(client)
+		if len(nodes.Items) < 1 {
+			framework.Skipf("Requires at least %d node", 1)
+		}
+		nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodes.Items[0].Name)
 	})
 	AfterEach(func() {
 		framework.Logf("Deleting all statefulset in namespace: %v", namespace)
@@ -104,9 +110,6 @@ var _ = utils.SIGDescribe("vsphere statefulset", func() {
 		Expect(scaledownErr).NotTo(HaveOccurred())
 		statefulsetTester.WaitForStatusReadyReplicas(statefulset, replicas-1)
 
-		vsp, err := getVSphere(client)
-		Expect(err).NotTo(HaveOccurred())
-
 		// After scale down, verify vsphere volumes are detached from deleted pods
 		By("Verify Volumes are detached from Nodes after Statefulsets is scaled down")
 		for _, sspod := range ssPodsBeforeScaleDown.Items {
@@ -117,7 +120,7 @@ var _ = utils.SIGDescribe("vsphere statefulset", func() {
 					if volumespec.PersistentVolumeClaim != nil {
 						vSpherediskPath := getvSphereVolumePathFromClaim(client, statefulset.Namespace, volumespec.PersistentVolumeClaim.ClaimName)
 						framework.Logf("Waiting for Volume: %q to detach from Node: %q", vSpherediskPath, sspod.Spec.NodeName)
-						Expect(waitForVSphereDiskToDetach(client, vsp, vSpherediskPath, types.NodeName(sspod.Spec.NodeName))).NotTo(HaveOccurred())
+						Expect(waitForVSphereDiskToDetach(client, nodeInfo.VSphere, vSpherediskPath, sspod.Spec.NodeName)).NotTo(HaveOccurred())
 					}
 				}
 			}
@@ -146,7 +149,7 @@ var _ = utils.SIGDescribe("vsphere statefulset", func() {
 					framework.Logf("Verify Volume: %q is attached to the Node: %q", vSpherediskPath, sspod.Spec.NodeName)
 					// Verify scale up has re-attached the same volumes and not introduced new volume
 					Expect(volumesBeforeScaleDown[vSpherediskPath] == "").To(BeFalse())
-					isVolumeAttached, verifyDiskAttachedError := verifyVSphereDiskAttached(client, vsp, vSpherediskPath, types.NodeName(sspod.Spec.NodeName))
+					isVolumeAttached, verifyDiskAttachedError := verifyVSphereDiskAttached(client, nodeInfo.VSphere, vSpherediskPath, sspod.Spec.NodeName)
 					Expect(isVolumeAttached).To(BeTrue())
 					Expect(verifyDiskAttachedError).NotTo(HaveOccurred())
 				}

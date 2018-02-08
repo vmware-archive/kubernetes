@@ -27,7 +27,6 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8stype "k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
@@ -95,6 +94,8 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 		scParameters map[string]string
 		policyName   string
 		tagPolicy    string
+		nodeInfo     *NodeInfo
+		vsp          *VSphere
 	)
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
@@ -109,6 +110,9 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 		if !(len(nodeList.Items) > 0) {
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
+		masternodes, _ := framework.GetMasterAndWorkerNodesOrDie(client)
+		nodeInfo = TestContext.NodeMapper.GetNodeInfo(masternodes.List()[0])
+		vsp = nodeInfo.VSphere
 	})
 
 	// Valid policy.
@@ -117,7 +121,7 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 		scParameters[Policy_HostFailuresToTolerate] = HostFailuresToTolerateCapabilityVal
 		scParameters[Policy_CacheReservation] = CacheReservationCapabilityVal
 		framework.Logf("Invoking test for VSAN storage capabilities: %+v", scParameters)
-		invokeValidPolicyTest(f, client, namespace, scParameters)
+		invokeValidPolicyTest(f, client, vsp, namespace, scParameters)
 	})
 
 	// Valid policy.
@@ -126,7 +130,7 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 		scParameters[Policy_DiskStripes] = "1"
 		scParameters[Policy_ObjectSpaceReservation] = "30"
 		framework.Logf("Invoking test for VSAN storage capabilities: %+v", scParameters)
-		invokeValidPolicyTest(f, client, namespace, scParameters)
+		invokeValidPolicyTest(f, client, vsp, namespace, scParameters)
 	})
 
 	// Valid policy.
@@ -136,7 +140,7 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 		scParameters[Policy_ObjectSpaceReservation] = ObjectSpaceReservationCapabilityVal
 		scParameters[Datastore] = VsanDatastore
 		framework.Logf("Invoking test for VSAN storage capabilities: %+v", scParameters)
-		invokeValidPolicyTest(f, client, namespace, scParameters)
+		invokeValidPolicyTest(f, client, vsp, namespace, scParameters)
 	})
 
 	// Valid policy.
@@ -145,7 +149,7 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 		scParameters[Policy_ObjectSpaceReservation] = ObjectSpaceReservationCapabilityVal
 		scParameters[Policy_IopsLimit] = IopsLimitCapabilityVal
 		framework.Logf("Invoking test for VSAN storage capabilities: %+v", scParameters)
-		invokeValidPolicyTest(f, client, namespace, scParameters)
+		invokeValidPolicyTest(f, client, vsp, namespace, scParameters)
 	})
 
 	// Invalid VSAN storage capabilties parameters.
@@ -213,7 +217,7 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 		scParameters[SpbmStoragePolicy] = policyName
 		scParameters[DiskFormat] = ThinDisk
 		framework.Logf("Invoking test for SPBM storage policy: %+v", scParameters)
-		invokeValidPolicyTest(f, client, namespace, scParameters)
+		invokeValidPolicyTest(f, client, vsp, namespace, scParameters)
 	})
 
 	It("verify clean up of stale dummy VM for dynamically provisioned pvc using SPBM policy", func() {
@@ -222,7 +226,7 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 		scParameters[Datastore] = VsanDatastore
 		framework.Logf("Invoking test for SPBM storage policy: %+v", scParameters)
 		kubernetesClusterName := GetAndExpectStringEnvVar(KubernetesClusterName)
-		invokeStaleDummyVMTestWithStoragePolicy(client, namespace, kubernetesClusterName, scParameters)
+		invokeStaleDummyVMTestWithStoragePolicy(client, nodeInfo, namespace, kubernetesClusterName, scParameters)
 	})
 
 	It("verify if a SPBM policy is not honored on a non-compatible datastore for dynamically provisioned pvc using storageclass", func() {
@@ -268,7 +272,7 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 	})
 })
 
-func invokeValidPolicyTest(f *framework.Framework, client clientset.Interface, namespace string, scParameters map[string]string) {
+func invokeValidPolicyTest(f *framework.Framework, client clientset.Interface, vsp *VSphere, namespace string, scParameters map[string]string) {
 	By("Creating Storage Class With storage policy params")
 	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("storagepolicysc", scParameters))
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
@@ -290,8 +294,6 @@ func invokeValidPolicyTest(f *framework.Framework, client clientset.Interface, n
 	pod, err := framework.CreatePod(client, namespace, nil, pvclaims, false, "")
 	Expect(err).NotTo(HaveOccurred())
 
-	vsp, err := getVSphere(client)
-	Expect(err).NotTo(HaveOccurred())
 	By("Verify the volume is accessible and available in the pod")
 	verifyVSphereVolumesAccessible(client, pod, persistentvolumes, vsp)
 
@@ -299,7 +301,7 @@ func invokeValidPolicyTest(f *framework.Framework, client clientset.Interface, n
 	framework.DeletePodWithWait(f, client, pod)
 
 	By("Waiting for volumes to be detached from the node")
-	waitForVSphereDiskToDetach(client, vsp, persistentvolumes[0].Spec.VsphereVolume.VolumePath, k8stype.NodeName(pod.Spec.NodeName))
+	waitForVSphereDiskToDetach(client, vsp, persistentvolumes[0].Spec.VsphereVolume.VolumePath, pod.Spec.NodeName)
 }
 
 func invokeInvalidPolicyTestNeg(client clientset.Interface, namespace string, scParameters map[string]string) error {
@@ -321,7 +323,7 @@ func invokeInvalidPolicyTestNeg(client clientset.Interface, namespace string, sc
 	return fmt.Errorf("Failure message: %+q", eventList.Items[0].Message)
 }
 
-func invokeStaleDummyVMTestWithStoragePolicy(client clientset.Interface, namespace string, clusterName string, scParameters map[string]string) {
+func invokeStaleDummyVMTestWithStoragePolicy(client clientset.Interface, nodeInfo *NodeInfo, namespace string, clusterName string, scParameters map[string]string) {
 	By("Creating Storage Class With storage policy params")
 	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("storagepolicysc", scParameters))
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
@@ -348,7 +350,5 @@ func invokeStaleDummyVMTestWithStoragePolicy(client clientset.Interface, namespa
 	fnvHash.Write([]byte(vmName))
 	dummyVMFullName := DummyVMPrefixName + "-" + fmt.Sprint(fnvHash.Sum32())
 	errorMsg := "Dummy VM - " + vmName + "is still present. Failing the test.."
-	vsp, err := getVSphere(client)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(vsp.IsDummyVMPresent(dummyVMFullName)).NotTo(BeTrue(), errorMsg)
+	Expect(nodeInfo.VSphere.IsVMPresent(dummyVMFullName, nodeInfo.DataCenterRef)).NotTo(BeTrue(), errorMsg)
 }

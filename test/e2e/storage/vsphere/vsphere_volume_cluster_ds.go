@@ -22,9 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
 )
@@ -47,6 +45,7 @@ var _ = utils.SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:v
 		namespace        string
 		scParameters     map[string]string
 		clusterDatastore string
+		nodeInfo         *NodeInfo
 	)
 
 	BeforeEach(func() {
@@ -54,6 +53,9 @@ var _ = utils.SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:v
 		Bootstrap(f)
 		client = f.ClientSet
 		namespace = f.Namespace.Name
+		nodeList := framework.GetReadySchedulableNodesOrDie(f.ClientSet)
+		Expect(nodeList.Items).NotTo(BeEmpty(), "Unable to find ready and schedulable Node")
+		nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodeList.Items[0].Name)
 		scParameters = make(map[string]string)
 		clusterDatastore = GetAndExpectStringEnvVar(VCPClusterDatastore)
 	})
@@ -70,21 +72,19 @@ var _ = utils.SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:v
 
 	It("verify static provisioning on clustered datastore", func() {
 		var volumePath string
-		vsp, err := getVSphere(client)
-		Expect(err).NotTo(HaveOccurred())
 
 		By("creating a test vsphere volume")
-		volumeOptions := new(vclib.VolumeOptions)
+		volumeOptions := new(VolumeOptions)
 		volumeOptions.CapacityKB = 2097152
 		volumeOptions.Name = "e2e-vmdk-" + namespace
 		volumeOptions.Datastore = clusterDatastore
 
-		volumePath, err = createVSphereVolume(vsp, volumeOptions)
+		volumePath, err := nodeInfo.VSphere.CreateVolume(volumeOptions, nodeInfo.DataCenterRef)
 		Expect(err).NotTo(HaveOccurred())
 
 		defer func() {
 			By("Deleting the vsphere volume")
-			vsp.DeleteVolume(volumePath)
+			nodeInfo.VSphere.DeleteVolume(volumePath, nodeInfo.DataCenterRef)
 		}()
 
 		podspec := getVSpherePodSpecWithVolumePaths([]string{volumePath}, nil, nil)
@@ -98,10 +98,10 @@ var _ = utils.SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:v
 		// get fresh pod info
 		pod, err = client.CoreV1().Pods(namespace).Get(pod.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		nodeName := types.NodeName(pod.Spec.NodeName)
+		nodeName := pod.Spec.NodeName
 
 		By("Verifying volume is attached")
-		isAttached, err := verifyVSphereDiskAttached(client, vsp, volumePath, nodeName)
+		isAttached, err := verifyVSphereDiskAttached(client, nodeInfo.VSphere, volumePath, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(isAttached).To(BeTrue(), fmt.Sprintf("disk: %s is not attached with the node: %v", volumePath, nodeName))
 
@@ -110,7 +110,7 @@ var _ = utils.SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:v
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for volumes to be detached from the node")
-		err = waitForVSphereDiskToDetach(client, vsp, volumePath, nodeName)
+		err = waitForVSphereDiskToDetach(client, nodeInfo.VSphere, volumePath, nodeName)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -121,7 +121,7 @@ var _ = utils.SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:v
 	*/
 	It("verify dynamic provision with default parameter on clustered datastore", func() {
 		scParameters[Datastore] = clusterDatastore
-		invokeValidPolicyTest(f, client, namespace, scParameters)
+		invokeValidPolicyTest(f, client, nodeInfo.VSphere, namespace, scParameters)
 	})
 
 	/*
@@ -132,6 +132,6 @@ var _ = utils.SIGDescribe("Volume Provisioning On Clustered Datastore [Feature:v
 	It("verify dynamic provision with spbm policy on clustered datastore", func() {
 		policyDatastoreCluster := GetAndExpectStringEnvVar(SPBMPolicyDataStoreCluster)
 		scParameters[SpbmStoragePolicy] = policyDatastoreCluster
-		invokeValidPolicyTest(f, client, namespace, scParameters)
+		invokeValidPolicyTest(f, client, nodeInfo.VSphere, namespace, scParameters)
 	})
 })
