@@ -94,7 +94,7 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 		scParameters map[string]string
 		policyName   string
 		tagPolicy    string
-		nodeInfo     *NodeInfo
+		masterNode   string
 	)
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
@@ -110,7 +110,8 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 			framework.Failf("Unable to find ready and schedulable Node")
 		}
 		masternodes, _ := framework.GetMasterAndWorkerNodesOrDie(client)
-		nodeInfo = TestContext.NodeMapper.GetNodeInfo(masternodes.List()[0])
+		Expect(masternodes).NotTo(BeEmpty())
+		masterNode = masternodes.List()[0]
 	})
 
 	// Valid policy.
@@ -224,7 +225,7 @@ var _ = utils.SIGDescribe("Storage Policy Based Volume Provisioning [Feature:vsp
 		scParameters[Datastore] = VsanDatastore
 		framework.Logf("Invoking test for SPBM storage policy: %+v", scParameters)
 		kubernetesClusterName := GetAndExpectStringEnvVar(KubernetesClusterName)
-		invokeStaleDummyVMTestWithStoragePolicy(client, nodeInfo, namespace, kubernetesClusterName, scParameters)
+		invokeStaleDummyVMTestWithStoragePolicy(client, masterNode, namespace, kubernetesClusterName, scParameters)
 	})
 
 	It("verify if a SPBM policy is not honored on a non-compatible datastore for dynamically provisioned pvc using storageclass", func() {
@@ -321,7 +322,7 @@ func invokeInvalidPolicyTestNeg(client clientset.Interface, namespace string, sc
 	return fmt.Errorf("Failure message: %+q", eventList.Items[0].Message)
 }
 
-func invokeStaleDummyVMTestWithStoragePolicy(client clientset.Interface, nodeInfo *NodeInfo, namespace string, clusterName string, scParameters map[string]string) {
+func invokeStaleDummyVMTestWithStoragePolicy(client clientset.Interface, masterNode string, namespace string, clusterName string, scParameters map[string]string) {
 	By("Creating Storage Class With storage policy params")
 	storageclass, err := client.StorageV1().StorageClasses().Create(getVSphereStorageClassSpec("storagepolicysc", scParameters))
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
@@ -348,5 +349,6 @@ func invokeStaleDummyVMTestWithStoragePolicy(client clientset.Interface, nodeInf
 	fnvHash.Write([]byte(vmName))
 	dummyVMFullName := DummyVMPrefixName + "-" + fmt.Sprint(fnvHash.Sum32())
 	errorMsg := "Dummy VM - " + vmName + "is still present. Failing the test.."
+	nodeInfo := TestContext.NodeMapper.GetNodeInfo(masterNode)
 	Expect(nodeInfo.VSphere.IsVMPresent(dummyVMFullName, nodeInfo.DataCenterRef)).NotTo(BeTrue(), errorMsg)
 }

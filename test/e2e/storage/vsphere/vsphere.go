@@ -25,6 +25,7 @@ import (
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 	"golang.org/x/net/context"
+	"k8s.io/kubernetes/test/e2e/framework"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -93,7 +94,7 @@ func (vs *VSphere) GetFolderByPath(ctx context.Context, dc object.Reference, fol
 	finder.SetDatacenter(datacenter)
 	vmFolder, err := finder.Folder(ctx, folderPath)
 	if err != nil {
-		glog.Errorf("Failed to get the folder reference for %s. err: %+v", folderPath, err)
+		framework.Logf("Failed to get the folder reference for %s. err: %+v", folderPath, err)
 		return vmFolderMor, err
 	}
 	return vmFolder.Reference(), nil
@@ -146,15 +147,15 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions, dataCenterRef type
 			soapFault := soap.ToSoapFault(err)
 			if _, ok := soapFault.VimFault().(types.FileAlreadyExists); ok {
 				directoryAlreadyPresent = true
-				glog.V(4).Infof("Directory with the path %+q is already present", directoryPath)
+				framework.Logf("Directory with the path %+q is already present", directoryPath)
 			}
 		}
 		if !directoryAlreadyPresent {
-			glog.Errorf("Cannot create dir %#v. err %s", directoryPath, err)
+			framework.Logf("Cannot create dir %#v. err %s", directoryPath, err)
 			return "", err
 		}
 	}
-	glog.V(4).Infof("Created dir with path as %+q", directoryPath)
+	framework.Logf("Created dir with path as %+q", directoryPath)
 	vmdkPath := directoryPath + volumeOptions.Name + ".vmdk"
 
 	// Create a virtual disk manager
@@ -170,12 +171,12 @@ func (vs *VSphere) CreateVolume(volumeOptions *VolumeOptions, dataCenterRef type
 	// Create virtual disk
 	task, err := vdm.CreateVirtualDisk(ctx, vmdkPath, datacenter, vmDiskSpec)
 	if err != nil {
-		glog.Errorf("Failed to create virtual disk: %s. err: %+v", vmdkPath, err)
+		framework.Logf("Failed to create virtual disk: %s. err: %+v", vmdkPath, err)
 		return "", err
 	}
 	taskInfo, err := task.WaitForResult(ctx, nil)
 	if err != nil {
-		glog.Errorf("Failed to complete virtual disk creation: %s. err: %+v", vmdkPath, err)
+		framework.Logf("Failed to complete virtual disk creation: %s. err: %+v", vmdkPath, err)
 		return "", err
 	}
 	volumePath := taskInfo.Result.(string)
@@ -197,12 +198,12 @@ func (vs *VSphere) DeleteVolume(volumePath string, dataCenterRef types.ManagedOb
 	// Delete virtual disk
 	task, err := virtualDiskManager.DeleteVirtualDisk(ctx, diskPath, datacenter)
 	if err != nil {
-		glog.Errorf("Failed to delete virtual disk. err: %v", err)
+		framework.Logf("Failed to delete virtual disk. err: %v", err)
 		return err
 	}
 	err = task.Wait(ctx)
 	if err != nil {
-		glog.Errorf("Failed to delete virtual disk. err: %v", err)
+		framework.Logf("Failed to delete virtual disk. err: %v", err)
 		return err
 	}
 	return nil
@@ -219,7 +220,7 @@ func (vs *VSphere) IsVMPresent(vmName string, dataCenterRef types.ManagedObjectR
 	vmFolder := object.NewFolder(vs.Client.Client, folderMor)
 	vmFoldersChildren, err := vmFolder.Children(ctx)
 	if err != nil {
-		glog.Errorf("Failed to get children from Folder: %s. err: %+v", vmFolder.InventoryPath, err)
+		framework.Logf("Failed to get children from Folder: %s. err: %+v", vmFolder.InventoryPath, err)
 		return
 	}
 	for _, vmFoldersChild := range vmFoldersChildren {

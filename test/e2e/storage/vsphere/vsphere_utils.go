@@ -447,30 +447,30 @@ func getCanonicalVolumePath(ctx context.Context, dc *object.Datacenter, volumePa
 	return canonicalVolumePath, nil
 }
 
-// GetPathFromVMDiskPath retrieves the path from VM Disk Path.
+// getPathFromVMDiskPath retrieves the path from VM Disk Path.
 // Example: For vmDiskPath - [vsanDatastore] kubevols/volume.vmdk, the path is kubevols/volume.vmdk
 func getPathFromVMDiskPath(vmDiskPath string) string {
 	datastorePathObj := new(object.DatastorePath)
 	isSuccess := datastorePathObj.FromString(vmDiskPath)
 	if !isSuccess {
-		glog.Errorf("Failed to parse vmDiskPath: %s", vmDiskPath)
+		framework.Logf("Failed to parse vmDiskPath: %s", vmDiskPath)
 		return ""
 	}
 	return datastorePathObj.Path
 }
 
-//GetDatastorePathObjFromVMDiskPath gets the datastorePathObj from VM disk path.
+//getDatastorePathObjFromVMDiskPath gets the datastorePathObj from VM disk path.
 func getDatastorePathObjFromVMDiskPath(vmDiskPath string) (*object.DatastorePath, error) {
 	datastorePathObj := new(object.DatastorePath)
 	isSuccess := datastorePathObj.FromString(vmDiskPath)
 	if !isSuccess {
-		glog.Errorf("Failed to parse volPath: %s", vmDiskPath)
+		framework.Logf("Failed to parse volPath: %s", vmDiskPath)
 		return nil, fmt.Errorf("Failed to parse volPath: %s", vmDiskPath)
 	}
 	return datastorePathObj, nil
 }
 
-// GetVirtualDiskPage83Data gets the virtual disk UUID by diskPath
+// getVirtualDiskPage83Data gets the virtual disk UUID by diskPath
 func getVirtualDiskPage83Data(ctx context.Context, dc *object.Datacenter, diskPath string) (string, error) {
 	if len(diskPath) > 0 && filepath.Ext(diskPath) != ".vmdk" {
 		diskPath += ".vmdk"
@@ -495,13 +495,13 @@ func formatVirtualDiskUUID(uuid string) string {
 	return strings.ToLower(uuidWithNoHypens)
 }
 
-//IsValidUUID checks if the string is a valid UUID.
+//isValidUUID checks if the string is a valid UUID.
 func isValidUUID(uuid string) bool {
 	r := regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$")
 	return r.MatchString(uuid)
 }
 
-// RemoveStorageClusterORFolderNameFromVDiskPath removes the cluster or folder path from the vDiskPath
+// removeStorageClusterORFolderNameFromVDiskPath removes the cluster or folder path from the vDiskPath
 // for vDiskPath [DatastoreCluster/sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk, return value is [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk
 // for vDiskPath [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk, return value remains same [sharedVmfs-0] kubevols/e2e-vmdk-1234.vmdk
 func removeStorageClusterORFolderNameFromVDiskPath(vDiskPath string) string {
@@ -512,7 +512,7 @@ func removeStorageClusterORFolderNameFromVDiskPath(vDiskPath string) string {
 	return vDiskPath
 }
 
-// IsDiskAttached checks if disk is attached to the VM.
+// isDiskAttached checks if disk is attached to the VM.
 func isDiskAttached(ctx context.Context, vm *object.VirtualMachine, diskPath string) (bool, error) {
 	device, err := getVirtualDeviceByPath(ctx, vm, diskPath)
 	if err != nil {
@@ -528,7 +528,7 @@ func isDiskAttached(ctx context.Context, vm *object.VirtualMachine, diskPath str
 func getVirtualDeviceByPath(ctx context.Context, vm *object.VirtualMachine, diskPath string) (vim25types.BaseVirtualDevice, error) {
 	vmDevices, err := vm.Device(ctx)
 	if err != nil {
-		glog.Errorf("Failed to get the devices for VM: %q. err: %+v", vm.InventoryPath, err)
+		framework.Logf("Failed to get the devices for VM: %q. err: %+v", vm.InventoryPath, err)
 		return nil, err
 	}
 
@@ -538,7 +538,7 @@ func getVirtualDeviceByPath(ctx context.Context, vm *object.VirtualMachine, disk
 			virtualDevice := device.GetVirtualDevice()
 			if backing, ok := virtualDevice.Backing.(*vim25types.VirtualDiskFlatVer2BackingInfo); ok {
 				if matchVirtualDiskAndVolPath(backing.FileName, diskPath) {
-					glog.V(4).Infof("Found VirtualDisk backing with filename %q for diskPath %q", backing.FileName, diskPath)
+					framework.Logf("Found VirtualDisk backing with filename %q for diskPath %q", backing.FileName, diskPath)
 					return device, nil
 				}
 			}
@@ -563,7 +563,7 @@ func convertVolPathsToDevicePaths(ctx context.Context, nodeVolumes map[string][]
 		for i, volPath := range volPaths {
 			deviceVolPath, err := convertVolPathToDevicePath(ctx, datacenter, volPath)
 			if err != nil {
-				glog.Errorf("Failed to convert vsphere volume path %s to device path for volume %s. err: %+v", volPath, deviceVolPath, err)
+				framework.Logf("Failed to convert vsphere volume path %s to device path for volume %s. err: %+v", volPath, deviceVolPath, err)
 				return nil, err
 			}
 			volPaths[i] = deviceVolPath
@@ -578,7 +578,7 @@ func convertVolPathToDevicePath(ctx context.Context, dc *object.Datacenter, volP
 	// Get the canonical volume path for volPath.
 	canonicalVolumePath, err := getCanonicalVolumePath(ctx, dc, volPath)
 	if err != nil {
-		glog.Errorf("Failed to get canonical vsphere volume path for volume: %s. err: %+v", volPath, err)
+		framework.Logf("Failed to get canonical vsphere volume path for volume: %s. err: %+v", volPath, err)
 		return "", err
 	}
 	// Check if the volume path contains .vmdk extension. If not, add the extension and update the nodeVolumes Map
@@ -692,7 +692,7 @@ func disksAreAttached(nodeVolumes map[string][]string) (nodeVolumesAttachMap map
 	// Convert VolPaths into canonical form so that it can be compared with the VM device path.
 	vmVolumes, err := convertVolPathsToDevicePaths(ctx, nodeVolumes)
 	if err != nil {
-		glog.Errorf("Failed to convert volPaths to devicePaths: %+v. err: %+v", nodeVolumes, err)
+		framework.Logf("Failed to convert volPaths to devicePaths: %+v. err: %+v", nodeVolumes, err)
 		return nil, err
 	}
 	for vm, volumes := range vmVolumes {
@@ -721,10 +721,10 @@ func diskIsAttached(volPath string, nodeName string) (bool, error) {
 	volPath = removeStorageClusterORFolderNameFromVDiskPath(volPath)
 	attached, err := isDiskAttached(ctx, vm, volPath)
 	if err != nil {
-		glog.Errorf("diskIsAttached failed to determine whether disk %q is still attached on node %q",
+		framework.Logf("diskIsAttached failed to determine whether disk %q is still attached on node %q",
 			volPath,
 			nodeName)
 	}
-	glog.V(4).Infof("diskIsAttached result: %q and error: %q, for volume: %q", attached, err, volPath)
+	framework.Logf("diskIsAttached result: %q and error: %q, for volume: %q", attached, err, volPath)
 	return attached, err
 }
