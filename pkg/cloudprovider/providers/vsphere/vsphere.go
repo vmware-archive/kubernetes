@@ -174,6 +174,9 @@ func newVSphere(cfg VSphereConfig) (*VSphere, error) {
 	if cfg.Global.WorkingDir != "" {
 		cfg.Global.WorkingDir = path.Clean(cfg.Global.WorkingDir)
 	}
+	if cfg.Global.WorkingDir != "/" {
+		cfg.Global.WorkingDir += "/"
+	}
 	if cfg.Global.RoundTripperCount == 0 {
 		cfg.Global.RoundTripperCount = RoundTripperDefaultCount
 	}
@@ -290,7 +293,7 @@ func (vs *VSphere) getVMByName(ctx context.Context, nodeName k8stypes.NodeName) 
 	if err != nil {
 		return nil, err
 	}
-	vmPath := vs.cfg.Global.WorkingDir + "/" + nodeNameToVMName(nodeName)
+	vmPath := vs.cfg.Global.WorkingDir + nodeNameToVMName(nodeName)
 	vm, err := dc.GetVMByPath(ctx, vmPath)
 	if err != nil {
 		return nil, err
@@ -386,7 +389,7 @@ func (vs *VSphere) InstanceExistsByProviderID(providerID string) (bool, error) {
 // InstanceID returns the cloud provider ID of the node with the specified Name.
 func (vs *VSphere) InstanceID(nodeName k8stypes.NodeName) (string, error) {
 	if vs.localInstanceID == nodeNameToVMName(nodeName) {
-		return vs.cfg.Global.WorkingDir + "/" + vs.localInstanceID, nil
+		return vs.cfg.Global.WorkingDir + vs.localInstanceID, nil
 	}
 	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
