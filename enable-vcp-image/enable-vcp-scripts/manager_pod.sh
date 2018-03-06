@@ -9,7 +9,9 @@ read_secret_keys
 
 create_daemonset () {
         version=`kubectl version --short --output json`
-        minor=`echo $version | jq '.serverVersion.minor' | sed 's/"//g'`
+        # sed 's/["+]//g' discards " and + symbols from the minor version output
+        # for example, minor version "8+" will be converted to 8 via sed
+        minor=`echo $version | jq '.serverVersion.minor' | sed 's/["+]//g'`
         major=`echo $version | jq '.serverVersion.major' | sed 's/"//g'`
 
         resource_yaml=""
