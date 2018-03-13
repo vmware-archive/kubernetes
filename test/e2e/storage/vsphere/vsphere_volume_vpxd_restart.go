@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2018 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@ package vsphere
 
 import (
 	"fmt"
+	"strconv"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -31,30 +33,42 @@ import (
 )
 
 /*
-	Test to verify volume remains attached after kubelet restart on master node
-	For the number of schedulable nodes,
-	1. Create a volume with default volume options
-	2. Create a Pod
-	3. Verify the volume is attached
-	4. Restart the kubelet on master node
-	5. Verify again that the volume is attached
-	6. Delete the pod and wait for the volume to be detached
-	7. Delete the volume
-*/
-var _ = utils.SIGDescribe("Volume Attach Verify [Feature:vsphere][Serial][Disruptive]", func() {
-	f := framework.NewDefaultFramework("restart-master")
+	Test to verify that a volume remains attached through vpxd restart.
 
-	const labelKey = "vsphere_e2e_label"
+	For the number of schedulable nodes:
+	1. Create a Volume with default options.
+	2. Create a Pod with the created Volume.
+	3. Verify that the Volume is attached.
+	4. Create a file with random contents under the Volume's mount point on the Pod.
+	5. Stop the vpxd service on the vCenter host.
+	6. Verify that the file is accessible on the Pod and that it's contents match.
+	7. Start the vpxd service on the vCenter host.
+	8. Verify that the Volume remains attached, the file is accessible on the Pod, and that it's contents match.
+	9. Delete the Pod and wait for the Volume to be detached.
+	10. Delete the Volume.
+*/
+var _ = utils.SIGDescribe("Verify Volume Attach Through vpxd Restart [Feature:vsphere][Serial][Disruptive]", func() {
+	f := framework.NewDefaultFramework("restart-vpxd")
+
+	const (
+		labelKey        = "vsphere_e2e_label"
+		vpxdServiceName = "vmware-vpxd"
+	)
+
 	var (
 		client                clientset.Interface
 		namespace             string
 		volumePaths           []string
+		filePaths             []string
+		fileContents          []string
 		pods                  []*v1.Pod
 		numNodes              int
 		nodeKeyValueLabelList []map[string]string
 		nodeNameList          []string
 		nodeInfo              *NodeInfo
+		vcHost                string
 	)
+
 	BeforeEach(func() {
 		framework.SkipUnlessProviderIs("vsphere")
 		Bootstrap(f)
@@ -64,8 +78,8 @@ var _ = utils.SIGDescribe("Volume Attach Verify [Feature:vsphere][Serial][Disrup
 
 		nodes := framework.GetReadySchedulableNodesOrDie(client)
 		numNodes = len(nodes.Items)
-		if numNodes < 2 {
-			framework.Skipf("Requires at least %d nodes (not %d)", 2, len(nodes.Items))
+		if numNodes < 1 {
+			framework.Skipf("Requires at least %d nodes (not %d)", 1, len(nodes.Items))
 		}
 		nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodes.Items[0].Name)
 		for i := 0; i < numNodes; i++ {
@@ -77,12 +91,16 @@ var _ = utils.SIGDescribe("Volume Attach Verify [Feature:vsphere][Serial][Disrup
 			nodeKeyValueLabelList = append(nodeKeyValueLabelList, nodeKeyValueLabel)
 			framework.AddOrUpdateLabelOnNode(client, nodeName, labelKey, nodeLabelValue)
 		}
+
+		for host := range TestContext.VSphereInstances {
+			vcHost = host
+			break
+		}
 	})
 
-	It("verify volume remains attached after master kubelet restart", func() {
-		// Create pod on each node
+	It("verify volume remains attached through vpxd restart", func() {
 		for i := 0; i < numNodes; i++ {
-			By(fmt.Sprintf("%d: Creating a test vsphere volume", i))
+			By(fmt.Sprintf("Creating test vsphere volume %d", i))
 			volumePath, err := nodeInfo.VSphere.CreateVolume(&VolumeOptions{}, nodeInfo.DataCenterRef)
 			Expect(err).NotTo(HaveOccurred())
 			volumePaths = append(volumePaths, volumePath)
@@ -91,42 +109,52 @@ var _ = utils.SIGDescribe("Volume Attach Verify [Feature:vsphere][Serial][Disrup
 			podspec := getVSpherePodSpecWithVolumePaths([]string{volumePath}, nodeKeyValueLabelList[i], nil)
 			pod, err := client.CoreV1().Pods(namespace).Create(podspec)
 			Expect(err).NotTo(HaveOccurred())
-			defer framework.DeletePodWithWait(f, client, pod)
 
-			By("Waiting for pod to be ready")
+			By(fmt.Sprintf("Waiting for pod %d to be ready", i))
 			Expect(framework.WaitForPodNameRunningInNamespace(client, pod.Name, namespace)).To(Succeed())
 
 			pod, err = client.CoreV1().Pods(namespace).Get(pod.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-
 			pods = append(pods, pod)
 
 			nodeName := pod.Spec.NodeName
-			By(fmt.Sprintf("Verify volume %s is attached to the pod %s", volumePath, nodeName))
+			By(fmt.Sprintf("Verifying that volume %v is attached to node %v", volumePath, nodeName))
 			expectVolumeToBeAttached(nodeName, volumePath)
+
+			By(fmt.Sprintf("Creating a file with random content on the volume mounted on pod %d", i))
+			filePath := fmt.Sprintf("/mnt/volume1/%v_vpxd_restart_test_%v.txt", namespace, strconv.FormatInt(time.Now().UnixNano(), 10))
+			randomContent := fmt.Sprintf("Random Content -- %v", strconv.FormatInt(time.Now().UnixNano(), 10))
+			err = writeContentToPodFile(namespace, pod.Name, filePath, randomContent)
+			Expect(err).NotTo(HaveOccurred())
+			filePaths = append(filePaths, filePath)
+			fileContents = append(fileContents, randomContent)
 		}
 
-		By("Restarting kubelet on master node")
-		masterAddress := framework.GetMasterHost() + ":22"
-		err := framework.RestartKubelet(masterAddress)
-		Expect(err).NotTo(HaveOccurred(), "Unable to restart kubelet on master node")
+		By("Stopping vpxd on the vCenter host")
+		vcAddress := vcHost + ":22"
+		err := InvokeVCenterServiceControl("stop", vpxdServiceName, vcAddress)
+		Expect(err).NotTo(HaveOccurred(), "Unable to stop vpxd on the vCenter host")
 
-		By("Verifying the kubelet on master node is up")
-		err = framework.WaitForKubeletUp(masterAddress)
-		Expect(err).NotTo(HaveOccurred())
+		expectFilesToBeAccessible(namespace, pods, filePaths)
+		expectFileContentsToMatch(namespace, pods, filePaths, fileContents)
+
+		By("Starting vpxd on the vCenter host")
+		err = InvokeVCenterServiceControl("start", vpxdServiceName, vcAddress)
+		Expect(err).NotTo(HaveOccurred(), "Unable to start vpxd on the vCenter host")
+
+		expectVolumesToBeAttached(pods, volumePaths)
+		expectFilesToBeAccessible(namespace, pods, filePaths)
+		expectFileContentsToMatch(namespace, pods, filePaths, fileContents)
 
 		for i, pod := range pods {
 			volumePath := volumePaths[i]
 			nodeName := pod.Spec.NodeName
 
-			By(fmt.Sprintf("After master restart, verify volume %v is attached to the pod %v", volumePath, nodeName))
-			expectVolumeToBeAttached(nodeName, volumePath)
-
 			By(fmt.Sprintf("Deleting pod on node %s", nodeName))
 			err = framework.DeletePodWithWait(f, client, pod)
 			Expect(err).NotTo(HaveOccurred())
 
-			By(fmt.Sprintf("Waiting for volume %s to be detached from the node %s", volumePath, nodeName))
+			By(fmt.Sprintf("Waiting for volume %s to be detached from node %s", volumePath, nodeName))
 			err = waitForVSphereDiskToDetach(volumePath, nodeName)
 			Expect(err).NotTo(HaveOccurred())
 
