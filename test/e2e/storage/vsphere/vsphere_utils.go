@@ -757,9 +757,9 @@ func GetReadySchedulableRandomNodeInfo() *NodeInfo {
 	return nodesInfo[rand.Int()%len(nodesInfo)]
 }
 
-// InvokeVCenterServiceControl invokes the given command for the given service
+// invokeVCenterServiceControl invokes the given command for the given service
 // via service-control on the given vCenter host over SSH.
-func InvokeVCenterServiceControl(command, service, host string) error {
+func invokeVCenterServiceControl(command, service, host string) error {
 	sshCmd := fmt.Sprintf("service-control --%s %s", command, service)
 	framework.Logf("Invoking command %v on vCenter host %v", sshCmd, host)
 	result, err := framework.SSH(sshCmd, host, framework.TestContext.Provider)
@@ -803,7 +803,7 @@ func expectFilesToBeAccessible(namespace string, pods []*v1.Pod, filePaths []str
 // writeContentToPodFile writes the given content to the specified file.
 func writeContentToPodFile(namespace, podName, filePath, content string) error {
 	_, err := framework.RunKubectl("exec", fmt.Sprintf("--namespace=%s", namespace), podName,
-					"--", "/bin/sh", "-c", fmt.Sprintf("echo '%s' > %s", content, filePath))
+		"--", "/bin/sh", "-c", fmt.Sprintf("echo '%s' > %s", content, filePath))
 	return err
 }
 
@@ -811,7 +811,7 @@ func writeContentToPodFile(namespace, podName, filePath, content string) error {
 // content, else fails.
 func expectFileContentToMatch(namespace, podName, filePath, content string) {
 	_, err := framework.RunKubectl("exec", fmt.Sprintf("--namespace=%s", namespace), podName,
-					"--", "/bin/sh", "-c", fmt.Sprintf("grep '%s' %s", content, filePath))
+		"--", "/bin/sh", "-c", fmt.Sprintf("grep '%s' %s", content, filePath))
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to match content of file: %q on the pod: %q", filePath, podName))
 }
 

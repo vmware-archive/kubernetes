@@ -132,14 +132,14 @@ var _ = utils.SIGDescribe("Verify Volume Attach Through vpxd Restart [Feature:vs
 
 		By("Stopping vpxd on the vCenter host")
 		vcAddress := vcHost + ":22"
-		err := InvokeVCenterServiceControl("stop", vpxdServiceName, vcAddress)
+		err := invokeVCenterServiceControl("stop", vpxdServiceName, vcAddress)
 		Expect(err).NotTo(HaveOccurred(), "Unable to stop vpxd on the vCenter host")
 
 		expectFilesToBeAccessible(namespace, pods, filePaths)
 		expectFileContentsToMatch(namespace, pods, filePaths, fileContents)
 
 		By("Starting vpxd on the vCenter host")
-		err = InvokeVCenterServiceControl("start", vpxdServiceName, vcAddress)
+		err = invokeVCenterServiceControl("start", vpxdServiceName, vcAddress)
 		Expect(err).NotTo(HaveOccurred(), "Unable to start vpxd on the vCenter host")
 
 		expectVolumesToBeAttached(pods, volumePaths)
