@@ -50,23 +50,21 @@ import (
 var _ = utils.SIGDescribe("Verify Volume Attach Through vpxd Restart [Feature:vsphere][Serial][Disruptive]", func() {
 	f := framework.NewDefaultFramework("restart-vpxd")
 
+	type node struct {
+		name     string
+		kvLabels map[string]string
+		nodeInfo *NodeInfo
+	}
+
 	const (
 		labelKey        = "vsphere_e2e_label"
 		vpxdServiceName = "vmware-vpxd"
 	)
 
 	var (
-		client                clientset.Interface
-		namespace             string
-		volumePaths           []string
-		filePaths             []string
-		fileContents          []string
-		pods                  []*v1.Pod
-		numNodes              int
-		nodeKeyValueLabelList []map[string]string
-		nodeNameList          []string
-		nodeInfo              *NodeInfo
-		vcHost                string
+		client     clientset.Interface
+		namespace  string
+		vcNodesMap map[string][]node
 	)
 
 	BeforeEach(func() {
@@ -77,90 +75,102 @@ var _ = utils.SIGDescribe("Verify Volume Attach Through vpxd Restart [Feature:vs
 		framework.ExpectNoError(framework.WaitForAllNodesSchedulable(client, framework.TestContext.NodeSchedulableTimeout))
 
 		nodes := framework.GetReadySchedulableNodesOrDie(client)
-		numNodes = len(nodes.Items)
+		numNodes := len(nodes.Items)
 		if numNodes < 1 {
 			framework.Skipf("Requires at least %d nodes (not %d)", 1, len(nodes.Items))
 		}
-		nodeInfo = TestContext.NodeMapper.GetNodeInfo(nodes.Items[0].Name)
-		for i := 0; i < numNodes; i++ {
-			nodeName := nodes.Items[i].Name
-			nodeNameList = append(nodeNameList, nodeName)
-			nodeLabelValue := "vsphere_e2e_" + string(uuid.NewUUID())
-			nodeKeyValueLabel := make(map[string]string)
-			nodeKeyValueLabel[labelKey] = nodeLabelValue
-			nodeKeyValueLabelList = append(nodeKeyValueLabelList, nodeKeyValueLabel)
-			framework.AddOrUpdateLabelOnNode(client, nodeName, labelKey, nodeLabelValue)
-		}
 
-		for host := range TestContext.VSphereInstances {
-			vcHost = host
-			break
+		vcNodesMap = make(map[string][]node)
+		for i := 0; i < numNodes; i++ {
+			nodeInfo := TestContext.NodeMapper.GetNodeInfo(nodes.Items[i].Name)
+			nodeName := nodes.Items[i].Name
+			nodeLabel := "vsphere_e2e_" + string(uuid.NewUUID())
+			framework.AddOrUpdateLabelOnNode(client, nodeName, labelKey, nodeLabel)
+
+			vcHost := nodeInfo.VSphere.Config.Hostname
+			vcNodesMap[vcHost] = append(vcNodesMap[vcHost], node{
+				name:     nodeName,
+				kvLabels: map[string]string{labelKey: nodeLabel},
+				nodeInfo: nodeInfo,
+			})
 		}
 	})
 
 	It("verify volume remains attached through vpxd restart", func() {
-		for i := 0; i < numNodes; i++ {
-			By(fmt.Sprintf("Creating test vsphere volume %d", i))
-			volumePath, err := nodeInfo.VSphere.CreateVolume(&VolumeOptions{}, nodeInfo.DataCenterRef)
-			Expect(err).NotTo(HaveOccurred())
-			volumePaths = append(volumePaths, volumePath)
+		for vcHost, nodes := range vcNodesMap {
+			var (
+				volumePaths  []string
+				filePaths    []string
+				fileContents []string
+				pods         []*v1.Pod
+			)
 
-			By(fmt.Sprintf("Creating pod %d on node %v", i, nodeNameList[i]))
-			podspec := getVSpherePodSpecWithVolumePaths([]string{volumePath}, nodeKeyValueLabelList[i], nil)
-			pod, err := client.CoreV1().Pods(namespace).Create(podspec)
-			Expect(err).NotTo(HaveOccurred())
+			framework.Logf("Testing for nodes on vCenter host: %s", vcHost)
 
-			By(fmt.Sprintf("Waiting for pod %d to be ready", i))
-			Expect(framework.WaitForPodNameRunningInNamespace(client, pod.Name, namespace)).To(Succeed())
+			for i, node := range nodes {
+				By(fmt.Sprintf("Creating test vsphere volume %d", i))
+				volumePath, err := node.nodeInfo.VSphere.CreateVolume(&VolumeOptions{}, node.nodeInfo.DataCenterRef)
+				Expect(err).NotTo(HaveOccurred())
+				volumePaths = append(volumePaths, volumePath)
 
-			pod, err = client.CoreV1().Pods(namespace).Get(pod.Name, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			pods = append(pods, pod)
+				By(fmt.Sprintf("Creating pod %d on node %v", i, node.name))
+				podspec := getVSpherePodSpecWithVolumePaths([]string{volumePath}, node.kvLabels, nil)
+				pod, err := client.CoreV1().Pods(namespace).Create(podspec)
+				Expect(err).NotTo(HaveOccurred())
 
-			nodeName := pod.Spec.NodeName
-			By(fmt.Sprintf("Verifying that volume %v is attached to node %v", volumePath, nodeName))
-			expectVolumeToBeAttached(nodeName, volumePath)
+				By(fmt.Sprintf("Waiting for pod %d to be ready", i))
+				Expect(framework.WaitForPodNameRunningInNamespace(client, pod.Name, namespace)).To(Succeed())
 
-			By(fmt.Sprintf("Creating a file with random content on the volume mounted on pod %d", i))
-			filePath := fmt.Sprintf("/mnt/volume1/%v_vpxd_restart_test_%v.txt", namespace, strconv.FormatInt(time.Now().UnixNano(), 10))
-			randomContent := fmt.Sprintf("Random Content -- %v", strconv.FormatInt(time.Now().UnixNano(), 10))
-			err = writeContentToPodFile(namespace, pod.Name, filePath, randomContent)
-			Expect(err).NotTo(HaveOccurred())
-			filePaths = append(filePaths, filePath)
-			fileContents = append(fileContents, randomContent)
-		}
+				pod, err = client.CoreV1().Pods(namespace).Get(pod.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				pods = append(pods, pod)
 
-		By("Stopping vpxd on the vCenter host")
-		vcAddress := vcHost + ":22"
-		err := invokeVCenterServiceControl("stop", vpxdServiceName, vcAddress)
-		Expect(err).NotTo(HaveOccurred(), "Unable to stop vpxd on the vCenter host")
+				nodeName := pod.Spec.NodeName
+				By(fmt.Sprintf("Verifying that volume %v is attached to node %v", volumePath, nodeName))
+				expectVolumeToBeAttached(nodeName, volumePath)
 
-		expectFilesToBeAccessible(namespace, pods, filePaths)
-		expectFileContentsToMatch(namespace, pods, filePaths, fileContents)
+				By(fmt.Sprintf("Creating a file with random content on the volume mounted on pod %d", i))
+				filePath := fmt.Sprintf("/mnt/volume1/%v_vpxd_restart_test_%v.txt", namespace, strconv.FormatInt(time.Now().UnixNano(), 10))
+				randomContent := fmt.Sprintf("Random Content -- %v", strconv.FormatInt(time.Now().UnixNano(), 10))
+				err = writeContentToPodFile(namespace, pod.Name, filePath, randomContent)
+				Expect(err).NotTo(HaveOccurred())
+				filePaths = append(filePaths, filePath)
+				fileContents = append(fileContents, randomContent)
+			}
 
-		By("Starting vpxd on the vCenter host")
-		err = invokeVCenterServiceControl("start", vpxdServiceName, vcAddress)
-		Expect(err).NotTo(HaveOccurred(), "Unable to start vpxd on the vCenter host")
+			By("Stopping vpxd on the vCenter host")
+			vcAddress := vcHost + ":22"
+			err := invokeVCenterServiceControl("stop", vpxdServiceName, vcAddress)
+			Expect(err).NotTo(HaveOccurred(), "Unable to stop vpxd on the vCenter host")
 
-		expectVolumesToBeAttached(pods, volumePaths)
-		expectFilesToBeAccessible(namespace, pods, filePaths)
-		expectFileContentsToMatch(namespace, pods, filePaths, fileContents)
+			expectFilesToBeAccessible(namespace, pods, filePaths)
+			expectFileContentsToMatch(namespace, pods, filePaths, fileContents)
 
-		for i, pod := range pods {
-			volumePath := volumePaths[i]
-			nodeName := pod.Spec.NodeName
+			By("Starting vpxd on the vCenter host")
+			err = invokeVCenterServiceControl("start", vpxdServiceName, vcAddress)
+			Expect(err).NotTo(HaveOccurred(), "Unable to start vpxd on the vCenter host")
 
-			By(fmt.Sprintf("Deleting pod on node %s", nodeName))
-			err = framework.DeletePodWithWait(f, client, pod)
-			Expect(err).NotTo(HaveOccurred())
+			expectVolumesToBeAttached(pods, volumePaths)
+			expectFilesToBeAccessible(namespace, pods, filePaths)
+			expectFileContentsToMatch(namespace, pods, filePaths, fileContents)
 
-			By(fmt.Sprintf("Waiting for volume %s to be detached from node %s", volumePath, nodeName))
-			err = waitForVSphereDiskToDetach(volumePath, nodeName)
-			Expect(err).NotTo(HaveOccurred())
+			for i, node := range nodes {
+				pod := pods[i]
+				nodeName := pod.Spec.NodeName
+				volumePath := volumePaths[i]
 
-			By(fmt.Sprintf("Deleting volume %s", volumePath))
-			err = nodeInfo.VSphere.DeleteVolume(volumePath, nodeInfo.DataCenterRef)
-			Expect(err).NotTo(HaveOccurred())
+				By(fmt.Sprintf("Deleting pod on node %s", nodeName))
+				err = framework.DeletePodWithWait(f, client, pod)
+				Expect(err).NotTo(HaveOccurred())
+
+				By(fmt.Sprintf("Waiting for volume %s to be detached from node %s", volumePath, nodeName))
+				err = waitForVSphereDiskToDetach(volumePath, nodeName)
+				Expect(err).NotTo(HaveOccurred())
+
+				By(fmt.Sprintf("Deleting volume %s", volumePath))
+				err = node.nodeInfo.VSphere.DeleteVolume(volumePath, node.nodeInfo.DataCenterRef)
+				Expect(err).NotTo(HaveOccurred())
+			}
 		}
 	})
 })
