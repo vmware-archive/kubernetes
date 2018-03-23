@@ -57,7 +57,7 @@ var _ = utils.SIGDescribe("Verify Volume Attach Through vpxd Restart [Feature:vs
 	}
 
 	const (
-		labelKey        = "vsphere_e2e_label"
+		labelKey        = "vsphere_e2e_label_vpxd_restart"
 		vpxdServiceName = "vmware-vpxd"
 	)
 
