@@ -1,0 +1,142 @@
+root@kubernetes-master [ ~ ]# kubectl get pod -o json
+{
+    "apiVersion": "v1",
+    "items": [
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "creationTimestamp": "2018-04-18T21:31:29Z",
+                "generateName": "sample-statefulset-",
+                "labels": {
+                    "app": "pv-ex",
+                    "controller-revision-hash": "sample-statefulset-7768549b77",
+                    "statefulset.kubernetes.io/pod-name": "sample-statefulset-0"
+                },
+                "name": "sample-statefulset-0",
+                "namespace": "default",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1beta1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "sample-statefulset",
+                        "uid": "db0ea6e2-434f-11e8-8cb0-00505691a640"
+                    }
+                ],
+                "resourceVersion": "96588",
+                "selfLink": "/api/v1/namespaces/default/pods/sample-statefulset-0",
+                "uid": "db123759-434f-11e8-8cb0-00505691a640"
+            },
+            "spec": {
+                "containers": [
+                    {
+                        "env": [
+                            {
+                                "name": "LOG_FILE",
+                                "value": "/usr/share/pv-ex/log.txt"
+                            }
+                        ],
+                        "image": "pcfkubo/persistent-example",
+                        "imagePullPolicy": "Always",
+                        "name": "pv-ex",
+                        "ports": [
+                            {
+                                "containerPort": 3000,
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "resources": {},
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/usr/share/pv-ex",
+                                "name": "www"
+                            },
+                            {
+                                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                                "name": "default-token-w6sbf",
+                                "readOnly": true
+                            }
+                        ]
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "hostname": "sample-statefulset-0",
+                "nodeName": "kubernetes-node3",
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {},
+                "serviceAccount": "default",
+                "serviceAccountName": "default",
+                "subdomain": "pv-ex-svc",
+                "terminationGracePeriodSeconds": 10,
+                "volumes": [
+                    {
+                        "name": "www",
+                        "persistentVolumeClaim": {
+                            "claimName": "www-sample-statefulset-0"
+                        }
+                    },
+                    {
+                        "name": "default-token-w6sbf",
+                        "secret": {
+                            "defaultMode": 420,
+                            "secretName": "default-token-w6sbf"
+                        }
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2018-04-18T21:31:29Z",
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2018-04-18T21:36:26Z",
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2018-04-18T21:31:29Z",
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "containerID": "docker://7a5e623e8d14f465516503cca5fe7b731497f15edc113c415590cf9c81357d6f",
+                        "image": "pcfkubo/persistent-example:latest",
+                        "imageID": "docker://sha256:81e5d384ed32e4705585cc6ddb0e2e72106dbccd2665deb7cc2d1dcd6c2ed690",
+                        "lastState": {},
+                        "name": "pv-ex",
+                        "ready": true,
+                        "restartCount": 0,
+                        "state": {
+                            "running": {
+                                "startedAt": "2018-04-18T21:36:26Z"
+                            }
+                        }
+                    }
+                ],
+                "hostIP": "10.160.206.184",
+                "phase": "Running",
+                "podIP": "172.1.73.2",
+                "qosClass": "BestEffort",
+                "startTime": "2018-04-18T21:31:29Z"
+            }
+        }
+    ],
+    "kind": "List",
+    "metadata": {
+        "resourceVersion": "",
+        "selfLink": ""
+    }
+}

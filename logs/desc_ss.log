@@ -1,0 +1,33 @@
+root@kubernetes-master [ ~ ]# kubectl describe statefulset
+Name:               sample-statefulset
+Namespace:          default
+CreationTimestamp:  Wed, 18 Apr 2018 21:31:29 +0000
+Selector:           app=pv-ex
+Labels:             app=pv-ex
+Annotations:        <none>
+Replicas:           1 desired | 1 total
+Pods Status:        1 Running / 0 Waiting / 0 Succeeded / 0 Failed
+Pod Template:
+  Labels:  app=pv-ex
+  Containers:
+   pv-ex:
+    Image:      pcfkubo/persistent-example
+    Port:       3000/TCP
+    Host Port:  0/TCP
+    Environment:
+      LOG_FILE:  /usr/share/pv-ex/log.txt
+    Mounts:
+      /usr/share/pv-ex from www (rw)
+  Volumes:  <none>
+Volume Claims:
+  Name:          www
+  StorageClass:  ci-storage
+  Labels:        <none>
+  Annotations:   <none>
+  Capacity:      1Gi
+  Access Modes:  [ReadWriteOnce]
+Events:
+  Type    Reason            Age   From                    Message
+  ----    ------            ----  ----                    -------
+  Normal  SuccessfulCreate  12m   statefulset-controller  create Claim www-sample-statefulset-0 Pod sample-statefulset-0 in StatefulSet sample-statefulset success
+  Normal  SuccessfulCreate  12m   statefulset-controller  create Pod sample-statefulset-0 in StatefulSet sample-statefulset successful

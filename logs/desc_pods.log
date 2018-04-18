@@ -1,0 +1,56 @@
+root@kubernetes-master [ ~ ]# kubectl describe pods
+Name:           sample-statefulset-0
+Namespace:      default
+Node:           kubernetes-node3/10.160.206.184
+Start Time:     Wed, 18 Apr 2018 21:31:29 +0000
+Labels:         app=pv-ex
+                controller-revision-hash=sample-statefulset-7768549b77
+                statefulset.kubernetes.io/pod-name=sample-statefulset-0
+Annotations:    <none>
+Status:         Running
+IP:             172.1.73.2
+Controlled By:  StatefulSet/sample-statefulset
+Containers:
+  pv-ex:
+    Container ID:   docker://7a5e623e8d14f465516503cca5fe7b731497f15edc113c415590cf9c81357d6f
+    Image:          pcfkubo/persistent-example
+    Image ID:       docker://sha256:81e5d384ed32e4705585cc6ddb0e2e72106dbccd2665deb7cc2d1dcd6c2ed690
+    Port:           3000/TCP
+    Host Port:      0/TCP
+    State:          Running
+      Started:      Wed, 18 Apr 2018 21:36:26 +0000
+    Ready:          True
+    Restart Count:  0
+    Environment:
+      LOG_FILE:  /usr/share/pv-ex/log.txt
+    Mounts:
+      /usr/share/pv-ex from www (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-w6sbf (ro)
+Conditions:
+  Type           Status
+  Initialized    True
+  Ready          True
+  PodScheduled   True
+Volumes:
+  www:
+    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
+    ClaimName:  www-sample-statefulset-0
+    ReadOnly:   false
+  default-token-w6sbf:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-w6sbf
+    Optional:    false
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     <none>
+Events:
+  Type     Reason                 Age   From                       Message
+  ----     ------                 ----  ----                       -------
+  Normal   Scheduled              9m    default-scheduler          Successfully assigned sample-statefulset-0 to kubernetes-node3
+  Normal   SuccessfulMountVolume  9m    kubelet, kubernetes-node3  MountVolume.SetUp succeeded for volume "default-token-w6sbf"
+  Warning  FailedMount            7m    kubelet, kubernetes-node3  Unable to mount volumes for pod "sample-statefulset-0_default(db123759-434f-11e8-8cb0-00505691a640)": timeout expired waiting for volumes to attach/mount for pod "default"/"sample-statefulset-0". list of unattached/unmounted volumes=[www]
+  Normal   SuccessfulMountVolume  5m    kubelet, kubernetes-node3  MountVolume.SetUp succeeded for volume "pvc-db11d295-434f-11e8-8cb0-00505691a640"
+  Normal   Pulling                5m    kubelet, kubernetes-node3  pulling image "pcfkubo/persistent-example"
+  Normal   Pulled                 4m    kubelet, kubernetes-node3  Successfully pulled image "pcfkubo/persistent-example"
+  Normal   Created                4m    kubelet, kubernetes-node3  Created container
+  Normal   Started                4m    kubelet, kubernetes-node3  Started container
