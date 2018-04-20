@@ -39,6 +39,9 @@ spec:
           mountPath: /secret-volume
           readOnly: true
       hostNetwork: true
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
       volumes:
         - name: rootpath
           hostPath:
