@@ -261,12 +261,12 @@ func (vs *VSphere) SecretDeleted(obj interface{}) {
 func (vs *VSphere) SecretUpdated(oldObj, newObj interface{}) {
 	oldSecret, ok := oldObj.(*v1.Secret)
 	if oldSecret == nil || !ok {
-		glog.Warningf("OldSecrets: unrecognized object %+v", secret)
+		glog.Warningf("OldSecrets: unrecognized object %+v", oldSecret)
 		return
 	}
 	newSecret, ok := newObj.(*v1.Secret)
 	if newSecret == nil || !ok {
-		glog.Warningf("NewSecrets: unrecognized object %+v", secret)
+		glog.Warningf("NewSecrets: unrecognized object %+v", newSecret)
 		return
 	}
 	glog.V(1).Infof("VCP: Secret Updated from %+v to %+v", oldSecret, newSecret)
