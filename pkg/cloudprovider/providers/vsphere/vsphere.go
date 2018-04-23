@@ -226,6 +226,51 @@ func (vs *VSphere) SetInformers(informerFactory informers.SharedInformerFactory)
 		DeleteFunc: vs.NodeDeleted,
 	})
 	glog.V(4).Infof("Node informers in vSphere cloud provider initialized")
+
+	secretInformer := informerFactory.Core().V1().Secrets().Informer()
+	secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: vs.SecretAdded,
+		DeleteFunc: vs.SecretDeleted,
+		UpdateFunc: vs.SecretUpdated,
+	})
+}
+
+func (vs *VSphere) SecretAdded(obj interface{}) {
+	secret, ok := obj.(*v1.Secret)
+	if secret == nil || !ok {
+		glog.Warningf("SecretAdded: unrecognized object %+v", obj)
+		return
+	}
+
+	glog.V(1).Infof("VCP: Secret added: %+v", secret)
+}
+
+// Notification handler when node is removed from k8s cluster.
+func (vs *VSphere) SecretDeleted(obj interface{}) {
+	secret, ok := obj.(*v1.Secret)
+	if secret == nil || !ok {
+		glog.Warningf("SecretsDeleted: unrecognized object %+v", obj)
+		return
+	}
+
+	glog.V(1).Infof("VCP: Secret deleted: %+v", secret)
+}
+
+
+// Notification handler when node is removed from k8s cluster.
+func (vs *VSphere) SecretUpdated(oldObj, newObj interface{}) {
+	oldSecret, ok := oldObj.(*v1.Secret)
+	if oldSecret == nil || !ok {
+		glog.Warningf("OldSecrets: unrecognized object %+v", secret)
+		return
+	}
+	newSecret, ok := newObj.(*v1.Secret)
+	if newSecret == nil || !ok {
+		glog.Warningf("NewSecrets: unrecognized object %+v", secret)
+		return
+	}
+	glog.V(1).Infof("VCP: Secret Updated from %+v to %+v", oldSecret, newSecret)
+
 }
 
 // Creates new worker node interface and returns
