@@ -175,7 +175,7 @@ func IsManagedObjectNotFoundError(err error) bool {
 func IsInvalidCredentialsError(err error) bool {
 	isInvalidCredentialsError := false
 	if soap.IsSoapFault(err) {
-		_, isInvalidCredentialsError = soap.ToSoapFault(err).VimFault().(types.ManagedObjectNotFound)
+		_, isInvalidCredentialsError = soap.ToSoapFault(err).VimFault().(types.InvalidLogin)
 	}
 	return isInvalidCredentialsError
 }
