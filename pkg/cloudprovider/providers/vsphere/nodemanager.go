@@ -45,6 +45,8 @@ type NodeManager struct {
 	nodeInfoMap map[string]*NodeInfo
 	// Maps node name to node structure
 	registeredNodes map[string]*v1.Node
+	//CredentialsManager
+	credentialManager CredentialManager
 
 	// Mutexes
 	registeredNodesLock sync.RWMutex
@@ -115,7 +117,7 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			err := vsi.conn.Connect(ctx)
+			err := nm.vcConnect(ctx, vsi)
 			if err != nil {
 				glog.V(4).Info("Discovering node error vc:", err)
 				setGlobalErr(err)
@@ -351,7 +353,7 @@ func (nm *NodeManager) renewNodeInfo(nodeInfo *NodeInfo, reconnect bool) (*NodeI
 		return nil, err
 	}
 	if reconnect {
-		err := vsphereInstance.conn.Connect(ctx)
+		err := nm.vcConnect(ctx, vsphereInstance)
 		if err != nil {
 			return nil, err
 		}
@@ -365,4 +367,20 @@ func (nodeInfo *NodeInfo) VM() *vclib.VirtualMachine {
 		return nil
 	}
 	return nodeInfo.vm
+}
+
+func (nm *NodeManager) vcConnect(ctx context.Context, vsphereInstance *VSphereInstance) error {
+	err := vsphereInstance.conn.Connect(ctx)
+	if err == nil || !vclib.IsInvalidCredentialsError(err) {
+		return err
+	}
+	glog.V(4).Infof("Invalid credentials. Cannot connect to server %q", vsphereInstance.conn.Hostname)
+	// Get latest credentials from CredentialManager
+	credentials, err := nm.credentialManager.GetCredential(vsphereInstance.conn.Hostname)
+	if err != nil {
+
+		return err
+	}
+	vsphereInstance.conn.UpdateCredentials(credentials.User, credentials.Password)
+	return vsphereInstance.conn.Connect(ctx)
 }

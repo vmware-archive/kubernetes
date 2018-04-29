@@ -130,7 +130,9 @@ type VSphereConfig struct {
 		// VMName is the VM name of virtual machine
 		// Combining the WorkingDir and VMName can form a unique InstanceID.
 		// When vm-name is set, no username/password is required on worker nodes.
-		VMName string `gcfg:"vm-name"`
+		VMName          string `gcfg:"vm-name"`
+		SecretName      string `gcfg:"secret-name"`
+		SecretNamespace string `gcfg:"secret-namespace"`
 	}
 
 	VirtualCenter map[string]*VirtualCenterConfig
@@ -153,6 +155,10 @@ type VSphereConfig struct {
 		DefaultDatastore string `gcfg:"default-datastore"`
 		ResourcePoolPath string `gcfg:"resourcepool-path"`
 	}
+}
+
+type VCenterCrends struct {
+	VirtualCenter map[string]*VirtualCenterConfig
 }
 
 type Volumes interface {
@@ -228,8 +234,9 @@ func (vs *VSphere) SetInformers(informerFactory informers.SharedInformerFactory)
 	glog.V(4).Infof("Node informers in vSphere cloud provider initialized")
 
 	secretInformer := informerFactory.Core().V1().Secrets().Informer()
+	informerFactory.Core().V1().Secrets().Lister()
 	secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: vs.SecretAdded,
+		AddFunc:    vs.SecretAdded,
 		DeleteFunc: vs.SecretDeleted,
 		UpdateFunc: vs.SecretUpdated,
 	})
@@ -243,6 +250,21 @@ func (vs *VSphere) SecretAdded(obj interface{}) {
 	}
 
 	glog.V(1).Infof("VCP: Secret added: %+v", secret)
+
+	if _, ok := secret.Data["vsphere.conf"]; !ok {
+		return
+	}
+	confData := string(secret.Data["vsphere.conf"])
+	var cfg VCenterCrends
+	err := gcfg.ReadStringInto(&cfg, confData)
+	if err != nil {
+		return
+	}
+	updateCrendtials(vs.nodeManager.vsphereInstanceMap, cfg)
+}
+
+func updateCrendtials(vsphereInstance map[string]*VSphereInstance, credentials VCenterCrends) error {
+	return nil
 }
 
 // Notification handler when node is removed from k8s cluster.
@@ -255,7 +277,6 @@ func (vs *VSphere) SecretDeleted(obj interface{}) {
 
 	glog.V(1).Infof("VCP: Secret deleted: %+v", secret)
 }
-
 
 // Notification handler when node is removed from k8s cluster.
 func (vs *VSphere) SecretUpdated(oldObj, newObj interface{}) {
@@ -297,11 +318,11 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 	// format the cfg.VirtualCenter will be nil or empty.
 	if cfg.VirtualCenter == nil || len(cfg.VirtualCenter) == 0 {
 		glog.V(4).Infof("Config is not per virtual center and is in old format.")
-		if cfg.Global.User == "" {
+		if cfg.Global.User == "" && (cfg.Global.SecretName == "" || cfg.Global.SecretNamespace == "") {
 			glog.Error("Global.User is empty!")
 			return nil, errors.New("Global.User is empty!")
 		}
-		if cfg.Global.Password == "" {
+		if cfg.Global.Password == "" && (cfg.Global.SecretName == "" || cfg.Global.SecretNamespace == "") {
 			glog.Error("Global.Password is empty!")
 			return nil, errors.New("Global.Password is empty!")
 		}
@@ -359,22 +380,28 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 			if vcConfig.User == "" {
 				vcConfig.User = cfg.Global.User
 			}
+
 			if vcConfig.Password == "" {
 				vcConfig.Password = cfg.Global.Password
 			}
-			if vcConfig.User == "" {
+
+			if vcConfig.User == "" && (cfg.Global.SecretName == "" || cfg.Global.SecretNamespace == "") {
 				msg := fmt.Sprintf("vcConfig.User is empty for vc %s!", vcServer)
 				glog.Error(msg)
 				return nil, errors.New(msg)
+
 			}
-			if vcConfig.Password == "" {
+
+			if vcConfig.Password == "" && (cfg.Global.SecretName == "" || cfg.Global.SecretNamespace == "") {
 				msg := fmt.Sprintf("vcConfig.Password is empty for vc %s!", vcServer)
 				glog.Error(msg)
 				return nil, errors.New(msg)
 			}
+
 			if vcConfig.VCenterPort == "" {
 				vcConfig.VCenterPort = cfg.Global.VCenterPort
 			}
+
 			if vcConfig.Datacenters == "" {
 				if cfg.Global.Datacenters != "" {
 					vcConfig.Datacenters = cfg.Global.Datacenters
@@ -429,12 +456,18 @@ func newControllerNode(cfg VSphereConfig) (*VSphere, error) {
 		return nil, err
 	}
 
+	secretCredentialManager := &SecretCredentialManager{
+		SecretName:      cfg.Global.SecretName,
+		SecretNamespace: cfg.Global.SecretNamespace,
+	}
+
 	vs := VSphere{
 		vsphereInstanceMap: vsphereInstanceMap,
 		nodeManager: &NodeManager{
 			vsphereInstanceMap: vsphereInstanceMap,
 			nodeInfoMap:        make(map[string]*NodeInfo),
 			registeredNodes:    make(map[string]*v1.Node),
+			credentialManager:  secretCredentialManager,
 		},
 		cfg: &cfg,
 	}
@@ -522,7 +555,7 @@ func (vs *VSphere) getVSphereInstanceForServer(vcServer string, ctx context.Cont
 		return nil, errors.New(fmt.Sprintf("Cannot find node %q in vsphere configuration map", vcServer))
 	}
 	// Ensure client is logged in and session is valid
-	err := vsphereIns.conn.Connect(ctx)
+	err := vs.nodeManager.vcConnect(ctx, vsphereIns)
 	if err != nil {
 		glog.Errorf("failed connecting to vcServer %q with error %+v", vcServer, err)
 		return nil, err
@@ -561,7 +594,7 @@ func (vs *VSphere) NodeAddresses(ctx context.Context, nodeName k8stypes.NodeName
 		return nil, err
 	}
 	// Ensure client is logged in and session is valid
-	err = vsi.conn.Connect(ctx)
+	err = vs.nodeManager.vcConnect(ctx, vsi)
 	if err != nil {
 		return nil, err
 	}
@@ -675,7 +708,7 @@ func (vs *VSphere) InstanceID(ctx context.Context, nodeName k8stypes.NodeName) (
 			return "", err
 		}
 		// Ensure client is logged in and session is valid
-		err = vsi.conn.Connect(ctx)
+		err = vs.nodeManager.vcConnect(ctx, vsi)
 		if err != nil {
 			return "", err
 		}
@@ -766,7 +799,7 @@ func (vs *VSphere) AttachDisk(vmDiskPath string, storagePolicyName string, nodeN
 			return "", err
 		}
 		// Ensure client is logged in and session is valid
-		err = vsi.conn.Connect(ctx)
+		err = vs.nodeManager.vcConnect(ctx, vsi)
 		if err != nil {
 			return "", err
 		}
@@ -828,7 +861,7 @@ func (vs *VSphere) DetachDisk(volPath string, nodeName k8stypes.NodeName) error 
 			return err
 		}
 		// Ensure client is logged in and session is valid
-		err = vsi.conn.Connect(ctx)
+		err = vs.nodeManager.vcConnect(ctx, vsi)
 		if err != nil {
 			return err
 		}
@@ -883,7 +916,7 @@ func (vs *VSphere) DiskIsAttached(volPath string, nodeName k8stypes.NodeName) (b
 			return false, err
 		}
 		// Ensure client is logged in and session is valid
-		err = vsi.conn.Connect(ctx)
+		err = vs.nodeManager.vcConnect(ctx, vsi)
 		if err != nil {
 			return false, err
 		}

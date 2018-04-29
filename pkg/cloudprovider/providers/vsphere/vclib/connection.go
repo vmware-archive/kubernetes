@@ -37,6 +37,7 @@ type VSphereConnection struct {
 	Port              string
 	Insecure          bool
 	RoundTripperCount uint
+	credentialsLock   sync.RWMutex
 }
 
 var (
@@ -85,7 +86,10 @@ func (connection *VSphereConnection) NewClient(ctx context.Context) (*govmomi.Cl
 		glog.Errorf("Failed to parse URL: %s. err: %+v", url, err)
 		return nil, err
 	}
+	connection.credentialsLock.RLock()
 	url.User = neturl.UserPassword(connection.Username, connection.Password)
+	connection.credentialsLock.RUnlock()
+
 	client, err := govmomi.NewClient(ctx, url, connection.Insecure)
 	if err != nil {
 		glog.Errorf("Failed to create new client. err: %+v", err)
@@ -96,4 +100,11 @@ func (connection *VSphereConnection) NewClient(ctx context.Context) (*govmomi.Cl
 	}
 	client.RoundTripper = vim25.Retry(client.RoundTripper, vim25.TemporaryNetworkError(int(connection.RoundTripperCount)))
 	return client, nil
+}
+
+func (connection *VSphereConnection) UpdateCredentials(username string, password string) {
+	connection.credentialsLock.Lock()
+	defer connection.credentialsLock.Unlock()
+	connection.Username = username
+	connection.Password = password
 }
