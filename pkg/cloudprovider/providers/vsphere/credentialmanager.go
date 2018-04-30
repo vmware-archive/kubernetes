@@ -10,6 +10,10 @@ import (
 	"net/http"
 )
 
+type SecretVSphereConfig struct {
+	VirtualCenter map[string]*Credential
+}
+
 type Credential struct {
 	User     string `gcfg:"user"`
 	Password string `gcfg:"password"`
@@ -29,13 +33,12 @@ type SecretCredentialManager struct {
 	SecretName      string
 	SecretNamespace string
 	SecretLister    v1.SecretLister
-	VirtualCenter   map[string]*Credential
+	Config          *SecretVSphereConfig
 }
 
 func (secretCredentialManager *SecretCredentialManager) GetCredentialManagerMetadata() (interface{}, error) {
 	return secretCredentialManager, nil
 }
-
 
 func (secretCredentialManager *SecretCredentialManager) UpdateCredentialManagerMetadata(data interface{}) (error) {
 	if secretCredentialManagerMetadata, ok := data.(*SecretCredentialManager); ok {
@@ -59,7 +62,7 @@ func (secretCredentialManager *SecretCredentialManager) GetCredential(server str
 	// 1. Secret Deleted finding credentials from cache
 	// 2. Secret Not Added at a first place will return error
 	// 3. Secret Added but not for asked vCenter Server
-	credentials, found := secretCredentialManager.VirtualCenter[server]
+	credentials, found := secretCredentialManager.Config.VirtualCenter[server]
 	if !found {
 		return credentials, fmt.Errorf("credentials not found for server %q", server)
 	}
@@ -71,7 +74,7 @@ func (secretCredentialManager *SecretCredentialManager) GetCredentials() (map[st
 	if err != nil {
 		return nil, err
 	}
-	return secretCredentialManager.VirtualCenter, err
+	return secretCredentialManager.Config.VirtualCenter, err
 }
 
 func (secretCredentialManager *SecretCredentialManager) updateCredentialsMap() error {
@@ -98,5 +101,5 @@ func (secretCredentialManager *SecretCredentialManager) parseSecret() error {
 	}
 
 	glog.Errorf("Data %+v, ConfData %+v, String Version %q", secretCredentialManager.Secret.Data["vsphere.conf"], confData, string(confData))
-	return gcfg.ReadStringInto(secretCredentialManager.VirtualCenter, string(confData))
+	return gcfg.ReadStringInto(secretCredentialManager.Config.VirtualCenter, string(confData))
 }
