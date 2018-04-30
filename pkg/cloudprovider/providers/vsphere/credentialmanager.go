@@ -82,7 +82,7 @@ func (secretCredentialManager *SecretCredentialManager) updateCredentialsMap() e
 	if err != nil {
 		return err
 	}
-	if secretCredentialManager.Secret != nil ||
+	if secretCredentialManager.Secret != nil &&
 		secretCredentialManager.Secret.GetResourceVersion() == secret.GetResourceVersion() {
 		return nil
 	}
