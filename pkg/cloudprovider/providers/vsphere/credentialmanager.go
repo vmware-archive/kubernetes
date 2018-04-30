@@ -73,6 +73,10 @@ func (secretCredentialManager *SecretCredentialManager) updateCredentialsMap() e
 }
 
 func (secretCredentialManager *SecretCredentialManager) parseSecret() error {
-	confData := string(secretCredentialManager.Secret.Data["vsphere.conf"])
-	return gcfg.ReadStringInto(secretCredentialManager.VirtualCenter, confData)
+	confData, found := secretCredentialManager.Secret.Data["vsphere.conf"]
+	if !found {
+		return fmt.Errorf("Cannot find vsphere.conf in secret %q which is namespace %q ",
+			secretCredentialManager.Secret, secretCredentialManager.SecretNamespace)
+	}
+	return gcfg.ReadStringInto(secretCredentialManager.VirtualCenter, string(confData))
 }
