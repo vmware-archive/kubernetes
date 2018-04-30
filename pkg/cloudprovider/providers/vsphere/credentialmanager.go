@@ -29,7 +29,7 @@ type SecretCredentialManager struct {
 	SecretName      string
 	SecretNamespace string
 	SecretLister    v1.SecretLister
-	VirtualCenter   map[string]Credential
+	VirtualCenter   map[string]*Credential
 }
 
 func (secretCredentialManager *SecretCredentialManager) GetCredentialManagerMetadata() (interface{}, error) {
@@ -61,12 +61,12 @@ func (secretCredentialManager *SecretCredentialManager) GetCredential(server str
 	// 3. Secret Added but not for asked vCenter Server
 	credentials, found := secretCredentialManager.VirtualCenter[server]
 	if !found {
-		return &credentials, fmt.Errorf("credentials not found for server %q", server)
+		return credentials, fmt.Errorf("credentials not found for server %q", server)
 	}
-	return &credentials, nil
+	return credentials, nil
 }
 
-func (secretCredentialManager *SecretCredentialManager) GetCredentials() (map[string]Credential, error) {
+func (secretCredentialManager *SecretCredentialManager) GetCredentials() (map[string]*Credential, error) {
 	err := secretCredentialManager.updateCredentialsMap()
 	if err != nil {
 		return nil, err
@@ -96,5 +96,7 @@ func (secretCredentialManager *SecretCredentialManager) parseSecret() error {
 		return fmt.Errorf("Cannot find vsphere.conf in secret %q which is namespace %q ",
 			secretCredentialManager.Secret, secretCredentialManager.SecretNamespace)
 	}
+
+	glog.Errorf("Data %+v, ConfData %+v, String Version %q", secretCredentialManager.Secret.Data["vsphere.conf"], confData, string(confData))
 	return gcfg.ReadStringInto(secretCredentialManager.VirtualCenter, string(confData))
 }
