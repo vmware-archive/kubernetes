@@ -16,6 +16,8 @@ type Credential struct {
 }
 
 type CredentialManager interface {
+	GetCredentialManagerMetadata() (interface{}, error)
+	UpdateCredentialManagerMetadata(data interface{}) (error)
 	GetCredential(string) (*Credential, error)
 	GetCredentials() (map[string]Credential, error)
 }
@@ -28,6 +30,19 @@ type SecretCredentialManager struct {
 	SecretNamespace string
 	SecretLister    v1.SecretLister
 	VirtualCenter   map[string]Credential
+}
+
+func (secretCredentialManager *SecretCredentialManager) GetCredentialManagerMetadata() (interface{}, error) {
+	return secretCredentialManager, nil
+}
+
+
+func (secretCredentialManager *SecretCredentialManager) UpdateCredentialManagerMetadata(data interface{}) (error) {
+	if secretCredentialManagerMetadata, ok := data.(*SecretCredentialManager); ok {
+		secretCredentialManager = secretCredentialManagerMetadata
+		return nil
+	}
+	return fmt.Errorf("Wrong metadata type")
 }
 
 func (secretCredentialManager *SecretCredentialManager) GetCredential(server string) (*Credential, error) {
@@ -60,6 +75,9 @@ func (secretCredentialManager *SecretCredentialManager) GetCredentials() (map[st
 }
 
 func (secretCredentialManager *SecretCredentialManager) updateCredentialsMap() error {
+	if secretCredentialManager.SecretLister == nil {
+		return fmt.Errorf("SecretLister not initialized")
+	}
 	secret, err := secretCredentialManager.SecretLister.Secrets(secretCredentialManager.SecretNamespace).Get(secretCredentialManager.SecretName)
 	if err != nil {
 		return err

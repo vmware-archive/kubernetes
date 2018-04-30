@@ -234,7 +234,16 @@ func (vs *VSphere) SetInformers(informerFactory informers.SharedInformerFactory)
 	glog.V(4).Infof("Node informers in vSphere cloud provider initialized")
 
 	secretInformer := informerFactory.Core().V1().Secrets().Informer()
-	informerFactory.Core().V1().Secrets().Lister()
+	metadata, err := vs.nodeManager.credentialManager.GetCredentialManagerMetadata()
+	if err != nil {
+		glog.Error(err)
+		return
+	}
+	if secretCredentialManagerMetadata, ok := metadata.(*SecretCredentialManager); ok {
+		secretCredentialManagerMetadata.SecretLister = informerFactory.Core().V1().Secrets().Lister()
+		secretCredentialManagerMetadata.UpdateCredentialManagerMetadata(secretCredentialManagerMetadata)
+	}
+
 	secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    vs.SecretAdded,
 		DeleteFunc: vs.SecretDeleted,
