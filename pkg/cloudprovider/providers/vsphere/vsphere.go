@@ -468,7 +468,7 @@ func newControllerNode(cfg VSphereConfig) (*VSphere, error) {
 	secretCredentialManager := &SecretCredentialManager{
 		SecretName:      cfg.Global.SecretName,
 		SecretNamespace: cfg.Global.SecretNamespace,
-		VirtualCenter: make(map[string]Credential),
+		VirtualCenter: make(map[string]*Credential),
 	}
 
 	vs := VSphere{

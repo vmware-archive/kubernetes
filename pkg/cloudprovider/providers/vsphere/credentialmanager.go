@@ -19,7 +19,7 @@ type CredentialManager interface {
 	GetCredentialManagerMetadata() (interface{}, error)
 	UpdateCredentialManagerMetadata(data interface{}) (error)
 	GetCredential(string) (*Credential, error)
-	GetCredentials() (map[string]Credential, error)
+	GetCredentials() (map[string]*Credential, error)
 }
 
 var _ CredentialManager = &SecretCredentialManager{}
