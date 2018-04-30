@@ -101,5 +101,5 @@ func (secretCredentialManager *SecretCredentialManager) parseSecret() error {
 	}
 
 	glog.Errorf("Data %+v, ConfData %+v, String Version %q", secretCredentialManager.Secret.Data["vsphere.conf"], confData, string(confData))
-	return gcfg.ReadStringInto(secretCredentialManager.Config.VirtualCenter, string(confData))
+	return gcfg.ReadStringInto(secretCredentialManager.Config, string(confData))
 }
