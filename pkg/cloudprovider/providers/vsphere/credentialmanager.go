@@ -85,6 +85,9 @@ func (cache *SecretCache) GetCredential(server string) (Credential, bool) {
 	cache.cacheLock.Lock()
 	defer cache.cacheLock.Unlock()
 	credential, found := cache.VirtualCenter[server]
+	if !found {
+		return Credential{}, found
+	}
 	return *credential, found
 }
 
