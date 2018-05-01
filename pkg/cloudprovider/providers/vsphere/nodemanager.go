@@ -49,8 +49,8 @@ type NodeManager struct {
 	credentialManager *SecretCredentialManager
 
 	// Mutexes
-	registeredNodesLock sync.RWMutex
-	nodeInfoLock        sync.RWMutex
+	registeredNodesLock   sync.RWMutex
+	nodeInfoLock          sync.RWMutex
 	credentialManagerLock sync.Mutex
 }
 
