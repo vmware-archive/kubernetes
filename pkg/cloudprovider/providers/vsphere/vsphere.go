@@ -271,6 +271,17 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 		isSecretInfoProvided = false
 	}
 
+	if isSecretInfoProvided {
+		if cfg.Global.User != "" {
+			glog.Warning("Global.User and Secret info provided. VCP will use secret to get credentials")
+			cfg.Global.User = ""
+		}
+		if cfg.Global.Password != "" {
+			glog.Warning("Global.Password and Secret info provided. VCP will use secret to get credentials")
+			cfg.Global.Password = ""
+		}
+	}
+
 	// Check if the vsphere.conf is in old format. In this
 	// format the cfg.VirtualCenter will be nil or empty.
 	if cfg.VirtualCenter == nil || len(cfg.VirtualCenter) == 0 {
@@ -283,13 +294,6 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 			if cfg.Global.Password == "" {
 				glog.Error("Global.Password is empty!")
 				return nil, errors.New("Global.Password is empty!")
-			}
-		} else {
-			if cfg.Global.User != "" {
-				glog.Warning("Global.User and Secret info provided. VCP will use secret to get credentials")
-			}
-			if cfg.Global.Password != "" {
-				glog.Warning("Global.Password and Secret info provided. VCP will use secret to get credentials")
 			}
 		}
 
@@ -338,31 +342,42 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 			glog.Error(msg)
 			return nil, errors.New(msg)
 		}
+
 		for vcServer, vcConfig := range cfg.VirtualCenter {
 			glog.V(4).Infof("Initializing vc server %s", vcServer)
 			if vcServer == "" {
 				glog.Error("vsphere.conf does not have the VirtualCenter IP address specified")
 				return nil, errors.New("vsphere.conf does not have the VirtualCenter IP address specified")
 			}
-			if vcConfig.User == "" && !isSecretInfoProvided {
-				vcConfig.User = cfg.Global.User
-			}
 
-			if vcConfig.Password == "" && !isSecretInfoProvided {
-				vcConfig.Password = cfg.Global.Password
-			}
-
-			if vcConfig.User == "" && (cfg.Global.SecretName == "" || cfg.Global.SecretNamespace == "") {
-				msg := fmt.Sprintf("vcConfig.User is empty for vc %s!", vcServer)
-				glog.Error(msg)
-				return nil, errors.New(msg)
-
-			}
-
-			if vcConfig.Password == "" && (cfg.Global.SecretName == "" || cfg.Global.SecretNamespace == "") {
-				msg := fmt.Sprintf("vcConfig.Password is empty for vc %s!", vcServer)
-				glog.Error(msg)
-				return nil, errors.New(msg)
+			if !isSecretInfoProvided {
+				if vcConfig.User == "" {
+					vcConfig.User = cfg.Global.User
+				}
+				if vcConfig.Password == "" {
+					vcConfig.Password = cfg.Global.Password
+				}
+				if vcConfig.User == "" {
+					msg := fmt.Sprintf("vcConfig.User is empty for vc %s!", vcServer)
+					glog.Error(msg)
+					return nil, errors.New(msg)
+				}
+				if vcConfig.Password == "" {
+					msg := fmt.Sprintf("vcConfig.Password is empty for vc %s!", vcServer)
+					glog.Error(msg)
+					return nil, errors.New(msg)
+				}
+			} else {
+				if vcConfig.User != "" {
+					msg := fmt.Sprintf("vcConfig.User for server %s and Secret info provided. VCP will use secret to get credentials", vcServer)
+					glog.Warning(msg)
+					vcConfig.User = ""
+				}
+				if vcConfig.Password != "" {
+					msg := fmt.Sprintf("vcConfig.Password for server %s and Secret info provided. VCP will use secret to get credentials", vcServer)
+					glog.Warning(msg)
+					vcConfig.Password = ""
+				}
 			}
 
 			if vcConfig.VCenterPort == "" {
