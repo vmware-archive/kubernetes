@@ -220,6 +220,18 @@ func (vs *VSphere) SetInformers(informerFactory informers.SharedInformerFactory)
 		return
 	}
 
+	if vs.isSecretInfoProvided {
+		secretCredentialManager := &SecretCredentialManager{
+			SecretName:      vs.cfg.Global.SecretName,
+			SecretNamespace: vs.cfg.Global.SecretNamespace,
+			SecretLister:    informerFactory.Core().V1().Secrets().Lister(),
+			Cache: &SecretCache{
+				VirtualCenter: make(map[string]*Credential),
+			},
+		}
+		vs.nodeManager.UpdateCredentialManager(secretCredentialManager)
+	}
+
 	// Only on controller node it is required to register listeners.
 	// Register callbacks for node updates
 	glog.V(4).Infof("Setting up node informers for vSphere Cloud Provider")
@@ -229,20 +241,6 @@ func (vs *VSphere) SetInformers(informerFactory informers.SharedInformerFactory)
 		DeleteFunc: vs.NodeDeleted,
 	})
 	glog.V(4).Infof("Node informers in vSphere cloud provider initialized")
-
-	if !vs.isSecretInfoProvided {
-		return
-	}
-
-	secretCredentialManager := &SecretCredentialManager{
-		SecretName:      vs.cfg.Global.SecretName,
-		SecretNamespace: vs.cfg.Global.SecretNamespace,
-		SecretLister:    informerFactory.Core().V1().Secrets().Lister(),
-		Cache: &SecretCache{
-			VirtualCenter: make(map[string]*Credential),
-		},
-	}
-	vs.nodeManager.credentialManager = secretCredentialManager
 
 }
 
@@ -277,14 +275,24 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 	// format the cfg.VirtualCenter will be nil or empty.
 	if cfg.VirtualCenter == nil || len(cfg.VirtualCenter) == 0 {
 		glog.V(4).Infof("Config is not per virtual center and is in old format.")
-		if cfg.Global.User == "" && !isSecretInfoProvided {
-			glog.Error("Global.User is empty!")
-			return nil, errors.New("Global.User is empty!")
+		if !isSecretInfoProvided {
+			if cfg.Global.User == "" {
+				glog.Error("Global.User is empty!")
+				return nil, errors.New("Global.User is empty!")
+			}
+			if cfg.Global.Password == "" {
+				glog.Error("Global.Password is empty!")
+				return nil, errors.New("Global.Password is empty!")
+			}
+		} else {
+			if cfg.Global.User != "" {
+				glog.Warning("Global.User and Secret info provided. VCP will use secret to get credentials")
+			}
+			if cfg.Global.Password != "" {
+				glog.Warning("Global.Password and Secret info provided. VCP will use secret to get credentials")
+			}
 		}
-		if cfg.Global.Password == "" && !isSecretInfoProvided {
-			glog.Error("Global.Password is empty!")
-			return nil, errors.New("Global.Password is empty!")
-		}
+
 		if cfg.Global.WorkingDir == "" {
 			glog.Error("Global.WorkingDir is empty!")
 			return nil, errors.New("Global.WorkingDir is empty!")
@@ -395,9 +403,9 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 func newControllerNode(cfg VSphereConfig) (*VSphere, error) {
 	var err error
 
-	isSecretInfoProvided := true
-	if cfg.Global.SecretName == "" || cfg.Global.SecretNamespace == "" {
-		isSecretInfoProvided = false
+	isSecretInfoProvided := false
+	if cfg.Global.SecretName != "" && cfg.Global.SecretNamespace != "" {
+		isSecretInfoProvided = true
 	}
 
 	if cfg.Disk.SCSIControllerType == "" {

@@ -51,6 +51,7 @@ type NodeManager struct {
 	// Mutexes
 	registeredNodesLock sync.RWMutex
 	nodeInfoLock        sync.RWMutex
+	credentialManagerLock sync.Mutex
 }
 
 type NodeDetails struct {
@@ -358,14 +359,15 @@ func (nodeInfo *NodeInfo) VM() *vclib.VirtualMachine {
 
 func (nm *NodeManager) vcConnect(ctx context.Context, vsphereInstance *VSphereInstance) error {
 	err := vsphereInstance.conn.Connect(ctx)
-	if err == nil || !vclib.IsInvalidCredentialsError(err) || nm.credentialManager == nil {
+	credentialManager := nm.CredentialManager()
+	if err == nil || !vclib.IsInvalidCredentialsError(err) || credentialManager == nil {
 		return err
 	}
 	glog.V(4).Infof("Invalid credentials. Cannot connect to server %q", vsphereInstance.conn.Hostname)
-	// Get latest credentials from SecretCredentialManager
-	credentials, err := nm.credentialManager.GetCredential(vsphereInstance.conn.Hostname)
-	if err != nil {
 
+	// Get latest credentials from SecretCredentialManager
+	credentials, err := credentialManager.GetCredential(vsphereInstance.conn.Hostname)
+	if err != nil {
 		return err
 	}
 	vsphereInstance.conn.UpdateCredentials(credentials.User, credentials.Password)
@@ -407,4 +409,16 @@ func (nm *NodeManager) GetNodeInfoWithNodeObject(node *v1.Node) (NodeInfo, error
 		nm.addNodeInfo(nodeName, nodeInfo)
 	}
 	return *nodeInfo, nil
+}
+
+func (nm *NodeManager) CredentialManager() (*SecretCredentialManager) {
+	nm.credentialManagerLock.Lock()
+	defer nm.credentialManagerLock.Unlock()
+	return nm.credentialManager
+}
+
+func (nm *NodeManager) UpdateCredentialManager(credentialManager *SecretCredentialManager) {
+	nm.credentialManagerLock.Lock()
+	defer nm.credentialManagerLock.Unlock()
+	nm.credentialManager = credentialManager
 }

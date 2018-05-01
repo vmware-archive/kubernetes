@@ -43,7 +43,7 @@ func (secretCredentialManager *SecretCredentialManager) GetCredential(server str
 	// 1. Secret Deleted finding credentials from cache
 	// 2. Secret Not Added at a first place will return error
 	// 3. Secret Added but not for asked vCenter Server
-	credential, found := secretCredentialManager.Cache.GetCredentials(server)
+	credential, found := secretCredentialManager.Cache.GetCredential(server)
 	if !found {
 		return nil, fmt.Errorf("credentials not found for server %q", server)
 	}
@@ -56,11 +56,13 @@ func (secretCredentialManager *SecretCredentialManager) updateCredentialsMap() e
 	}
 	secret, err := secretCredentialManager.SecretLister.Secrets(secretCredentialManager.SecretNamespace).Get(secretCredentialManager.SecretName)
 	if err != nil {
+		glog.Errorf("Cannot get secret %s in namespace %s. error: %q", secretCredentialManager.SecretName, secretCredentialManager.SecretNamespace, err)
 		return err
 	}
 	cacheSecret := secretCredentialManager.Cache.GetSecret()
 	if cacheSecret != nil &&
 		cacheSecret.GetResourceVersion() == secret.GetResourceVersion() {
+		glog.V(4).Infof("VCP SecretCredentialManager: Secret %q will not be updated in cache. Since, secrets have same resource version %q", secretCredentialManager.SecretName, cacheSecret.GetResourceVersion())
 		return nil
 	}
 	secretCredentialManager.Cache.UpdateSecret(secret)
@@ -79,7 +81,7 @@ func (cache *SecretCache) UpdateSecret(secret *corev1.Secret) {
 	cache.Secret = secret
 }
 
-func (cache *SecretCache) GetCredentials(server string) (Credential, bool) {
+func (cache *SecretCache) GetCredential(server string) (Credential, bool) {
 	cache.cacheLock.Lock()
 	defer cache.cacheLock.Unlock()
 	credential, found := cache.VirtualCenter[server]
@@ -92,7 +94,7 @@ func (cache *SecretCache) parseSecret() error {
 
 	confData, found := cache.Secret.Data["vsphere.conf"]
 	if !found {
-		return fmt.Errorf("vsphere.conf not found in cahce")
+		return fmt.Errorf("vsphere.conf not found in cache")
 	}
 
 	glog.Errorf("Data %+v, ConfData %+v, String Version %q", cache.Secret.Data["vsphere.conf"], confData, string(confData))
