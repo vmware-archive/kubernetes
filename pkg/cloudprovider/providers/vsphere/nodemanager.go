@@ -46,7 +46,7 @@ type NodeManager struct {
 	// Maps node name to node structure
 	registeredNodes map[string]*v1.Node
 	//CredentialsManager
-	credentialManager CredentialManager
+	credentialManager *SecretCredentialManager
 
 	// Mutexes
 	registeredNodesLock sync.RWMutex
@@ -295,30 +295,17 @@ func (nm *NodeManager) GetNodeInfo(nodeName k8stypes.NodeName) (NodeInfo, error)
 //
 // This method is a getter but it can cause side-effect of updating NodeInfo objects.
 func (nm *NodeManager) GetNodeDetails() ([]NodeDetails, error) {
-	nm.nodeInfoLock.RLock()
-	defer nm.nodeInfoLock.RUnlock()
+	nm.registeredNodesLock.Lock()
+	defer nm.registeredNodesLock.Unlock()
 	var nodeDetails []NodeDetails
-	vsphereSessionRefreshMap := make(map[string]bool)
 
-	for nodeName, nodeInfo := range nm.nodeInfoMap {
-		var n *NodeInfo
-		var err error
-		if vsphereSessionRefreshMap[nodeInfo.vcServer] {
-			// vSphere connection already refreshed. Just refresh VM and Datacenter.
-			glog.V(4).Infof("Renewing NodeInfo %+v for node %q. No new connection needed.", nodeInfo, nodeName)
-			n, err = nm.renewNodeInfo(nodeInfo, false)
-		} else {
-			// Refresh vSphere connection, VM and Datacenter.
-			glog.V(4).Infof("Renewing NodeInfo %+v for node %q with new vSphere connection.", nodeInfo, nodeName)
-			n, err = nm.renewNodeInfo(nodeInfo, true)
-			vsphereSessionRefreshMap[nodeInfo.vcServer] = true
-		}
+	for nodeName, nodeObj := range nm.registeredNodes {
+		nodeInfo, err := nm.GetNodeInfoWithNodeObject(nodeObj)
 		if err != nil {
 			return nil, err
 		}
-		nm.nodeInfoMap[nodeName] = n
 		glog.V(4).Infof("Updated NodeInfo %q for node %q.", nodeInfo, nodeName)
-		nodeDetails = append(nodeDetails, NodeDetails{nodeName, n.vm, n.vmUUID})
+		nodeDetails = append(nodeDetails, NodeDetails{nodeName, nodeInfo.vm, nodeInfo.vmUUID})
 	}
 	return nodeDetails, nil
 }
@@ -371,11 +358,11 @@ func (nodeInfo *NodeInfo) VM() *vclib.VirtualMachine {
 
 func (nm *NodeManager) vcConnect(ctx context.Context, vsphereInstance *VSphereInstance) error {
 	err := vsphereInstance.conn.Connect(ctx)
-	if err == nil || !vclib.IsInvalidCredentialsError(err) {
+	if err == nil || !vclib.IsInvalidCredentialsError(err) || nm.credentialManager == nil {
 		return err
 	}
 	glog.V(4).Infof("Invalid credentials. Cannot connect to server %q", vsphereInstance.conn.Hostname)
-	// Get latest credentials from CredentialManager
+	// Get latest credentials from SecretCredentialManager
 	credentials, err := nm.credentialManager.GetCredential(vsphereInstance.conn.Hostname)
 	if err != nil {
 
@@ -383,4 +370,41 @@ func (nm *NodeManager) vcConnect(ctx context.Context, vsphereInstance *VSphereIn
 	}
 	vsphereInstance.conn.UpdateCredentials(credentials.User, credentials.Password)
 	return vsphereInstance.conn.Connect(ctx)
+}
+
+// GetNodeInfo returns a NodeInfo which datacenter, vm and vc server ip address.
+// This method returns an error if it is unable find node VCs and DCs listed in vSphere.conf
+// NodeInfo returned may not be updated to reflect current VM location.
+//
+// This method is a getter but it can cause side-effect of updating NodeInfo object.
+func (nm *NodeManager) GetNodeInfoWithNodeObject(node *v1.Node) (NodeInfo, error) {
+	nodeName := node.Name
+	getNodeInfo := func(nodeName string) *NodeInfo {
+		nm.nodeInfoLock.RLock()
+		nodeInfo := nm.nodeInfoMap[nodeName]
+		nm.nodeInfoLock.RUnlock()
+		return nodeInfo
+	}
+	nodeInfo := getNodeInfo(nodeName)
+	var err error
+	if nodeInfo == nil {
+		// Rediscover node if no NodeInfo found.
+		glog.V(4).Infof("No VM found for node %q. Initiating rediscovery.", nodeName)
+		err = nm.DiscoverNode(node)
+		if err != nil {
+			glog.Errorf("Error %q node info for node %q not found", err, nodeName)
+			return NodeInfo{}, err
+		}
+		nodeInfo = getNodeInfo(nodeName)
+	} else {
+		// Renew the found NodeInfo to avoid stale vSphere connection.
+		glog.V(4).Infof("Renewing NodeInfo %+v for node %q", nodeInfo, nodeName)
+		nodeInfo, err = nm.renewNodeInfo(nodeInfo, true)
+		if err != nil {
+			glog.Errorf("Error %q occurred while renewing NodeInfo for %q", err, nodeName)
+			return NodeInfo{}, err
+		}
+		nm.addNodeInfo(nodeName, nodeInfo)
+	}
+	return *nodeInfo, nil
 }

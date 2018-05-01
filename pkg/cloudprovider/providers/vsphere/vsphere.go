@@ -68,8 +68,9 @@ type VSphere struct {
 	// Maps the VSphere IP address to VSphereInstance
 	vsphereInstanceMap map[string]*VSphereInstance
 	// Responsible for managing discovery of k8s node, their location etc.
-	nodeManager *NodeManager
-	vmUUID      string
+	nodeManager          *NodeManager
+	vmUUID               string
+	isSecretInfoProvided bool
 }
 
 // Represents a vSphere instance where one or more kubernetes nodes are running.
@@ -157,10 +158,6 @@ type VSphereConfig struct {
 	}
 }
 
-type VCenterCrends struct {
-	VirtualCenter map[string]*VirtualCenterConfig
-}
-
 type Volumes interface {
 	// AttachDisk attaches given disk to given node. Current node
 	// is used when nodeName is empty string.
@@ -233,73 +230,19 @@ func (vs *VSphere) SetInformers(informerFactory informers.SharedInformerFactory)
 	})
 	glog.V(4).Infof("Node informers in vSphere cloud provider initialized")
 
-	secretInformer := informerFactory.Core().V1().Secrets().Informer()
-	metadata, err := vs.nodeManager.credentialManager.GetCredentialManagerMetadata()
-	if err != nil {
-		glog.Error(err)
-		return
-	}
-	if secretCredentialManagerMetadata, ok := metadata.(*SecretCredentialManager); ok {
-		secretCredentialManagerMetadata.SecretLister = informerFactory.Core().V1().Secrets().Lister()
-		secretCredentialManagerMetadata.UpdateCredentialManagerMetadata(secretCredentialManagerMetadata)
-	}
-
-	secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    vs.SecretAdded,
-		DeleteFunc: vs.SecretDeleted,
-		UpdateFunc: vs.SecretUpdated,
-	})
-}
-
-func (vs *VSphere) SecretAdded(obj interface{}) {
-	secret, ok := obj.(*v1.Secret)
-	if secret == nil || !ok {
-		glog.Warningf("SecretAdded: unrecognized object %+v", obj)
+	if !vs.isSecretInfoProvided {
 		return
 	}
 
-	glog.V(1).Infof("VCP: Secret added: %+v", secret)
-
-	if _, ok := secret.Data["vsphere.conf"]; !ok {
-		return
+	secretCredentialManager := &SecretCredentialManager{
+		SecretName:      vs.cfg.Global.SecretName,
+		SecretNamespace: vs.cfg.Global.SecretNamespace,
+		SecretLister:    informerFactory.Core().V1().Secrets().Lister(),
+		Cache: &SecretCache{
+			VirtualCenter: make(map[string]*Credential),
+		},
 	}
-	confData := string(secret.Data["vsphere.conf"])
-	var cfg VCenterCrends
-	err := gcfg.ReadStringInto(&cfg, confData)
-	if err != nil {
-		return
-	}
-	updateCrendtials(vs.nodeManager.vsphereInstanceMap, cfg)
-}
-
-func updateCrendtials(vsphereInstance map[string]*VSphereInstance, credentials VCenterCrends) error {
-	return nil
-}
-
-// Notification handler when node is removed from k8s cluster.
-func (vs *VSphere) SecretDeleted(obj interface{}) {
-	secret, ok := obj.(*v1.Secret)
-	if secret == nil || !ok {
-		glog.Warningf("SecretsDeleted: unrecognized object %+v", obj)
-		return
-	}
-
-	glog.V(1).Infof("VCP: Secret deleted: %+v", secret)
-}
-
-// Notification handler when node is removed from k8s cluster.
-func (vs *VSphere) SecretUpdated(oldObj, newObj interface{}) {
-	oldSecret, ok := oldObj.(*v1.Secret)
-	if oldSecret == nil || !ok {
-		glog.Warningf("OldSecrets: unrecognized object %+v", oldSecret)
-		return
-	}
-	newSecret, ok := newObj.(*v1.Secret)
-	if newSecret == nil || !ok {
-		glog.Warningf("NewSecrets: unrecognized object %+v", newSecret)
-		return
-	}
-	glog.V(1).Infof("VCP: Secret Updated from %+v to %+v", oldSecret, newSecret)
+	vs.nodeManager.credentialManager = secretCredentialManager
 
 }
 
@@ -322,16 +265,23 @@ func newWorkerNode() (*VSphere, error) {
 
 func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance, error) {
 	vsphereInstanceMap := make(map[string]*VSphereInstance)
+	isSecretInfoProvided := true
+
+	if cfg.Global.SecretName == "" || cfg.Global.SecretNamespace == "" {
+		glog.Warningf("SecretName and/or SecretNamespace is not provided. " +
+			"VCP will use username and password from config file")
+		isSecretInfoProvided = false
+	}
 
 	// Check if the vsphere.conf is in old format. In this
 	// format the cfg.VirtualCenter will be nil or empty.
 	if cfg.VirtualCenter == nil || len(cfg.VirtualCenter) == 0 {
 		glog.V(4).Infof("Config is not per virtual center and is in old format.")
-		if cfg.Global.User == "" && (cfg.Global.SecretName == "" || cfg.Global.SecretNamespace == "") {
+		if cfg.Global.User == "" && !isSecretInfoProvided {
 			glog.Error("Global.User is empty!")
 			return nil, errors.New("Global.User is empty!")
 		}
-		if cfg.Global.Password == "" && (cfg.Global.SecretName == "" || cfg.Global.SecretNamespace == "") {
+		if cfg.Global.Password == "" && !isSecretInfoProvided {
 			glog.Error("Global.Password is empty!")
 			return nil, errors.New("Global.Password is empty!")
 		}
@@ -386,11 +336,11 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 				glog.Error("vsphere.conf does not have the VirtualCenter IP address specified")
 				return nil, errors.New("vsphere.conf does not have the VirtualCenter IP address specified")
 			}
-			if vcConfig.User == "" {
+			if vcConfig.User == "" && !isSecretInfoProvided {
 				vcConfig.User = cfg.Global.User
 			}
 
-			if vcConfig.Password == "" {
+			if vcConfig.Password == "" && !isSecretInfoProvided {
 				vcConfig.Password = cfg.Global.Password
 			}
 
@@ -445,6 +395,11 @@ func populateVsphereInstanceMap(cfg *VSphereConfig) (map[string]*VSphereInstance
 func newControllerNode(cfg VSphereConfig) (*VSphere, error) {
 	var err error
 
+	isSecretInfoProvided := true
+	if cfg.Global.SecretName == "" || cfg.Global.SecretNamespace == "" {
+		isSecretInfoProvided = false
+	}
+
 	if cfg.Disk.SCSIControllerType == "" {
 		cfg.Disk.SCSIControllerType = vclib.PVSCSIControllerType
 	} else if !vclib.CheckControllerSupported(cfg.Disk.SCSIControllerType) {
@@ -465,23 +420,15 @@ func newControllerNode(cfg VSphereConfig) (*VSphere, error) {
 		return nil, err
 	}
 
-	secretCredentialManager := &SecretCredentialManager{
-		SecretName:      cfg.Global.SecretName,
-		SecretNamespace: cfg.Global.SecretNamespace,
-		Config: &SecretVSphereConfig{
-			VirtualCenter: make(map[string]*Credential),
-		},
-	}
-
 	vs := VSphere{
 		vsphereInstanceMap: vsphereInstanceMap,
 		nodeManager: &NodeManager{
 			vsphereInstanceMap: vsphereInstanceMap,
 			nodeInfoMap:        make(map[string]*NodeInfo),
 			registeredNodes:    make(map[string]*v1.Node),
-			credentialManager:  secretCredentialManager,
 		},
-		cfg: &cfg,
+		isSecretInfoProvided: isSecretInfoProvided,
+		cfg:                  &cfg,
 	}
 
 	vs.hostName, err = os.Hostname()

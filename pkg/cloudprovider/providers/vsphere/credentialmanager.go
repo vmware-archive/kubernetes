@@ -8,10 +8,13 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/listers/core/v1"
 	"net/http"
+	"sync"
 )
 
-type SecretVSphereConfig struct {
+type SecretCache struct {
+	cacheLock     sync.Mutex
 	VirtualCenter map[string]*Credential
+	Secret        *corev1.Secret
 }
 
 type Credential struct {
@@ -19,33 +22,11 @@ type Credential struct {
 	Password string `gcfg:"password"`
 }
 
-type CredentialManager interface {
-	GetCredentialManagerMetadata() (interface{}, error)
-	UpdateCredentialManagerMetadata(data interface{}) (error)
-	GetCredential(string) (*Credential, error)
-	GetCredentials() (map[string]*Credential, error)
-}
-
-var _ CredentialManager = &SecretCredentialManager{}
-
 type SecretCredentialManager struct {
-	Secret          *corev1.Secret
 	SecretName      string
 	SecretNamespace string
 	SecretLister    v1.SecretLister
-	Config          *SecretVSphereConfig
-}
-
-func (secretCredentialManager *SecretCredentialManager) GetCredentialManagerMetadata() (interface{}, error) {
-	return secretCredentialManager, nil
-}
-
-func (secretCredentialManager *SecretCredentialManager) UpdateCredentialManagerMetadata(data interface{}) (error) {
-	if secretCredentialManagerMetadata, ok := data.(*SecretCredentialManager); ok {
-		secretCredentialManager = secretCredentialManagerMetadata
-		return nil
-	}
-	return fmt.Errorf("Wrong metadata type")
+	Cache           *SecretCache
 }
 
 func (secretCredentialManager *SecretCredentialManager) GetCredential(server string) (*Credential, error) {
@@ -56,50 +37,64 @@ func (secretCredentialManager *SecretCredentialManager) GetCredential(server str
 		if ok && statusErr.ErrStatus.Code != http.StatusNotFound || !ok {
 			return nil, err
 		}
-		glog.Warningf("secret %q not found", secretCredentialManager.SecretName)
+		glog.Warningf("secret %q not found in namespace %q", secretCredentialManager.SecretName, secretCredentialManager.SecretNamespace)
 	}
 	// Cases:
 	// 1. Secret Deleted finding credentials from cache
 	// 2. Secret Not Added at a first place will return error
 	// 3. Secret Added but not for asked vCenter Server
-	credentials, found := secretCredentialManager.Config.VirtualCenter[server]
+	credential, found := secretCredentialManager.Cache.GetCredentials(server)
 	if !found {
-		return credentials, fmt.Errorf("credentials not found for server %q", server)
+		return nil, fmt.Errorf("credentials not found for server %q", server)
 	}
-	return credentials, nil
-}
-
-func (secretCredentialManager *SecretCredentialManager) GetCredentials() (map[string]*Credential, error) {
-	err := secretCredentialManager.updateCredentialsMap()
-	if err != nil {
-		return nil, err
-	}
-	return secretCredentialManager.Config.VirtualCenter, err
+	return &credential, nil
 }
 
 func (secretCredentialManager *SecretCredentialManager) updateCredentialsMap() error {
 	if secretCredentialManager.SecretLister == nil {
-		return fmt.Errorf("SecretLister not initialized")
+		return fmt.Errorf("SecretLister is not initialized")
 	}
 	secret, err := secretCredentialManager.SecretLister.Secrets(secretCredentialManager.SecretNamespace).Get(secretCredentialManager.SecretName)
 	if err != nil {
 		return err
 	}
-	if secretCredentialManager.Secret != nil &&
-		secretCredentialManager.Secret.GetResourceVersion() == secret.GetResourceVersion() {
+	cacheSecret := secretCredentialManager.Cache.GetSecret()
+	if cacheSecret != nil &&
+		cacheSecret.GetResourceVersion() == secret.GetResourceVersion() {
 		return nil
 	}
-	secretCredentialManager.Secret = secret
-	return secretCredentialManager.parseSecret()
+	secretCredentialManager.Cache.UpdateSecret(secret)
+	return secretCredentialManager.Cache.parseSecret()
 }
 
-func (secretCredentialManager *SecretCredentialManager) parseSecret() error {
-	confData, found := secretCredentialManager.Secret.Data["vsphere.conf"]
+func (cache *SecretCache) GetSecret() *corev1.Secret {
+	cache.cacheLock.Lock()
+	defer cache.cacheLock.Unlock()
+	return cache.Secret
+}
+
+func (cache *SecretCache) UpdateSecret(secret *corev1.Secret) {
+	cache.cacheLock.Lock()
+	defer cache.cacheLock.Unlock()
+	cache.Secret = secret
+}
+
+func (cache *SecretCache) GetCredentials(server string) (Credential, bool) {
+	cache.cacheLock.Lock()
+	defer cache.cacheLock.Unlock()
+	credential, found := cache.VirtualCenter[server]
+	return *credential, found
+}
+
+func (cache *SecretCache) parseSecret() error {
+	cache.cacheLock.Lock()
+	defer cache.cacheLock.Unlock()
+
+	confData, found := cache.Secret.Data["vsphere.conf"]
 	if !found {
-		return fmt.Errorf("Cannot find vsphere.conf in secret %q which is namespace %q ",
-			secretCredentialManager.Secret, secretCredentialManager.SecretNamespace)
+		return fmt.Errorf("vsphere.conf not found in cahce")
 	}
 
-	glog.Errorf("Data %+v, ConfData %+v, String Version %q", secretCredentialManager.Secret.Data["vsphere.conf"], confData, string(confData))
-	return gcfg.ReadStringInto(secretCredentialManager.Config, string(confData))
+	glog.Errorf("Data %+v, ConfData %+v, String Version %q", cache.Secret.Data["vsphere.conf"], confData, string(confData))
+	return gcfg.ReadStringInto(cache, string(confData))
 }
