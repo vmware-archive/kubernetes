@@ -24,9 +24,9 @@ Following are the Prerequisites for this automation.
 
  * We need a vCenter admin username and password.
  * Separate user for vSphere Cloud Provider needs to be pre-created on the vCenter. This Step is optional but recommended.
- * Daemonset Pods should be allowed to be scheduled on all nodes. If Kubernetes is deployed using kubeadm, we see the taint ```node-role.kubernetes.io/master``` on the master node. Make sure to remove this taint. Taint can be removed using the following command.
 
-    ```kubectl taint nodes --all node-role.kubernetes.io/master-```
+
+
 
 
 Let's get started with how to use these automation scripts.
