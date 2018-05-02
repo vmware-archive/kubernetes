@@ -255,3 +255,21 @@ func TestVolumes(t *testing.T) {
 	// 	t.Fatalf("Cannot delete VMDK volume %s: %v", volPath, err)
 	// }
 }
+
+func TestReadSecretConfig(t *testing.T) {
+	cfg, err := readConfig(strings.NewReader(`
+[Global]
+server = 0.0.0.0
+port = 443
+insecure-flag = true
+datacenter = us-west
+secret-name=testSecret
+secret-namespace=testSecretNamespace
+working-dir="/"
+`))
+	_, err = newControllerNode(cfg)
+	if err != nil {
+		t.Fatalf("Failed to construct vSphere: %s", err)
+	}
+
+}
