@@ -6,7 +6,7 @@ metadata:
 spec:
     containers:
     - name: vcp-manager-container
-      image: cnastorage/enablevcp:v1
+      image: cnastorage/enablevcp:latest
       env:
       - name: POD_ROLE
         value: "MANAGER"
