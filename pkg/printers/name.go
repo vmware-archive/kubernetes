@@ -19,13 +19,13 @@ package printers
 import (
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
 // NamePrinter is an implementation of ResourcePrinter which outputs "resource/name" pair of an object.
@@ -38,20 +38,23 @@ type NamePrinter struct {
 	// finalized "successful" message.
 	Operation string
 
-	Decoders []runtime.Decoder
-	Typer    runtime.ObjectTyper
+	Typer runtime.ObjectTyper
 }
 
 // PrintObj is an implementation of ResourcePrinter.PrintObj which decodes the object
 // and print "resource/name" pair. If the object is a List, print all items in it.
 func (p *NamePrinter) PrintObj(obj runtime.Object, w io.Writer) error {
+	// we use reflect.Indirect here in order to obtain the actual value from a pointer.
+	// using reflect.Indirect indiscriminately is valid here, as all runtime.Objects are supposed to be pointers.
+	// we need an actual value in order to retrieve the package path for an object.
+	if internalObjectPreventer.IsForbidden(reflect.Indirect(reflect.ValueOf(obj)).Type().PkgPath()) {
+		return fmt.Errorf(internalObjectPrinterErr)
+	}
+
 	if meta.IsListType(obj) {
 		items, err := meta.ExtractList(obj)
 		if err != nil {
 			return err
-		}
-		if errs := runtime.DecodeList(items, p.Decoders...); len(errs) > 0 {
-			return utilerrors.NewAggregate(errs)
 		}
 		for _, obj := range items {
 			if err := p.PrintObj(obj, w); err != nil {

@@ -24,28 +24,24 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
+
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
-	manualfake "k8s.io/client-go/rest/fake"
-	"k8s.io/client-go/restmapper"
 	testcore "k8s.io/client-go/testing"
-	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/fake"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/kubectl"
-	"k8s.io/kubernetes/pkg/kubectl/categories"
-	"k8s.io/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
 )
 
 func TestPortsForObject(t *testing.T) {
-	f := NewFactory(NewTestConfigFlags())
+	f := NewFactory(genericclioptions.NewTestConfigFlags())
 
 	pod := &api.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "baz", Namespace: "test", ResourceVersion: "12"},
@@ -76,7 +72,7 @@ func TestPortsForObject(t *testing.T) {
 }
 
 func TestProtocolsForObject(t *testing.T) {
-	f := NewFactory(NewTestConfigFlags())
+	f := NewFactory(genericclioptions.NewTestConfigFlags())
 
 	pod := &api.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "baz", Namespace: "test", ResourceVersion: "12"},
@@ -114,7 +110,7 @@ func TestProtocolsForObject(t *testing.T) {
 }
 
 func TestLabelsForObject(t *testing.T) {
-	f := NewFactory(NewTestConfigFlags())
+	f := NewFactory(genericclioptions.NewTestConfigFlags())
 
 	tests := []struct {
 		name     string
@@ -165,7 +161,7 @@ func TestLabelsForObject(t *testing.T) {
 }
 
 func TestCanBeExposed(t *testing.T) {
-	factory := NewFactory(NewTestConfigFlags())
+	factory := NewFactory(genericclioptions.NewTestConfigFlags())
 	tests := []struct {
 		kind      schema.GroupKind
 		expectErr bool
@@ -437,47 +433,6 @@ func TestMakePortsString(t *testing.T) {
 		output := makePortsString(test.ports, test.useNodePort)
 		if output != test.expectedOutput {
 			t.Errorf("expected: %s, saw: %s.", test.expectedOutput, output)
-		}
-	}
-}
-
-func fakeClient() resource.FakeClientFunc {
-	return func(version schema.GroupVersion) (resource.RESTClient, error) {
-		return &manualfake.RESTClient{}, nil
-	}
-}
-
-func TestDiscoveryReplaceAliases(t *testing.T) {
-	tests := []struct {
-		name     string
-		arg      string
-		expected string
-	}{
-		{
-			name:     "no-replacement",
-			arg:      "service",
-			expected: "service",
-		},
-		{
-			name:     "all-replacement",
-			arg:      "all",
-			expected: "pods,replicationcontrollers,services,statefulsets.apps,horizontalpodautoscalers.autoscaling,jobs.batch,cronjobs.batch,daemonsets.extensions,deployments.extensions,replicasets.extensions",
-		},
-		{
-			name:     "alias-in-comma-separated-arg",
-			arg:      "all,secrets",
-			expected: "pods,replicationcontrollers,services,statefulsets.apps,horizontalpodautoscalers.autoscaling,jobs.batch,cronjobs.batch,daemonsets.extensions,deployments.extensions,replicasets.extensions,secrets",
-		},
-	}
-
-	ds := &fakeDiscoveryClient{}
-	mapper := restmapper.NewShortcutExpander(testrestmapper.TestOnlyStaticRESTMapper(legacyscheme.Scheme), ds)
-	b := resource.NewFakeBuilder(fakeClient(), mapper, categories.LegacyCategoryExpander)
-
-	for _, test := range tests {
-		replaced := b.ReplaceAliases(test.arg)
-		if replaced != test.expected {
-			t.Errorf("%s: unexpected argument: expected %s, got %s", test.name, test.expected, replaced)
 		}
 	}
 }

@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -42,20 +41,10 @@ import (
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
 	"k8s.io/kubernetes/pkg/kubectl"
-	"k8s.io/kubernetes/pkg/kubectl/categories"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi"
-	"k8s.io/kubernetes/pkg/kubectl/plugins"
-	"k8s.io/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource"
 	"k8s.io/kubernetes/pkg/kubectl/validation"
 	"k8s.io/kubernetes/pkg/printers"
-)
-
-const (
-	FlagMatchBinaryVersion = "match-server-version"
-)
-
-var (
-	FlagHTTPCacheDir = "cache-dir"
 )
 
 // Factory provides abstractions that allow the Kubectl command to be extended across multiple types
@@ -74,14 +63,6 @@ type Factory interface {
 	BuilderFactory
 }
 
-type DiscoveryClientFactory interface {
-	// Returns a discovery client
-	DiscoveryClient() (discovery.CachedDiscoveryInterface, error)
-
-	// BindFlags adds any discovery flags that are common to all kubectl sub commands.
-	BindFlags(flags *pflag.FlagSet)
-}
-
 // ClientAccessFactory holds the first level of factory methods.
 // Generally provides discovery, negotiation, and no-dep calls.
 // TODO The polymorphic calls probably deserve their own interface.
@@ -93,10 +74,13 @@ type ClientAccessFactory interface {
 	ClientSet() (internalclientset.Interface, error)
 
 	// DynamicClient returns a dynamic client ready for use
-	DynamicClient() (dynamic.DynamicInterface, error)
+	DynamicClient() (dynamic.Interface, error)
 
 	// KubernetesClientSet gives you back an external clientset
 	KubernetesClientSet() (*kubernetes.Clientset, error)
+
+	// Returns interfaces for dealing with arbitrary runtime.Objects.
+	RESTMapper() (meta.RESTMapper, error)
 
 	// Returns a RESTClient for accessing Kubernetes resources or an error.
 	RESTClient() (*restclient.RESTClient, error)
@@ -105,6 +89,10 @@ type ClientAccessFactory interface {
 	// BareClientConfig returns a client.Config that has NOT been negotiated. It's
 	// just directions to the server. People use this to build RESTMappers on top of
 	BareClientConfig() (*restclient.Config, error)
+
+	// NewBuilder returns an object that assists in loading objects from both disk and the server
+	// and which implements the common patterns for CLI interactions with generic resources.
+	NewBuilder() *resource.Builder
 
 	// UpdatePodSpecForObject will call the provided function on the pod spec this object supports,
 	// return false if no pod spec is supported, or return an error.
@@ -124,9 +112,6 @@ type ClientAccessFactory interface {
 	// Command will stringify and return all environment arguments ie. a command run by a client
 	// using the factory.
 	Command(cmd *cobra.Command, showSecrets bool) string
-
-	// BindFlags adds any flags that are common to all kubectl sub commands.
-	BindFlags(flags *pflag.FlagSet)
 
 	// SuggestedPodTemplateResources returns a list of resource types that declare a pod template
 	SuggestedPodTemplateResources() []schema.GroupResource
@@ -155,20 +140,11 @@ type ClientAccessFactory interface {
 	CanBeExposed(kind schema.GroupKind) error
 	// Check whether the kind of resources could be autoscaled
 	CanBeAutoscaled(kind schema.GroupKind) error
-
-	// EditorEnvs returns a group of environment variables that the edit command
-	// can range over in order to determine if the user has specified an editor
-	// of their choice.
-	EditorEnvs() []string
 }
 
 // ObjectMappingFactory holds the second level of factory methods. These functions depend upon ClientAccessFactory methods.
 // Generally they provide object typing and functions that build requests based on the negotiated clients.
 type ObjectMappingFactory interface {
-	// Returns interfaces for dealing with arbitrary runtime.Objects.
-	RESTMapper() (meta.RESTMapper, error)
-	// Returns interface for expanding categories like `all`.
-	CategoryExpander() categories.CategoryExpander
 	// Returns a RESTClient for working with the specified RESTMapping or an error. This is intended
 	// for working with arbitrary resources and is not guaranteed to point to a Kubernetes APIServer.
 	ClientForMapping(mapping *meta.RESTMapping) (resource.RESTClient, error)
@@ -203,15 +179,6 @@ type ObjectMappingFactory interface {
 // BuilderFactory holds the third level of factory methods. These functions depend upon ObjectMappingFactory and ClientAccessFactory methods.
 // Generally they depend upon client mapper functions
 type BuilderFactory interface {
-	// NewBuilder returns an object that assists in loading objects from both disk and the server
-	// and which implements the common patterns for CLI interactions with generic resources.
-	NewBuilder() *resource.Builder
-	// PluginLoader provides the implementation to be used to load cli plugins.
-	PluginLoader() plugins.PluginLoader
-	// PluginRunner provides the implementation to be used to run cli plugins.
-	PluginRunner() plugins.PluginRunner
-	// Returns a Scaler for changing the size of the specified RESTMapping type or an error
-	Scaler() (kubectl.Scaler, error)
 	// ScaleClient gives you back scale getter
 	ScaleClient() (scaleclient.ScalesGetter, error)
 	// Returns a Reaper for gracefully shutting down resources.

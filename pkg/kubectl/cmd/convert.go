@@ -27,7 +27,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubectl/cmd/templates"
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
-	"k8s.io/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource"
 	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
 	"k8s.io/kubernetes/pkg/printers"
 
@@ -103,7 +103,7 @@ type ConvertOptions struct {
 
 func NewConvertOptions(ioStreams genericclioptions.IOStreams) *ConvertOptions {
 	return &ConvertOptions{
-		PrintFlags: printers.NewPrintFlags("converted").WithDefaultOutput("yaml"),
+		PrintFlags: printers.NewPrintFlags("converted", scheme.Scheme).WithDefaultOutput("yaml"),
 		local:      true,
 		IOStreams:  ioStreams,
 	}

@@ -29,7 +29,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
-	kubeadmapiext "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha1"
+	kubeadmapiv1alpha2 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha2"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/features"
 	"k8s.io/kubernetes/cmd/kubeadm/app/images"
@@ -38,17 +38,10 @@ import (
 	staticpodutil "k8s.io/kubernetes/cmd/kubeadm/app/util/staticpod"
 	authzmodes "k8s.io/kubernetes/pkg/kubeapiserver/authorizer/modes"
 	"k8s.io/kubernetes/pkg/master/reconcilers"
-	utilpointer "k8s.io/kubernetes/pkg/util/pointer"
 	"k8s.io/kubernetes/pkg/util/version"
 )
 
-// Static pod definitions in golang form are included below so that `kubeadm init` can get going.
-const (
-	DefaultCloudConfigPath = "/etc/kubernetes/cloud-config"
-
-	deprecatedV19AdmissionControl = "NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota"
-	defaultV19AdmissionControl    = "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota"
-)
+const defaultAdmissionControl = "NamespaceLifecycle,LimitRanger,ServiceAccount,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota"
 
 // CreateInitStaticPodManifestFiles will write all static pod manifest files needed to bring up the control plane.
 func CreateInitStaticPodManifestFiles(manifestDir string, cfg *kubeadmapi.MasterConfiguration) error {
@@ -113,19 +106,6 @@ func GetStaticPodSpecs(cfg *kubeadmapi.MasterConfiguration, k8sVersion *version.
 			Env:             getProxyEnvVars(),
 		}, mounts.GetVolumes(kubeadmconstants.KubeScheduler)),
 	}
-
-	// Some cloud providers need extra privileges for example to load node information from a config drive
-	// TODO: when we fully to external cloud providers and the api server and controller manager do not need
-	// to call out to cloud provider code, we can remove the support for the PrivilegedPods
-	if cfg.PrivilegedPods {
-		staticPodSpecs[kubeadmconstants.KubeAPIServer].Spec.Containers[0].SecurityContext = &v1.SecurityContext{
-			Privileged: utilpointer.BoolPtr(true),
-		}
-		staticPodSpecs[kubeadmconstants.KubeControllerManager].Spec.Containers[0].SecurityContext = &v1.SecurityContext{
-			Privileged: utilpointer.BoolPtr(true),
-		}
-	}
-
 	return staticPodSpecs
 }
 
@@ -165,7 +145,7 @@ func getAPIServerCommand(cfg *kubeadmapi.MasterConfiguration) []string {
 	defaultArguments := map[string]string{
 		"advertise-address":               cfg.API.AdvertiseAddress,
 		"insecure-port":                   "0",
-		"admission-control":               defaultV19AdmissionControl,
+		"admission-control":               defaultAdmissionControl,
 		"service-cluster-ip-range":        cfg.Networking.ServiceSubnet,
 		"service-account-key-file":        filepath.Join(cfg.CertificatesDir, kubeadmconstants.ServiceAccountPublicKeyName),
 		"client-ca-file":                  filepath.Join(cfg.CertificatesDir, kubeadmconstants.CACertName),
@@ -189,10 +169,6 @@ func getAPIServerCommand(cfg *kubeadmapi.MasterConfiguration) []string {
 	}
 
 	command := []string{"kube-apiserver"}
-
-	if cfg.CloudProvider == "aws" || cfg.CloudProvider == "gce" {
-		defaultArguments["admission-control"] = deprecatedV19AdmissionControl
-	}
 
 	// If the user set endpoints for an external etcd cluster
 	if len(cfg.Etcd.Endpoints) > 0 {
@@ -225,15 +201,6 @@ func getAPIServerCommand(cfg *kubeadmapi.MasterConfiguration) []string {
 		}
 	}
 
-	if cfg.CloudProvider != "" {
-		defaultArguments["cloud-provider"] = cfg.CloudProvider
-
-		// Only append the --cloud-config option if there's a such file
-		if _, err := os.Stat(DefaultCloudConfigPath); err == nil {
-			defaultArguments["cloud-config"] = DefaultCloudConfigPath
-		}
-	}
-
 	if features.Enabled(cfg.FeatureGates, features.HighAvailability) {
 		defaultArguments["endpoint-reconciler-type"] = reconcilers.LeaseEndpointReconcilerType
 	}
@@ -246,7 +213,7 @@ func getAPIServerCommand(cfg *kubeadmapi.MasterConfiguration) []string {
 		defaultArguments["audit-policy-file"] = kubeadmconstants.GetStaticPodAuditPolicyFile()
 		defaultArguments["audit-log-path"] = filepath.Join(kubeadmconstants.StaticPodAuditPolicyLogDir, kubeadmconstants.AuditPolicyLogFile)
 		if cfg.AuditPolicyConfiguration.LogMaxAge == nil {
-			defaultArguments["audit-log-maxage"] = fmt.Sprintf("%d", kubeadmapiext.DefaultAuditPolicyLogMaxAge)
+			defaultArguments["audit-log-maxage"] = fmt.Sprintf("%d", kubeadmapiv1alpha2.DefaultAuditPolicyLogMaxAge)
 		} else {
 			defaultArguments["audit-log-maxage"] = fmt.Sprintf("%d", *cfg.AuditPolicyConfiguration.LogMaxAge)
 		}
@@ -274,9 +241,6 @@ func getAPIServerCommand(cfg *kubeadmapi.MasterConfiguration) []string {
 //
 // If the pod network size is /113 or larger, the node CIDR will be set to the same
 // size and this will be rejected later in validation.
-//
-// NOTE: Currently, the pod network must be /66 or larger. It is not reflected here,
-// but a smaller value will fail later validation.
 //
 // NOTE: Currently, the design allows a maximum of 64K nodes. This algorithm splits
 // the available bits to maximize the number used for nodes, but still have the node
@@ -324,15 +288,6 @@ func getControllerManagerCommand(cfg *kubeadmapi.MasterConfiguration, k8sVersion
 	if res, _ := certphase.UsingExternalCA(cfg); res {
 		defaultArguments["cluster-signing-key-file"] = ""
 		defaultArguments["cluster-signing-cert-file"] = ""
-	}
-
-	if cfg.CloudProvider != "" {
-		defaultArguments["cloud-provider"] = cfg.CloudProvider
-
-		// Only append the --cloud-config option if there's a such file
-		if _, err := os.Stat(DefaultCloudConfigPath); err == nil {
-			defaultArguments["cloud-config"] = DefaultCloudConfigPath
-		}
 	}
 
 	// Let the controller-manager allocate Node CIDRs for the Pod network.
@@ -390,7 +345,7 @@ func getAuthzParameters(modes []string) []string {
 	strset := sets.NewString(modes...)
 
 	if len(modes) == 0 {
-		return []string{fmt.Sprintf("--authorization-mode=%s", kubeadmapiext.DefaultAuthorizationModes)}
+		return []string{fmt.Sprintf("--authorization-mode=%s", kubeadmapiv1alpha2.DefaultAuthorizationModes)}
 	}
 
 	if strset.Has(authzmodes.ModeABAC) {

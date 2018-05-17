@@ -87,9 +87,9 @@ func TestFsStoreInitialize(t *testing.T) {
 		t.Fatalf("expect %q to exist, but stat failed with error: %v", store.checkpointPath(""), err)
 	}
 
-	// check that currentFile exists
-	if _, err := store.fs.Stat(store.metaPath(currentFile)); err != nil {
-		t.Fatalf("expect %q to exist, but stat failed with error: %v", store.metaPath(currentFile), err)
+	// check that assignedFile exists
+	if _, err := store.fs.Stat(store.metaPath(assignedFile)); err != nil {
+		t.Fatalf("expect %q to exist, but stat failed with error: %v", store.metaPath(assignedFile), err)
 	}
 
 	// check that lastKnownGoodFile exists
@@ -125,7 +125,12 @@ func TestFsStoreExists(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{
-				ConfigMapRef: &apiv1.ObjectReference{Name: "name", Namespace: "namespace", UID: c.uid}})
+				ConfigMap: &apiv1.ConfigMapNodeConfigSource{
+					Name:             "name",
+					Namespace:        "namespace",
+					UID:              c.uid,
+					KubeletConfigKey: "kubelet",
+				}})
 			if err != nil {
 				t.Fatalf("error constructing remote config source: %v", err)
 			}
@@ -214,7 +219,10 @@ func TestFsStoreLoad(t *testing.T) {
 		t.Fatalf("error encoding KubeletConfiguration: %v", err)
 	}
 	// construct a payload that contains the kubeletconfig
-	const uid = "uid"
+	const (
+		uid        = "uid"
+		kubeletKey = "kubelet"
+	)
 	p, err := checkpoint.NewConfigMapPayload(&apiv1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{UID: types.UID(uid)},
 		Data: map[string]string{
@@ -241,7 +249,12 @@ func TestFsStoreLoad(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{
-				ConfigMapRef: &apiv1.ObjectReference{Name: "name", Namespace: "namespace", UID: c.uid}})
+				ConfigMap: &apiv1.ConfigMapNodeConfigSource{
+					Name:             "name",
+					Namespace:        "namespace",
+					UID:              c.uid,
+					KubeletConfigKey: kubeletKey,
+				}})
 			if err != nil {
 				t.Fatalf("error constructing remote config source: %v", err)
 			}
@@ -257,41 +270,46 @@ func TestFsStoreLoad(t *testing.T) {
 	}
 }
 
-func TestFsStoreCurrentModified(t *testing.T) {
+func TestFsStoreAssignedModified(t *testing.T) {
 	store, err := newInitializedFakeFsStore()
 	if err != nil {
 		t.Fatalf("error constructing store: %v", err)
 	}
 
-	// create an empty current file, this is good enough for testing
-	saveTestSourceFile(t, store, currentFile, nil)
+	// create an empty assigned file, this is good enough for testing
+	saveTestSourceFile(t, store, assignedFile, nil)
 
-	// set the timestamps to the current time, so we can compare to result of store.CurrentModified
+	// set the timestamps to the current time, so we can compare to result of store.AssignedModified
 	now := time.Now()
-	err = store.fs.Chtimes(store.metaPath(currentFile), now, now)
+	err = store.fs.Chtimes(store.metaPath(assignedFile), now, now)
 	if err != nil {
 		t.Fatalf("could not change timestamps, error: %v", err)
 	}
 
 	// for now we hope that the system won't truncate the time to a less precise unit,
 	// if this test fails on certain systems that may be the reason.
-	modTime, err := store.CurrentModified()
+	modTime, err := store.AssignedModified()
 	if err != nil {
-		t.Fatalf("unable to determine modification time of current config source, error: %v", err)
+		t.Fatalf("unable to determine modification time of assigned config source, error: %v", err)
 	}
 	if !now.Equal(modTime) {
 		t.Errorf("expect %q but got %q", now.Format(time.RFC3339), modTime.Format(time.RFC3339))
 	}
 }
 
-func TestFsStoreCurrent(t *testing.T) {
+func TestFsStoreAssigned(t *testing.T) {
 	store, err := newInitializedFakeFsStore()
 	if err != nil {
 		t.Fatalf("error constructing store: %v", err)
 	}
 
 	source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{
-		ConfigMapRef: &apiv1.ObjectReference{Name: "name", Namespace: "namespace", UID: "uid"}})
+		ConfigMap: &apiv1.ConfigMapNodeConfigSource{
+			Name:             "name",
+			Namespace:        "namespace",
+			UID:              "uid",
+			KubeletConfigKey: "kubelet",
+		}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -307,10 +325,10 @@ func TestFsStoreCurrent(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			// save the last known good source
-			saveTestSourceFile(t, store, currentFile, c.expect)
+			saveTestSourceFile(t, store, assignedFile, c.expect)
 
 			// load last-known-good and compare to expected result
-			source, err := store.Current()
+			source, err := store.Assigned()
 			utiltest.ExpectError(t, err, c.err)
 			if err != nil {
 				return
@@ -329,7 +347,12 @@ func TestFsStoreLastKnownGood(t *testing.T) {
 	}
 
 	source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{
-		ConfigMapRef: &apiv1.ObjectReference{Name: "name", Namespace: "namespace", UID: "uid"}})
+		ConfigMap: &apiv1.ConfigMapNodeConfigSource{
+			Name:             "name",
+			Namespace:        "namespace",
+			UID:              "uid",
+			KubeletConfigKey: "kubelet",
+		}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -360,35 +383,41 @@ func TestFsStoreLastKnownGood(t *testing.T) {
 	}
 }
 
-func TestFsStoreSetCurrent(t *testing.T) {
+func TestFsStoreSetAssigned(t *testing.T) {
 	store, err := newInitializedFakeFsStore()
 	if err != nil {
 		t.Fatalf("error constructing store: %v", err)
 	}
 
 	const uid = "uid"
-	expect := fmt.Sprintf(`apiVersion: v1
-configMapRef:
-  name: name
-  namespace: namespace
-  uid: %s
-kind: NodeConfigSource
+	expect := fmt.Sprintf(`apiVersion: kubelet.config.k8s.io/v1beta1
+kind: SerializedNodeConfigSource
+source:
+  configMap:
+    kubeletConfigKey: kubelet
+    name: name
+    namespace: namespace
+    uid: %s
 `, uid)
-	source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{ConfigMapRef: &apiv1.ObjectReference{
-		Name: "name", Namespace: "namespace", UID: types.UID(uid)}})
+	source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{ConfigMap: &apiv1.ConfigMapNodeConfigSource{
+		Name:             "name",
+		Namespace:        "namespace",
+		UID:              types.UID(uid),
+		KubeletConfigKey: "kubelet",
+	}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// save the current source
-	if err := store.SetCurrent(source); err != nil {
+	// save the assigned source
+	if err := store.SetAssigned(source); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// check that the source saved as we would expect
-	data := readTestSourceFile(t, store, currentFile)
+	data := readTestSourceFile(t, store, assignedFile)
 	if expect != string(data) {
-		t.Errorf("expect current source file to contain %q, but got %q", expect, string(data))
+		t.Errorf("expect assigned source file to contain %q, but got %q", expect, string(data))
 	}
 }
 
@@ -399,15 +428,21 @@ func TestFsStoreSetLastKnownGood(t *testing.T) {
 	}
 
 	const uid = "uid"
-	expect := fmt.Sprintf(`apiVersion: v1
-configMapRef:
-  name: name
-  namespace: namespace
-  uid: %s
-kind: NodeConfigSource
+	expect := fmt.Sprintf(`apiVersion: kubelet.config.k8s.io/v1beta1
+kind: SerializedNodeConfigSource
+source:
+  configMap:
+    kubeletConfigKey: kubelet
+    name: name
+    namespace: namespace
+    uid: %s
 `, uid)
-	source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{ConfigMapRef: &apiv1.ObjectReference{
-		Name: "name", Namespace: "namespace", UID: types.UID(uid)}})
+	source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{ConfigMap: &apiv1.ConfigMapNodeConfigSource{
+		Name:             "name",
+		Namespace:        "namespace",
+		UID:              types.UID(uid),
+		KubeletConfigKey: "kubelet",
+	}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -430,17 +465,27 @@ func TestFsStoreReset(t *testing.T) {
 		t.Fatalf("error constructing store: %v", err)
 	}
 
-	source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{ConfigMapRef: &apiv1.ObjectReference{Name: "name", Namespace: "namespace", UID: "uid"}})
+	source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{ConfigMap: &apiv1.ConfigMapNodeConfigSource{
+		Name:             "name",
+		Namespace:        "namespace",
+		UID:              "uid",
+		KubeletConfigKey: "kubelet",
+	}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	otherSource, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{ConfigMapRef: &apiv1.ObjectReference{Name: "other-name", Namespace: "namespace", UID: "other-uid"}})
+	otherSource, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{ConfigMap: &apiv1.ConfigMapNodeConfigSource{
+		Name:             "other-name",
+		Namespace:        "namespace",
+		UID:              "other-uid",
+		KubeletConfigKey: "kubelet",
+	}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cases := []struct {
 		desc          string
-		current       checkpoint.RemoteConfigSource
+		assigned      checkpoint.RemoteConfigSource
 		lastKnownGood checkpoint.RemoteConfigSource
 		updated       bool
 	}{
@@ -454,7 +499,7 @@ func TestFsStoreReset(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.desc, func(t *testing.T) {
 			// manually save the sources to their respective files
-			saveTestSourceFile(t, store, currentFile, c.current)
+			saveTestSourceFile(t, store, assignedFile, c.assigned)
 			saveTestSourceFile(t, store, lastKnownGoodFile, c.lastKnownGood)
 
 			// reset
@@ -464,15 +509,15 @@ func TestFsStoreReset(t *testing.T) {
 			}
 
 			// make sure the files were emptied
-			if size := testSourceFileSize(t, store, currentFile); size > 0 {
-				t.Errorf("case %q, expect source file %q to be empty but got %d bytes", c.desc, currentFile, size)
+			if size := testSourceFileSize(t, store, assignedFile); size > 0 {
+				t.Errorf("case %q, expect source file %q to be empty but got %d bytes", c.desc, assignedFile, size)
 			}
 			if size := testSourceFileSize(t, store, lastKnownGoodFile); size > 0 {
 				t.Errorf("case %q, expect source file %q to be empty but got %d bytes", c.desc, lastKnownGoodFile, size)
 			}
 
-			// make sure Current() and LastKnownGood() both return nil
-			current, err := store.Current()
+			// make sure Assigned() and LastKnownGood() both return nil
+			assigned, err := store.Assigned()
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -480,9 +525,9 @@ func TestFsStoreReset(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if current != nil || lastKnownGood != nil {
-				t.Errorf("case %q, expect nil for current and last-known-good checkpoints, but still have %q and %q, respectively",
-					c.desc, current, lastKnownGood)
+			if assigned != nil || lastKnownGood != nil {
+				t.Errorf("case %q, expect nil for assigned and last-known-good checkpoints, but still have %q and %q, respectively",
+					c.desc, assigned, lastKnownGood)
 			}
 			if c.updated != updated {
 				t.Errorf("case %q, expect reset to return %t, but got %t", c.desc, c.updated, updated)
@@ -498,7 +543,12 @@ func TestFsStoreReadRemoteConfigSource(t *testing.T) {
 	}
 
 	source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{
-		ConfigMapRef: &apiv1.ObjectReference{Name: "name", Namespace: "namespace", UID: "uid"}})
+		ConfigMap: &apiv1.ConfigMapNodeConfigSource{
+			Name:             "name",
+			Namespace:        "namespace",
+			UID:              "uid",
+			KubeletConfigKey: "kubelet",
+		}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -534,7 +584,12 @@ func TestFsStoreWriteRemoteConfigSource(t *testing.T) {
 		t.Fatalf("error constructing store: %v", err)
 	}
 
-	source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{ConfigMapRef: &apiv1.ObjectReference{Name: "name", Namespace: "namespace", UID: "uid"}})
+	source, _, err := checkpoint.NewRemoteConfigSource(&apiv1.NodeConfigSource{ConfigMap: &apiv1.ConfigMapNodeConfigSource{
+		Name:             "name",
+		Namespace:        "namespace",
+		UID:              "uid",
+		KubeletConfigKey: "kubelet",
+	}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

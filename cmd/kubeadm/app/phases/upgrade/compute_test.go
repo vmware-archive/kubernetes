@@ -17,11 +17,18 @@ limitations under the License.
 package upgrade
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	apps "k8s.io/api/apps/v1"
+	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientsetfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/kubernetes/cmd/kubeadm/app/constants"
+	etcdutil "k8s.io/kubernetes/cmd/kubeadm/app/util/etcd"
 	versionutil "k8s.io/kubernetes/pkg/util/version"
 )
 
@@ -62,28 +69,56 @@ func (f *fakeVersionGetter) KubeletVersions() (map[string]uint16, error) {
 	}, nil
 }
 
-type fakeEtcdCluster struct{ TLS bool }
-
-func (f fakeEtcdCluster) HasTLS() bool { return f.TLS }
-
-func (f fakeEtcdCluster) GetStatus() (*clientv3.StatusResponse, error) {
-	client := &clientv3.StatusResponse{}
-	client.Version = "3.1.12"
-	return client, nil
+type fakeEtcdClient struct {
+	TLS                bool
+	mismatchedVersions bool
 }
 
-func (f fakeEtcdCluster) WaitForStatus(delay time.Duration, retries int, retryInterval time.Duration) (*clientv3.StatusResponse, error) {
-	return f.GetStatus()
+func (f fakeEtcdClient) HasTLS() bool { return f.TLS }
+
+func (f fakeEtcdClient) ClusterAvailable() (bool, error) { return true, nil }
+
+func (f fakeEtcdClient) WaitForClusterAvailable(delay time.Duration, retries int, retryInterval time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (f fakeEtcdClient) GetClusterStatus() (map[string]*clientv3.StatusResponse, error) {
+	return make(map[string]*clientv3.StatusResponse), nil
+}
+
+func (f fakeEtcdClient) GetVersion() (string, error) {
+	versions, _ := f.GetClusterVersions()
+	if f.mismatchedVersions {
+		return "", fmt.Errorf("etcd cluster contains endpoints with mismatched versions: %v", versions)
+	}
+	return "3.1.12", nil
+}
+
+func (f fakeEtcdClient) GetClusterVersions() (map[string]string, error) {
+	if f.mismatchedVersions {
+		return map[string]string{
+			"foo": "3.1.12",
+			"bar": "3.2.0",
+		}, nil
+	}
+	return map[string]string{
+		"foo": "3.1.12",
+		"bar": "3.1.12",
+	}, nil
 }
 
 func TestGetAvailableUpgrades(t *testing.T) {
-	featureGates := make(map[string]bool)
+	etcdClient := fakeEtcdClient{}
 	tests := []struct {
 		name                        string
 		vg                          VersionGetter
 		expectedUpgrades            []Upgrade
 		allowExperimental, allowRCs bool
 		errExpected                 bool
+		etcdClient                  etcdutil.ClusterInterrogator
+		beforeDNSType               string
+		beforeDNSVersion            string
+		featureGates                map[string]bool
 	}{
 		{
 			name: "no action needed, already up-to-date",
@@ -95,9 +130,13 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				stablePatchVersion: "v1.9.3",
 				stableVersion:      "v1.9.3",
 			},
+			beforeDNSType:     constants.CoreDNS,
+			beforeDNSVersion:  "v1.0.6",
+			featureGates:      make(map[string]bool),
 			expectedUpgrades:  []Upgrade{},
 			allowExperimental: false,
 			errExpected:       false,
+			etcdClient:        etcdClient,
 		},
 		{
 			name: "simple patch version upgrade",
@@ -109,6 +148,9 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				stablePatchVersion: "v1.9.3",
 				stableVersion:      "v1.9.3",
 			},
+			beforeDNSType:    constants.CoreDNS,
+			beforeDNSVersion: "1.0.6",
+			featureGates:     make(map[string]bool),
 			expectedUpgrades: []Upgrade{
 				{
 					Description: "version in the v1.9 series",
@@ -118,19 +160,22 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.1": 1,
 						},
 						KubeadmVersion: "v1.9.2",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.9.3",
 						KubeadmVersion: "v1.9.3",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 				},
 			},
 			allowExperimental: false,
 			errExpected:       false,
+			etcdClient:        etcdClient,
 		},
 		{
 			name: "no version provided to offline version getter does not change behavior",
@@ -142,6 +187,9 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				stablePatchVersion: "v1.9.3",
 				stableVersion:      "v1.9.3",
 			}, ""),
+			beforeDNSType:    constants.CoreDNS,
+			beforeDNSVersion: "1.0.6",
+			featureGates:     make(map[string]bool),
 			expectedUpgrades: []Upgrade{
 				{
 					Description: "version in the v1.9 series",
@@ -151,19 +199,22 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.1": 1,
 						},
 						KubeadmVersion: "v1.9.2",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.9.3",
 						KubeadmVersion: "v1.9.3",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 				},
 			},
 			allowExperimental: false,
 			errExpected:       false,
+			etcdClient:        etcdClient,
 		},
 		{
 			name: "minor version upgrade only",
@@ -175,6 +226,9 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				stablePatchVersion: "v1.9.1",
 				stableVersion:      "v1.10.0",
 			},
+			beforeDNSType:    constants.CoreDNS,
+			beforeDNSVersion: "1.0.6",
+			featureGates:     make(map[string]bool),
 			expectedUpgrades: []Upgrade{
 				{
 					Description: "stable version",
@@ -184,19 +238,22 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.1": 1,
 						},
 						KubeadmVersion: "v1.10.0",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.10.0",
 						KubeadmVersion: "v1.10.0",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 				},
 			},
 			allowExperimental: false,
 			errExpected:       false,
+			etcdClient:        etcdClient,
 		},
 		{
 			name: "both minor version upgrade and patch version upgrade available",
@@ -208,6 +265,9 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				stablePatchVersion: "v1.9.5",
 				stableVersion:      "v1.10.1",
 			},
+			beforeDNSType:    constants.CoreDNS,
+			beforeDNSVersion: "1.0.6",
+			featureGates:     make(map[string]bool),
 			expectedUpgrades: []Upgrade{
 				{
 					Description: "version in the v1.9 series",
@@ -217,13 +277,15 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.3": 1,
 						},
 						KubeadmVersion: "v1.9.5",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.9.5",
 						KubeadmVersion: "v1.9.5", // Note: The kubeadm version mustn't be "downgraded" here
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 				},
@@ -235,19 +297,22 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.3": 1,
 						},
 						KubeadmVersion: "v1.9.5",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.10.1",
 						KubeadmVersion: "v1.10.1",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 				},
 			},
 			allowExperimental: false,
 			errExpected:       false,
+			etcdClient:        etcdClient,
 		},
 		{
 			name: "allow experimental upgrades, but no upgrade available",
@@ -260,9 +325,13 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				stableVersion:      "v1.9.5",
 				latestVersion:      "v1.10.0-alpha.2",
 			},
+			beforeDNSType:     constants.CoreDNS,
+			beforeDNSVersion:  "v1.0.6",
+			featureGates:      make(map[string]bool),
 			expectedUpgrades:  []Upgrade{},
 			allowExperimental: true,
 			errExpected:       false,
+			etcdClient:        etcdClient,
 		},
 		{
 			name: "upgrade to an unstable version should be supported",
@@ -275,6 +344,9 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				stableVersion:      "v1.9.5",
 				latestVersion:      "v1.10.0-alpha.2",
 			},
+			beforeDNSType:    constants.CoreDNS,
+			beforeDNSVersion: "1.0.6",
+			featureGates:     make(map[string]bool),
 			expectedUpgrades: []Upgrade{
 				{
 					Description: "experimental version",
@@ -284,19 +356,22 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.5": 1,
 						},
 						KubeadmVersion: "v1.9.5",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.10.0-alpha.2",
 						KubeadmVersion: "v1.10.0-alpha.2",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 				},
 			},
 			allowExperimental: true,
 			errExpected:       false,
+			etcdClient:        etcdClient,
 		},
 		{
 			name: "upgrade from an unstable version to an unstable version should be supported",
@@ -309,6 +384,9 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				stableVersion:      "v1.9.5",
 				latestVersion:      "v1.10.0-alpha.2",
 			},
+			beforeDNSType:    constants.CoreDNS,
+			beforeDNSVersion: "1.0.6",
+			featureGates:     make(map[string]bool),
 			expectedUpgrades: []Upgrade{
 				{
 					Description: "experimental version",
@@ -318,19 +396,22 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.5": 1,
 						},
 						KubeadmVersion: "v1.9.5",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.10.0-alpha.2",
 						KubeadmVersion: "v1.10.0-alpha.2",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 				},
 			},
 			allowExperimental: true,
 			errExpected:       false,
+			etcdClient:        etcdClient,
 		},
 		{
 			name: "v1.X.0-alpha.0 should be ignored",
@@ -344,6 +425,9 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				latestDevBranchVersion: "v1.10.0-beta.1",
 				latestVersion:          "v1.11.0-alpha.0",
 			},
+			beforeDNSType:    constants.CoreDNS,
+			beforeDNSVersion: "1.0.6",
+			featureGates:     make(map[string]bool),
 			expectedUpgrades: []Upgrade{
 				{
 					Description: "experimental version",
@@ -353,19 +437,22 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.5": 1,
 						},
 						KubeadmVersion: "v1.9.5",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.10.0-beta.1",
 						KubeadmVersion: "v1.10.0-beta.1",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 				},
 			},
 			allowExperimental: true,
 			errExpected:       false,
+			etcdClient:        etcdClient,
 		},
 		{
 			name: "upgrade to an RC version should be supported",
@@ -379,6 +466,9 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				latestDevBranchVersion: "v1.10.0-rc.1",
 				latestVersion:          "v1.11.0-alpha.1",
 			},
+			beforeDNSType:    constants.CoreDNS,
+			beforeDNSVersion: "1.0.6",
+			featureGates:     make(map[string]bool),
 			expectedUpgrades: []Upgrade{
 				{
 					Description: "release candidate version",
@@ -388,19 +478,22 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.5": 1,
 						},
 						KubeadmVersion: "v1.9.5",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.10.0-rc.1",
 						KubeadmVersion: "v1.10.0-rc.1",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 				},
 			},
 			allowRCs:    true,
 			errExpected: false,
+			etcdClient:  etcdClient,
 		},
 		{
 			name: "it is possible (but very uncommon) that the latest version from the previous branch is an rc and the current latest version is alpha.0. In that case, show the RC",
@@ -414,6 +507,9 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				latestDevBranchVersion: "v1.10.6-rc.1",
 				latestVersion:          "v1.11.1-alpha.0",
 			},
+			beforeDNSType:    constants.CoreDNS,
+			beforeDNSVersion: "1.0.6",
+			featureGates:     make(map[string]bool),
 			expectedUpgrades: []Upgrade{
 				{
 					Description: "experimental version", // Note that this is considered an experimental version in this uncommon scenario
@@ -423,19 +519,22 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.5": 1,
 						},
 						KubeadmVersion: "v1.9.5",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.10.6-rc.1",
 						KubeadmVersion: "v1.10.6-rc.1",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 				},
 			},
 			allowExperimental: true,
 			errExpected:       false,
+			etcdClient:        etcdClient,
 		},
 		{
 			name: "upgrade to an RC version should be supported. There may also be an even newer unstable version.",
@@ -449,6 +548,9 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				latestDevBranchVersion: "v1.10.0-rc.1",
 				latestVersion:          "v1.11.0-alpha.2",
 			},
+			beforeDNSType:    constants.CoreDNS,
+			beforeDNSVersion: "1.0.6",
+			featureGates:     make(map[string]bool),
 			expectedUpgrades: []Upgrade{
 				{
 					Description: "release candidate version",
@@ -458,13 +560,15 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.5": 1,
 						},
 						KubeadmVersion: "v1.9.5",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.10.0-rc.1",
 						KubeadmVersion: "v1.10.0-rc.1",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 				},
@@ -476,13 +580,15 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.9.5": 1,
 						},
 						KubeadmVersion: "v1.9.5",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.11.0-alpha.2",
 						KubeadmVersion: "v1.11.0-alpha.2",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.2.18",
 					},
 				},
@@ -490,6 +596,22 @@ func TestGetAvailableUpgrades(t *testing.T) {
 			allowRCs:          true,
 			allowExperimental: true,
 			errExpected:       false,
+			etcdClient:        etcdClient,
+		},
+		{
+			name: "Upgrades with external etcd with mismatched versions should not be allowed.",
+			vg: &fakeVersionGetter{
+				clusterVersion:     "v1.9.3",
+				kubeletVersion:     "v1.9.3",
+				kubeadmVersion:     "v1.9.3",
+				stablePatchVersion: "v1.9.3",
+				stableVersion:      "v1.9.3",
+			},
+			allowRCs:          false,
+			allowExperimental: false,
+			etcdClient:        fakeEtcdClient{mismatchedVersions: true},
+			expectedUpgrades:  []Upgrade{},
+			errExpected:       true,
 		},
 		{
 			name: "offline version getter",
@@ -498,6 +620,10 @@ func TestGetAvailableUpgrades(t *testing.T) {
 				kubeletVersion: "v1.10.0",
 				kubeadmVersion: "v1.10.1",
 			}, "v1.11.1"),
+			etcdClient:       etcdClient,
+			beforeDNSType:    constants.CoreDNS,
+			beforeDNSVersion: "1.0.6",
+			featureGates:     make(map[string]bool),
 			expectedUpgrades: []Upgrade{
 				{
 					Description: "version in the v1.1 series",
@@ -507,12 +633,88 @@ func TestGetAvailableUpgrades(t *testing.T) {
 							"v1.10.0": 1,
 						},
 						KubeadmVersion: "v1.10.1",
-						DNSVersion:     "1.14.10",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
 						EtcdVersion:    "3.1.12",
 					},
 					After: ClusterState{
 						KubeVersion:    "v1.11.1",
 						KubeadmVersion: "v1.11.1",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
+						EtcdVersion:    "3.2.18",
+					},
+				},
+			},
+		},
+		{
+			name: "kubedns to coredns",
+			vg: &fakeVersionGetter{
+				clusterVersion: "v1.10.2",
+				kubeletVersion: "v1.10.2", // the kubelet are on the same version as the control plane
+				kubeadmVersion: "v1.11.0",
+
+				stablePatchVersion: "v1.11.0",
+				stableVersion:      "v1.11.0",
+			},
+			etcdClient:       etcdClient,
+			beforeDNSType:    constants.KubeDNS,
+			beforeDNSVersion: "1.14.7",
+			featureGates:     make(map[string]bool),
+			expectedUpgrades: []Upgrade{
+				{
+					Description: "version in the v1.1 series",
+					Before: ClusterState{
+						KubeVersion: "v1.10.2",
+						KubeletVersions: map[string]uint16{
+							"v1.10.2": 1,
+						},
+						KubeadmVersion: "v1.11.0",
+						DNSType:        "kube-dns",
+						DNSVersion:     "1.14.7",
+						EtcdVersion:    "3.1.12",
+					},
+					After: ClusterState{
+						KubeVersion:    "v1.11.0",
+						KubeadmVersion: "v1.11.0",
+						DNSType:        "coredns",
+						DNSVersion:     "1.0.6",
+						EtcdVersion:    "3.2.18",
+					},
+				},
+			},
+		},
+		{
+			name: "keep coredns",
+			vg: &fakeVersionGetter{
+				clusterVersion: "v1.10.2",
+				kubeletVersion: "v1.10.2", // the kubelet are on the same version as the control plane
+				kubeadmVersion: "v1.11.0",
+
+				stablePatchVersion: "v1.11.0",
+				stableVersion:      "v1.11.0",
+			},
+			etcdClient:       etcdClient,
+			beforeDNSType:    constants.KubeDNS,
+			beforeDNSVersion: "1.14.7",
+			featureGates:     map[string]bool{"CoreDNS": false},
+			expectedUpgrades: []Upgrade{
+				{
+					Description: "version in the v1.1 series",
+					Before: ClusterState{
+						KubeVersion: "v1.10.2",
+						KubeletVersions: map[string]uint16{
+							"v1.10.2": 1,
+						},
+						KubeadmVersion: "v1.11.0",
+						DNSType:        "kube-dns",
+						DNSVersion:     "1.14.7",
+						EtcdVersion:    "3.1.12",
+					},
+					After: ClusterState{
+						KubeVersion:    "v1.11.0",
+						KubeadmVersion: "v1.11.0",
+						DNSType:        "kube-dns",
 						DNSVersion:     "1.14.10",
 						EtcdVersion:    "3.2.18",
 					},
@@ -523,15 +725,44 @@ func TestGetAvailableUpgrades(t *testing.T) {
 
 	// Instantiating a fake etcd cluster for being able to get etcd version for a corresponding
 	// kubernetes release.
-	testCluster := fakeEtcdCluster{}
 	for _, rt := range tests {
 		t.Run(rt.name, func(t *testing.T) {
-			actualUpgrades, actualErr := GetAvailableUpgrades(rt.vg, rt.allowExperimental, rt.allowRCs, testCluster, featureGates)
+
+			client := clientsetfake.NewSimpleClientset(&apps.Deployment{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Deployment",
+					APIVersion: "apps/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rt.beforeDNSType,
+					Namespace: "kube-system",
+					Labels: map[string]string{
+						"k8s-app": "kube-dns",
+					},
+				},
+				Spec: apps.DeploymentSpec{
+					Template: v1.PodTemplateSpec{
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{
+								{
+									Image: "test:" + rt.beforeDNSVersion,
+								},
+							},
+						},
+					},
+				},
+			})
+
+			actualUpgrades, actualErr := GetAvailableUpgrades(rt.vg, rt.allowExperimental, rt.allowRCs, rt.etcdClient, rt.featureGates, client)
 			if !reflect.DeepEqual(actualUpgrades, rt.expectedUpgrades) {
 				t.Errorf("failed TestGetAvailableUpgrades\n\texpected upgrades: %v\n\tgot: %v", rt.expectedUpgrades, actualUpgrades)
 			}
 			if (actualErr != nil) != rt.errExpected {
+				fmt.Printf("Hello error")
 				t.Errorf("failed TestGetAvailableUpgrades\n\texpected error: %t\n\tgot error: %t", rt.errExpected, (actualErr != nil))
+			}
+			if !reflect.DeepEqual(actualUpgrades, rt.expectedUpgrades) {
+				t.Errorf("failed TestGetAvailableUpgrades\n\texpected upgrades: %v\n\tgot: %v", rt.expectedUpgrades, actualUpgrades)
 			}
 		})
 	}

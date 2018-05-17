@@ -105,7 +105,7 @@ func NodeRules() []rbac.PolicyRule {
 		// Use the NodeRestriction admission plugin to limit a node to creating/updating its own API object.
 		rbac.NewRule("create", "get", "list", "watch").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
 		rbac.NewRule("update", "patch").Groups(legacyGroup).Resources("nodes/status").RuleOrDie(),
-		rbac.NewRule("update", "patch").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
+		rbac.NewRule("update", "patch", "delete").Groups(legacyGroup).Resources("nodes").RuleOrDie(),
 
 		// TODO: restrict to the bound node as creator in the NodeRestrictions admission plugin
 		rbac.NewRule("create", "update", "patch").Groups(legacyGroup).Resources("events").RuleOrDie(),
@@ -126,7 +126,7 @@ func NodeRules() []rbac.PolicyRule {
 		// Needed for imagepullsecrets, rbd/ceph and secret volumes, and secrets in envs
 		// Needed for configmap volume and envs
 		// Use the Node authorization mode to limit a node to get secrets/configmaps referenced by pods bound to itself.
-		rbac.NewRule("get").Groups(legacyGroup).Resources("secrets", "configmaps").RuleOrDie(),
+		rbac.NewRule("get", "list", "watch").Groups(legacyGroup).Resources("secrets", "configmaps").RuleOrDie(),
 		// Needed for persistent volumes
 		// Use the Node authorization mode to limit a node to get pv/pvc objects referenced by pods bound to itself.
 		rbac.NewRule("get").Groups(legacyGroup).Resources("persistentvolumeclaims", "persistentvolumes").RuleOrDie(),

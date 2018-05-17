@@ -32,11 +32,11 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	clientset "k8s.io/client-go/kubernetes"
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
-	kubeadmapiext "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha1"
+	kubeadmscheme "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/scheme"
+	kubeadmapiv1alpha2 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha2"
 	"k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/validation"
 	cmdutil "k8s.io/kubernetes/cmd/kubeadm/app/cmd/util"
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
@@ -61,7 +61,6 @@ import (
 	configutil "k8s.io/kubernetes/cmd/kubeadm/app/util/config"
 	dryrunutil "k8s.io/kubernetes/cmd/kubeadm/app/util/dryrun"
 	kubeconfigutil "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig"
-	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	utilsexec "k8s.io/utils/exec"
 )
 
@@ -103,13 +102,20 @@ var (
 		If you are on a systemd-powered system, you can try to troubleshoot the error with the following commands:
 			- 'systemctl status kubelet'
 			- 'journalctl -xeu kubelet'
+
+		Additionally, a control plane component may have crashed or exited when started by the container runtime.
+		To troubleshoot, list all containers using your preferred container runtimes CLI, e.g. docker.
+		Here is one example how you may list all Kubernetes containers running in docker:
+			- 'docker ps -a | grep kube | grep -v pause'
+			Once you have found the failing container, you can inspect its logs with:
+			- 'docker logs CONTAINERID'
 		`)))
 )
 
 // NewCmdInit returns "kubeadm init" command.
 func NewCmdInit(out io.Writer) *cobra.Command {
-	cfg := &kubeadmapiext.MasterConfiguration{}
-	legacyscheme.Scheme.Default(cfg)
+	externalcfg := &kubeadmapiv1alpha2.MasterConfiguration{}
+	kubeadmscheme.Scheme.Default(externalcfg)
 
 	var cfgPath string
 	var skipPreFlight bool
@@ -122,33 +128,34 @@ func NewCmdInit(out io.Writer) *cobra.Command {
 		Use:   "init",
 		Short: "Run this command in order to set up the Kubernetes master.",
 		Run: func(cmd *cobra.Command, args []string) {
+
+			kubeadmscheme.Scheme.Default(externalcfg)
+
 			var err error
-			if cfg.FeatureGates, err = features.NewFeatureGate(&features.InitFeatureGates, featureGatesString); err != nil {
+			if externalcfg.FeatureGates, err = features.NewFeatureGate(&features.InitFeatureGates, featureGatesString); err != nil {
 				kubeadmutil.CheckErr(err)
 			}
-
-			legacyscheme.Scheme.Default(cfg)
-			internalcfg := &kubeadmapi.MasterConfiguration{}
-			legacyscheme.Scheme.Convert(cfg, internalcfg, nil)
 
 			ignorePreflightErrorsSet, err := validation.ValidateIgnorePreflightErrors(ignorePreflightErrors, skipPreFlight)
 			kubeadmutil.CheckErr(err)
 
-			i, err := NewInit(cfgPath, internalcfg, ignorePreflightErrorsSet, skipTokenPrint, dryRun)
+			err = validation.ValidateMixedArguments(cmd.Flags())
 			kubeadmutil.CheckErr(err)
-			kubeadmutil.CheckErr(i.Validate(cmd))
+
+			i, err := NewInit(cfgPath, externalcfg, ignorePreflightErrorsSet, skipTokenPrint, dryRun)
+			kubeadmutil.CheckErr(err)
 			kubeadmutil.CheckErr(i.Run(out))
 		},
 	}
 
-	AddInitConfigFlags(cmd.PersistentFlags(), cfg, &featureGatesString)
+	AddInitConfigFlags(cmd.PersistentFlags(), externalcfg, &featureGatesString)
 	AddInitOtherFlags(cmd.PersistentFlags(), &cfgPath, &skipPreFlight, &skipTokenPrint, &dryRun, &ignorePreflightErrors)
 
 	return cmd
 }
 
 // AddInitConfigFlags adds init flags bound to the config to the specified flagset
-func AddInitConfigFlags(flagSet *flag.FlagSet, cfg *kubeadmapiext.MasterConfiguration, featureGatesString *string) {
+func AddInitConfigFlags(flagSet *flag.FlagSet, cfg *kubeadmapiv1alpha2.MasterConfiguration, featureGatesString *string) {
 	flagSet.StringVar(
 		&cfg.API.AdvertiseAddress, "apiserver-advertise-address", cfg.API.AdvertiseAddress,
 		"The IP address the API Server will advertise it's listening on. Specify '0.0.0.0' to use the address of the default network interface.",
@@ -187,7 +194,7 @@ func AddInitConfigFlags(flagSet *flag.FlagSet, cfg *kubeadmapiext.MasterConfigur
 	)
 	flagSet.StringVar(
 		&cfg.Token, "token", cfg.Token,
-		"The token to use for establishing bidirectional trust between nodes and masters.",
+		"The token to use for establishing bidirectional trust between nodes and masters. The format is [a-z0-9]{6}\\.[a-z0-9]{16} - e.g. abcdef.0123456789abcdef",
 	)
 	flagSet.DurationVar(
 		&cfg.TokenTTL.Duration, "token-ttl", cfg.TokenTTL.Duration,
@@ -231,39 +238,21 @@ func AddInitOtherFlags(flagSet *flag.FlagSet, cfgPath *string, skipPreFlight, sk
 }
 
 // NewInit validates given arguments and instantiates Init struct with provided information.
-func NewInit(cfgPath string, cfg *kubeadmapi.MasterConfiguration, ignorePreflightErrors sets.String, skipTokenPrint, dryRun bool) (*Init, error) {
+func NewInit(cfgPath string, externalcfg *kubeadmapiv1alpha2.MasterConfiguration, ignorePreflightErrors sets.String, skipTokenPrint, dryRun bool) (*Init, error) {
 
-	if cfgPath != "" {
-		glog.V(1).Infof("[init] reading config file from: " + cfgPath)
-		b, err := ioutil.ReadFile(cfgPath)
-		if err != nil {
-			return nil, fmt.Errorf("unable to read config from %q [%v]", cfgPath, err)
-		}
-		if err := runtime.DecodeInto(legacyscheme.Codecs.UniversalDecoder(), b, cfg); err != nil {
-			return nil, fmt.Errorf("unable to decode config from %q [%v]", cfgPath, err)
-		}
-	}
-
-	// Set defaults dynamically that the API group defaulting can't (by fetching information from the internet, looking up network interfaces, etc.)
-	glog.V(1).Infof("[init] setting dynamic defaults")
-	err := configutil.SetInitDynamicDefaults(cfg)
+	// Either use the config file if specified, or convert the defaults in the external to an internal cfg representation
+	cfg, err := configutil.ConfigFileAndDefaultsToInternalConfig(cfgPath, externalcfg)
 	if err != nil {
 		return nil, err
 	}
 
-	glog.V(1).Infof("[init] validating Kubernetes version")
+	glog.V(1).Infof("[init] validating feature gates")
 	if err := features.ValidateVersion(features.InitFeatureGates, cfg.FeatureGates, cfg.KubernetesVersion); err != nil {
 		return nil, err
 	}
 
 	glog.Infof("[init] using Kubernetes version: %s\n", cfg.KubernetesVersion)
 	glog.Infof("[init] using Authorization modes: %v\n", cfg.AuthorizationModes)
-
-	// Warn about the limitations with the current cloudprovider solution.
-	if cfg.CloudProvider != "" {
-		glog.Warningln("[init] for cloudprovider integrations to work --cloud-provider must be set for all kubelets in the cluster")
-		glog.Infoln("\t(/etc/systemd/system/kubelet.service.d/10-kubeadm.conf should be edited for this purpose)")
-	}
 
 	glog.Infoln("[preflight] running pre-flight checks")
 
@@ -283,14 +272,6 @@ type Init struct {
 	cfg            *kubeadmapi.MasterConfiguration
 	skipTokenPrint bool
 	dryRun         bool
-}
-
-// Validate validates configuration passed to "kubeadm init"
-func (i *Init) Validate(cmd *cobra.Command) error {
-	if err := validation.ValidateMixedArguments(cmd.Flags()); err != nil {
-		return err
-	}
-	return validation.ValidateMasterConfiguration(i.cfg).ToAggregate()
 }
 
 // Run executes master node provisioning, including certificates, needed static pod manifests, etc.
@@ -577,14 +558,7 @@ func waitForAPIAndKubelet(waiter apiclient.Waiter) error {
 
 	go func(errC chan error, waiter apiclient.Waiter) {
 		// This goroutine can only make kubeadm init fail. If this check succeeds, it won't do anything special
-		if err := waiter.WaitForHealthyKubelet(40*time.Second, "http://localhost:10255/healthz"); err != nil {
-			errC <- err
-		}
-	}(errorChan, waiter)
-
-	go func(errC chan error, waiter apiclient.Waiter) {
-		// This goroutine can only make kubeadm init fail. If this check succeeds, it won't do anything special
-		if err := waiter.WaitForHealthyKubelet(60*time.Second, "http://localhost:10255/healthz/syncloop"); err != nil {
+		if err := waiter.WaitForHealthyKubelet(40*time.Second, "http://localhost:10248/healthz"); err != nil {
 			errC <- err
 		}
 	}(errorChan, waiter)

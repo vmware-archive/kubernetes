@@ -42,6 +42,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	scaleclient "k8s.io/client-go/scale"
 	oapi "k8s.io/kube-openapi/pkg/util/proto"
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/kubectl"
@@ -49,9 +50,10 @@ import (
 	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 	"k8s.io/kubernetes/pkg/kubectl/cmd/util/openapi"
 	"k8s.io/kubernetes/pkg/kubectl/genericclioptions"
-	"k8s.io/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource"
 	"k8s.io/kubernetes/pkg/kubectl/scheme"
 	"k8s.io/kubernetes/pkg/kubectl/util/i18n"
+	"k8s.io/kubernetes/pkg/kubectl/validation"
 	"k8s.io/kubernetes/pkg/printers"
 )
 
@@ -65,15 +67,27 @@ type ApplyOptions struct {
 	DeleteFlags   *DeleteFlags
 	DeleteOptions *DeleteOptions
 
-	Selector       string
-	DryRun         bool
-	Prune          bool
-	PruneResources []pruneResource
-	cmdBaseName    string
-	All            bool
-	Overwrite      bool
-	OpenApiPatch   bool
-	PruneWhitelist []string
+	Selector                   string
+	DryRun                     bool
+	Prune                      bool
+	PruneResources             []pruneResource
+	cmdBaseName                string
+	All                        bool
+	Overwrite                  bool
+	OpenApiPatch               bool
+	PruneWhitelist             []string
+	ShouldIncludeUninitialized bool
+
+	Validator     validation.Schema
+	Builder       *resource.Builder
+	Mapper        meta.RESTMapper
+	Scaler        scaleclient.ScalesGetter
+	DynamicClient dynamic.Interface
+	ClientSetFunc func() (internalclientset.Interface, error)
+	OpenAPISchema openapi.Resources
+
+	Namespace        string
+	EnforceNamespace bool
 
 	genericclioptions.IOStreams
 }
@@ -118,7 +132,7 @@ func NewApplyOptions(ioStreams genericclioptions.IOStreams) *ApplyOptions {
 	return &ApplyOptions{
 		RecordFlags: genericclioptions.NewRecordFlags(),
 		DeleteFlags: NewDeleteFlags("that contains the configuration to apply"),
-		PrintFlags:  printers.NewPrintFlags("created"),
+		PrintFlags:  printers.NewPrintFlags("created", legacyscheme.Scheme),
 
 		Overwrite:    true,
 		OpenApiPatch: true,
@@ -146,7 +160,7 @@ func NewCmdApply(baseName string, f cmdutil.Factory, ioStreams genericclioptions
 			cmdutil.CheckErr(o.Complete(f, cmd))
 			cmdutil.CheckErr(validateArgs(cmd, args))
 			cmdutil.CheckErr(validatePruneAll(o.Prune, o.All, o.Selector))
-			cmdutil.CheckErr(o.Run(f, cmd))
+			cmdutil.CheckErr(o.Run())
 		},
 	}
 
@@ -199,6 +213,32 @@ func (o *ApplyOptions) Complete(f cmdutil.Factory, cmd *cobra.Command) error {
 	}
 
 	o.DeleteOptions = o.DeleteFlags.ToOptions(o.IOStreams)
+	o.ShouldIncludeUninitialized = cmdutil.ShouldIncludeUninitialized(cmd, o.Prune)
+
+	o.OpenAPISchema, _ = f.OpenAPISchema()
+	o.ClientSetFunc = f.ClientSet
+	o.Validator, err = f.Validator(cmdutil.GetFlagBool(cmd, "validate"))
+	o.Builder = f.NewBuilder()
+	o.Mapper, err = f.RESTMapper()
+	if err != nil {
+		return err
+	}
+
+	o.Scaler, err = f.ScaleClient()
+	if err != nil {
+		return err
+	}
+
+	o.DynamicClient, err = f.DynamicClient()
+	if err != nil {
+		return err
+	}
+
+	o.Namespace, o.EnforceNamespace, err = f.DefaultNamespace()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -250,56 +290,37 @@ func parsePruneResources(mapper meta.RESTMapper, gvks []string) ([]pruneResource
 	return pruneResources, nil
 }
 
-// TODO(juanvallejo): break dependency on factory and cmd
-func (o *ApplyOptions) Run(f cmdutil.Factory, cmd *cobra.Command) error {
-	schema, err := f.Validator(cmdutil.GetFlagBool(cmd, "validate"))
-	if err != nil {
-		return err
-	}
-
+func (o *ApplyOptions) Run() error {
 	var openapiSchema openapi.Resources
 	if o.OpenApiPatch {
-		openapiSchema, err = f.OpenAPISchema()
-		if err != nil {
-			openapiSchema = nil
-		}
-	}
-
-	cmdNamespace, enforceNamespace, err := f.DefaultNamespace()
-	if err != nil {
-		return err
+		openapiSchema = o.OpenAPISchema
 	}
 
 	// include the uninitialized objects by default if --prune is true
 	// unless explicitly set --include-uninitialized=false
-	includeUninitialized := cmdutil.ShouldIncludeUninitialized(cmd, o.Prune)
-	r := f.NewBuilder().
+	r := o.Builder.
 		Unstructured().
-		Schema(schema).
+		Schema(o.Validator).
 		ContinueOnError().
-		NamespaceParam(cmdNamespace).DefaultNamespace().
-		FilenameParam(enforceNamespace, &o.DeleteOptions.FilenameOptions).
+		NamespaceParam(o.Namespace).DefaultNamespace().
+		FilenameParam(o.EnforceNamespace, &o.DeleteOptions.FilenameOptions).
 		LabelSelectorParam(o.Selector).
-		IncludeUninitialized(includeUninitialized).
+		IncludeUninitialized(o.ShouldIncludeUninitialized).
 		Flatten().
 		Do()
 	if err := r.Err(); err != nil {
 		return err
 	}
 
-	mapper, err := f.RESTMapper()
-	if err != nil {
-		return err
-	}
-
+	var err error
 	if o.Prune {
-		o.PruneResources, err = parsePruneResources(mapper, o.PruneWhitelist)
+		o.PruneResources, err = parsePruneResources(o.Mapper, o.PruneWhitelist)
 		if err != nil {
 			return err
 		}
 	}
 
-	output := cmdutil.GetFlagString(cmd, "output")
+	output := *o.PrintFlags.OutputFormat
 	shortOutput := output == "name"
 
 	visitedUids := sets.NewString()
@@ -380,20 +401,13 @@ func (o *ApplyOptions) Run(f cmdutil.Factory, cmd *cobra.Command) error {
 			if _, ok := annotationMap[api.LastAppliedConfigAnnotation]; !ok {
 				fmt.Fprintf(o.ErrOut, warningNoLastAppliedConfigAnnotation, o.cmdBaseName)
 			}
-			scaler, err := f.ScaleClient()
-			if err != nil {
-				return err
-			}
+
 			helper := resource.NewHelper(info.Client, info.Mapping)
-			dynamicClient, err := f.DynamicClient()
-			if err != nil {
-				return err
-			}
 			patcher := &patcher{
 				mapping:       info.Mapping,
 				helper:        helper,
-				dynamicClient: dynamicClient,
-				clientsetFunc: f.ClientSet,
+				dynamicClient: o.DynamicClient,
+				clientsetFunc: o.ClientSetFunc,
 				overwrite:     o.Overwrite,
 				backOff:       clockwork.NewRealClock(),
 				force:         o.DeleteOptions.ForceDeletion,
@@ -401,7 +415,7 @@ func (o *ApplyOptions) Run(f cmdutil.Factory, cmd *cobra.Command) error {
 				timeout:       o.DeleteOptions.Timeout,
 				gracePeriod:   o.DeleteOptions.GracePeriod,
 				openapiSchema: openapiSchema,
-				scaleClient:   scaler,
+				scaleClient:   o.Scaler,
 			}
 
 			patchBytes, patchedObject, err := patcher.patch(info.Object, modified, info.Source, info.Namespace, info.Name, o.ErrOut)
@@ -475,15 +489,10 @@ func (o *ApplyOptions) Run(f cmdutil.Factory, cmd *cobra.Command) error {
 		return nil
 	}
 
-	dynamicClient, err := f.DynamicClient()
-	if err != nil {
-		return err
-	}
-
 	p := pruner{
-		mapper:        mapper,
-		dynamicClient: dynamicClient,
-		clientsetFunc: f.ClientSet,
+		mapper:        o.Mapper,
+		dynamicClient: o.DynamicClient,
+		clientsetFunc: o.ClientSetFunc,
 
 		labelSelector: o.Selector,
 		visitedUids:   visitedUids,
@@ -491,26 +500,27 @@ func (o *ApplyOptions) Run(f cmdutil.Factory, cmd *cobra.Command) error {
 		cascade:     o.DeleteOptions.Cascade,
 		dryRun:      o.DryRun,
 		gracePeriod: o.DeleteOptions.GracePeriod,
+		scaler:      o.Scaler,
 
 		toPrinter: o.ToPrinter,
 
 		out: o.Out,
 	}
 
-	namespacedRESTMappings, nonNamespacedRESTMappings, err := getRESTMappings(mapper, &(o.PruneResources))
+	namespacedRESTMappings, nonNamespacedRESTMappings, err := getRESTMappings(o.Mapper, &(o.PruneResources))
 	if err != nil {
 		return fmt.Errorf("error retrieving RESTMappings to prune: %v", err)
 	}
 
 	for n := range visitedNamespaces {
 		for _, m := range namespacedRESTMappings {
-			if err := p.prune(f, n, m, includeUninitialized); err != nil {
+			if err := p.prune(n, m, o.ShouldIncludeUninitialized); err != nil {
 				return fmt.Errorf("error pruning namespaced object %v: %v", m.GroupVersionKind, err)
 			}
 		}
 	}
 	for _, m := range nonNamespacedRESTMappings {
-		if err := p.prune(f, metav1.NamespaceNone, m, includeUninitialized); err != nil {
+		if err := p.prune(metav1.NamespaceNone, m, o.ShouldIncludeUninitialized); err != nil {
 			return fmt.Errorf("error pruning nonNamespaced object %v: %v", m.GroupVersionKind, err)
 		}
 	}
@@ -570,7 +580,7 @@ func getRESTMappings(mapper meta.RESTMapper, pruneResources *[]pruneResource) (n
 
 type pruner struct {
 	mapper        meta.RESTMapper
-	dynamicClient dynamic.DynamicInterface
+	dynamicClient dynamic.Interface
 	clientsetFunc func() (internalclientset.Interface, error)
 
 	visitedUids   sets.String
@@ -581,12 +591,14 @@ type pruner struct {
 	dryRun      bool
 	gracePeriod int
 
+	scaler scaleclient.ScalesGetter
+
 	toPrinter func(string) (printers.ResourcePrinterFunc, error)
 
 	out io.Writer
 }
 
-func (p *pruner) prune(f cmdutil.Factory, namespace string, mapping *meta.RESTMapping, includeUninitialized bool) error {
+func (p *pruner) prune(namespace string, mapping *meta.RESTMapping, includeUninitialized bool) error {
 	objList, err := p.dynamicClient.Resource(mapping.Resource).
 		Namespace(namespace).
 		List(metav1.ListOptions{
@@ -599,10 +611,6 @@ func (p *pruner) prune(f cmdutil.Factory, namespace string, mapping *meta.RESTMa
 	}
 
 	objs, err := meta.ExtractList(objList)
-	if err != nil {
-		return err
-	}
-	scaler, err := f.ScaleClient()
 	if err != nil {
 		return err
 	}
@@ -623,7 +631,7 @@ func (p *pruner) prune(f cmdutil.Factory, namespace string, mapping *meta.RESTMa
 		}
 		name := metadata.GetName()
 		if !p.dryRun {
-			if err := p.delete(namespace, name, mapping, scaler); err != nil {
+			if err := p.delete(namespace, name, mapping, p.scaler); err != nil {
 				return err
 			}
 		}
@@ -641,7 +649,7 @@ func (p *pruner) delete(namespace, name string, mapping *meta.RESTMapping, scale
 	return runDelete(namespace, name, mapping, p.dynamicClient, p.cascade, p.gracePeriod, p.clientsetFunc, scaleClient)
 }
 
-func runDelete(namespace, name string, mapping *meta.RESTMapping, c dynamic.DynamicInterface, cascade bool, gracePeriod int, clientsetFunc func() (internalclientset.Interface, error), scaleClient scaleclient.ScalesGetter) error {
+func runDelete(namespace, name string, mapping *meta.RESTMapping, c dynamic.Interface, cascade bool, gracePeriod int, clientsetFunc func() (internalclientset.Interface, error), scaleClient scaleclient.ScalesGetter) error {
 	if !cascade {
 		return c.Resource(mapping.Resource).Namespace(namespace).Delete(name, nil)
 	}
@@ -673,7 +681,7 @@ func (p *patcher) delete(namespace, name string) error {
 type patcher struct {
 	mapping       *meta.RESTMapping
 	helper        *resource.Helper
-	dynamicClient dynamic.DynamicInterface
+	dynamicClient dynamic.Interface
 	clientsetFunc func() (internalclientset.Interface, error)
 
 	overwrite bool

@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"testing"
 
-	kubeadmapiext "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha1"
+	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 )
 
 func TestPrintConfiguration(t *testing.T) {
 	var tests = []struct {
-		cfg           *kubeadmapiext.MasterConfiguration
+		cfg           *kubeadmapi.MasterConfiguration
 		buf           *bytes.Buffer
 		expectedBytes []byte
 	}{
@@ -34,7 +34,7 @@ func TestPrintConfiguration(t *testing.T) {
 			expectedBytes: []byte(""),
 		},
 		{
-			cfg: &kubeadmapiext.MasterConfiguration{
+			cfg: &kubeadmapi.MasterConfiguration{
 				KubernetesVersion: "v1.7.1",
 			},
 			expectedBytes: []byte(`[upgrade/config] Configuration used:
@@ -42,11 +42,11 @@ func TestPrintConfiguration(t *testing.T) {
 	  advertiseAddress: ""
 	  bindPort: 0
 	  controlPlaneEndpoint: ""
+	apiVersion: kubeadm.k8s.io/v1alpha2
 	auditPolicy:
 	  logDir: ""
 	  path: ""
 	certificatesDir: ""
-	cloudProvider: ""
 	etcd:
 	  caFile: ""
 	  certFile: ""
@@ -55,6 +55,7 @@ func TestPrintConfiguration(t *testing.T) {
 	  image: ""
 	  keyFile: ""
 	imageRepository: ""
+	kind: MasterConfiguration
 	kubeProxy: {}
 	kubeletConfiguration: {}
 	kubernetesVersion: v1.7.1
@@ -63,15 +64,14 @@ func TestPrintConfiguration(t *testing.T) {
 	  podSubnet: ""
 	  serviceSubnet: ""
 	nodeName: ""
-	privilegedPods: false
 	token: ""
 	unifiedControlPlaneImage: ""
 `),
 		},
 		{
-			cfg: &kubeadmapiext.MasterConfiguration{
+			cfg: &kubeadmapi.MasterConfiguration{
 				KubernetesVersion: "v1.7.1",
-				Networking: kubeadmapiext.Networking{
+				Networking: kubeadmapi.Networking{
 					ServiceSubnet: "10.96.0.1/12",
 				},
 			},
@@ -80,11 +80,11 @@ func TestPrintConfiguration(t *testing.T) {
 	  advertiseAddress: ""
 	  bindPort: 0
 	  controlPlaneEndpoint: ""
+	apiVersion: kubeadm.k8s.io/v1alpha2
 	auditPolicy:
 	  logDir: ""
 	  path: ""
 	certificatesDir: ""
-	cloudProvider: ""
 	etcd:
 	  caFile: ""
 	  certFile: ""
@@ -93,6 +93,7 @@ func TestPrintConfiguration(t *testing.T) {
 	  image: ""
 	  keyFile: ""
 	imageRepository: ""
+	kind: MasterConfiguration
 	kubeProxy: {}
 	kubeletConfiguration: {}
 	kubernetesVersion: v1.7.1
@@ -101,16 +102,15 @@ func TestPrintConfiguration(t *testing.T) {
 	  podSubnet: ""
 	  serviceSubnet: 10.96.0.1/12
 	nodeName: ""
-	privilegedPods: false
 	token: ""
 	unifiedControlPlaneImage: ""
 `),
 		},
 		{
-			cfg: &kubeadmapiext.MasterConfiguration{
+			cfg: &kubeadmapi.MasterConfiguration{
 				KubernetesVersion: "v1.7.1",
-				Etcd: kubeadmapiext.Etcd{
-					SelfHosted: &kubeadmapiext.SelfHostedEtcd{
+				Etcd: kubeadmapi.Etcd{
+					SelfHosted: &kubeadmapi.SelfHostedEtcd{
 						CertificatesDir:    "/var/foo",
 						ClusterServiceName: "foo",
 						EtcdVersion:        "v0.1.0",
@@ -123,11 +123,11 @@ func TestPrintConfiguration(t *testing.T) {
 	  advertiseAddress: ""
 	  bindPort: 0
 	  controlPlaneEndpoint: ""
+	apiVersion: kubeadm.k8s.io/v1alpha2
 	auditPolicy:
 	  logDir: ""
 	  path: ""
 	certificatesDir: ""
-	cloudProvider: ""
 	etcd:
 	  caFile: ""
 	  certFile: ""
@@ -141,6 +141,7 @@ func TestPrintConfiguration(t *testing.T) {
 	    etcdVersion: v0.1.0
 	    operatorVersion: v0.1.0
 	imageRepository: ""
+	kind: MasterConfiguration
 	kubeProxy: {}
 	kubeletConfiguration: {}
 	kubernetesVersion: v1.7.1
@@ -149,7 +150,6 @@ func TestPrintConfiguration(t *testing.T) {
 	  podSubnet: ""
 	  serviceSubnet: ""
 	nodeName: ""
-	privilegedPods: false
 	token: ""
 	unifiedControlPlaneImage: ""
 `),

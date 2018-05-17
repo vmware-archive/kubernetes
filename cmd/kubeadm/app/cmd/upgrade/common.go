@@ -24,15 +24,16 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ghodss/yaml"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	clientset "k8s.io/client-go/kubernetes"
-	kubeadmapiext "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha1"
+	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
+	kubeadmscheme "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/scheme"
+	kubeadmapiv1alpha2 "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm/v1alpha2"
 	"k8s.io/kubernetes/cmd/kubeadm/app/features"
 	"k8s.io/kubernetes/cmd/kubeadm/app/phases/upgrade"
 	"k8s.io/kubernetes/cmd/kubeadm/app/preflight"
+	kubeadmutil "k8s.io/kubernetes/cmd/kubeadm/app/util"
 	"k8s.io/kubernetes/cmd/kubeadm/app/util/apiclient"
 	dryrunutil "k8s.io/kubernetes/cmd/kubeadm/app/util/dryrun"
 	kubeconfigutil "k8s.io/kubernetes/cmd/kubeadm/app/util/kubeconfig"
@@ -42,7 +43,7 @@ import (
 // TODO - Restructure or rename upgradeVariables
 type upgradeVariables struct {
 	client        clientset.Interface
-	cfg           *kubeadmapiext.MasterConfiguration
+	cfg           *kubeadmapi.MasterConfiguration
 	versionGetter upgrade.VersionGetter
 	waiter        apiclient.Waiter
 }
@@ -94,13 +95,16 @@ func enforceRequirements(flags *cmdUpgradeFlags, dryRun bool, newK8sVersion stri
 }
 
 // printConfiguration prints the external version of the API to yaml
-func printConfiguration(cfg *kubeadmapiext.MasterConfiguration, w io.Writer) {
+func printConfiguration(cfg *kubeadmapi.MasterConfiguration, w io.Writer) {
 	// Short-circuit if cfg is nil, so we can safely get the value of the pointer below
 	if cfg == nil {
 		return
 	}
 
-	cfgYaml, err := yaml.Marshal(*cfg)
+	externalcfg := &kubeadmapiv1alpha2.MasterConfiguration{}
+	kubeadmscheme.Scheme.Convert(cfg, externalcfg, nil)
+
+	cfgYaml, err := kubeadmutil.MarshalToYamlForCodecs(externalcfg, kubeadmapiv1alpha2.SchemeGroupVersion, kubeadmscheme.Codecs)
 	if err == nil {
 		fmt.Fprintln(w, "[upgrade/config] Configuration used:")
 

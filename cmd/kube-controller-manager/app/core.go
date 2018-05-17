@@ -79,20 +79,23 @@ func startServiceController(ctx ControllerContext) (bool, error) {
 func startNodeIpamController(ctx ControllerContext) (bool, error) {
 	var clusterCIDR *net.IPNet = nil
 	var serviceCIDR *net.IPNet = nil
-	if ctx.ComponentConfig.KubeCloudShared.AllocateNodeCIDRs {
-		var err error
-		if len(strings.TrimSpace(ctx.ComponentConfig.KubeCloudShared.ClusterCIDR)) != 0 {
-			_, clusterCIDR, err = net.ParseCIDR(ctx.ComponentConfig.KubeCloudShared.ClusterCIDR)
-			if err != nil {
-				glog.Warningf("Unsuccessful parsing of cluster CIDR %v: %v", ctx.ComponentConfig.KubeCloudShared.ClusterCIDR, err)
-			}
-		}
 
-		if len(strings.TrimSpace(ctx.ComponentConfig.NodeIpamController.ServiceCIDR)) != 0 {
-			_, serviceCIDR, err = net.ParseCIDR(ctx.ComponentConfig.NodeIpamController.ServiceCIDR)
-			if err != nil {
-				glog.Warningf("Unsuccessful parsing of service CIDR %v: %v", ctx.ComponentConfig.NodeIpamController.ServiceCIDR, err)
-			}
+	if !ctx.ComponentConfig.KubeCloudShared.AllocateNodeCIDRs {
+		return false, nil
+	}
+
+	var err error
+	if len(strings.TrimSpace(ctx.ComponentConfig.KubeCloudShared.ClusterCIDR)) != 0 {
+		_, clusterCIDR, err = net.ParseCIDR(ctx.ComponentConfig.KubeCloudShared.ClusterCIDR)
+		if err != nil {
+			glog.Warningf("Unsuccessful parsing of cluster CIDR %v: %v", ctx.ComponentConfig.KubeCloudShared.ClusterCIDR, err)
+		}
+	}
+
+	if len(strings.TrimSpace(ctx.ComponentConfig.NodeIpamController.ServiceCIDR)) != 0 {
+		_, serviceCIDR, err = net.ParseCIDR(ctx.ComponentConfig.NodeIpamController.ServiceCIDR)
+		if err != nil {
+			glog.Warningf("Unsuccessful parsing of service CIDR %v: %v", ctx.ComponentConfig.NodeIpamController.ServiceCIDR, err)
 		}
 	}
 
@@ -103,7 +106,6 @@ func startNodeIpamController(ctx ControllerContext) (bool, error) {
 		clusterCIDR,
 		serviceCIDR,
 		int(ctx.ComponentConfig.NodeIpamController.NodeCIDRMaskSize),
-		ctx.ComponentConfig.KubeCloudShared.AllocateNodeCIDRs,
 		ipam.CIDRAllocatorType(ctx.ComponentConfig.KubeCloudShared.CIDRAllocatorType),
 	)
 	if err != nil {
@@ -350,9 +352,6 @@ func startGarbageCollectorController(ctx ControllerContext) (bool, error) {
 	discoveryClient := cacheddiscovery.NewMemCacheClient(gcClientset.Discovery())
 
 	config := ctx.ClientBuilder.ConfigOrDie("generic-garbage-collector")
-	// bump QPS limits on our dynamic client that we use to GC every deleted object
-	config.QPS *= 20
-	config.Burst *= 20
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		return true, err

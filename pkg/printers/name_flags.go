@@ -22,7 +22,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"k8s.io/kubernetes/pkg/kubectl/scheme"
@@ -32,6 +31,8 @@ import (
 // a resource's fully-qualified Kind.group/name, or a successful
 // message about that resource if an Operation is provided.
 type NamePrintFlags struct {
+	Scheme runtime.ObjectConvertor
+
 	// Operation describes the name of the action that
 	// took place on an object, to be included in the
 	// finalized "successful" message.
@@ -48,11 +49,9 @@ func (f *NamePrintFlags) Complete(successTemplate string) error {
 // Returns false if the specified outputFormat does not match a supported format.
 // Supported format types can be found in pkg/printers/printers.go
 func (f *NamePrintFlags) ToPrinter(outputFormat string) (ResourcePrinter, error) {
-	decoders := []runtime.Decoder{scheme.Codecs.UniversalDecoder(), unstructured.UnstructuredJSONScheme}
 	namePrinter := &NamePrinter{
 		Operation: f.Operation,
 		Typer:     scheme.Scheme,
-		Decoders:  decoders,
 	}
 
 	outputFormat = strings.ToLower(outputFormat)
@@ -73,7 +72,7 @@ func (f *NamePrintFlags) AddFlags(c *cobra.Command) {}
 
 // NewNamePrintFlags returns flags associated with
 // --name printing, with default values set.
-func NewNamePrintFlags(operation string) *NamePrintFlags {
+func NewNamePrintFlags(operation string, scheme runtime.ObjectConvertor) *NamePrintFlags {
 	return &NamePrintFlags{
 		Operation: operation,
 	}

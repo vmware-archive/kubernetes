@@ -24,9 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
-	"sync"
 
 	"k8s.io/api/core/v1"
 
@@ -57,22 +55,18 @@ import (
 	"k8s.io/kubernetes/pkg/apis/extensions"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/kubectl"
-	"k8s.io/kubernetes/pkg/kubectl/resource"
-	"k8s.io/kubernetes/pkg/version"
+	"k8s.io/kubernetes/pkg/kubectl/genericclioptions/resource"
 )
 
 type RESTClientGetter interface {
 	ToRESTConfig() (*restclient.Config, error)
 	ToDiscoveryClient() (discovery.CachedDiscoveryInterface, error)
+	ToRESTMapper() (meta.RESTMapper, error)
 	ToRawKubeConfigLoader() clientcmd.ClientConfig
 }
 
 type ring0Factory struct {
 	clientGetter RESTClientGetter
-
-	requireMatchedServerVersion bool
-	checkServerVersion          sync.Once
-	matchesServerVersionErr     error
 }
 
 func NewClientAccessFactory(clientGetter RESTClientGetter) ClientAccessFactory {
@@ -85,6 +79,18 @@ func NewClientAccessFactory(clientGetter RESTClientGetter) ClientAccessFactory {
 	}
 
 	return f
+}
+
+func (f *ring0Factory) ClientConfig() (*restclient.Config, error) {
+	return f.clientGetter.ToRESTConfig()
+}
+
+func (f *ring0Factory) RESTMapper() (meta.RESTMapper, error) {
+	return f.clientGetter.ToRESTMapper()
+}
+
+func (f *ring0Factory) BareClientConfig() (*restclient.Config, error) {
+	return f.clientGetter.ToRESTConfig()
 }
 
 func (f *ring0Factory) DiscoveryClient() (discovery.CachedDiscoveryInterface, error) {
@@ -107,42 +113,17 @@ func (f *ring0Factory) ClientSet() (internalclientset.Interface, error) {
 	return internalclientset.NewForConfig(clientConfig)
 }
 
-func (f *ring0Factory) DynamicClient() (dynamic.DynamicInterface, error) {
+func (f *ring0Factory) DynamicClient() (dynamic.Interface, error) {
 	clientConfig, err := f.ClientConfig()
 	if err != nil {
 		return nil, err
 	}
 	return dynamic.NewForConfig(clientConfig)
 }
-func (f *ring0Factory) checkMatchingServerVersion() error {
-	f.checkServerVersion.Do(func() {
-		if !f.requireMatchedServerVersion {
-			return
-		}
-		discoveryClient, err := f.DiscoveryClient()
-		if err != nil {
-			f.matchesServerVersionErr = err
-			return
-		}
-		f.matchesServerVersionErr = discovery.MatchesServerVersion(version.Get(), discoveryClient)
-	})
 
-	return f.matchesServerVersionErr
-}
-
-func (f *ring0Factory) ClientConfig() (*restclient.Config, error) {
-	if err := f.checkMatchingServerVersion(); err != nil {
-		return nil, err
-	}
-	clientConfig, err := f.clientGetter.ToRESTConfig()
-	if err != nil {
-		return nil, err
-	}
-	setKubernetesDefaults(clientConfig)
-	return clientConfig, nil
-}
-func (f *ring0Factory) BareClientConfig() (*restclient.Config, error) {
-	return f.clientGetter.ToRESTConfig()
+// NewBuilder returns a new resource builder for structured api objects.
+func (f *ring0Factory) NewBuilder() *resource.Builder {
+	return resource.NewBuilder(f.clientGetter)
 }
 
 func (f *ring0Factory) RESTClient() (*restclient.RESTClient, error) {
@@ -150,6 +131,7 @@ func (f *ring0Factory) RESTClient() (*restclient.RESTClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	setKubernetesDefaults(clientConfig)
 	return restclient.RESTClientFor(clientConfig)
 }
 
@@ -210,7 +192,7 @@ func (f *ring0Factory) UpdatePodSpecForObject(obj runtime.Object, fn func(*v1.Po
 		return true, fn(&t.Spec.JobTemplate.Spec.Template.Spec)
 
 	default:
-		return false, fmt.Errorf("the object is not a pod or does not have a pod template")
+		return false, fmt.Errorf("the object is not a pod or does not have a pod template: %T", t)
 	}
 }
 
@@ -317,14 +299,6 @@ func (f *ring0Factory) Command(cmd *cobra.Command, showSecrets bool) string {
 
 	base := filepath.Base(os.Args[0])
 	return base + args + flags
-}
-
-func (f *ring0Factory) BindFlags(flags *pflag.FlagSet) {
-	// Globally persistent flags across all subcommands.
-	// TODO Change flag names to consts to allow safer lookup from subcommands.
-	// TODO Add a verbose flag that turns on glog logging. Probably need a way
-	// to do that automatically for every subcommand.
-	flags.BoolVar(&f.requireMatchedServerVersion, FlagMatchBinaryVersion, false, "Require server version to match client version")
 }
 
 func (f *ring0Factory) SuggestedPodTemplateResources() []schema.GroupResource {
@@ -603,23 +577,6 @@ func (f *ring0Factory) CanBeAutoscaled(kind schema.GroupKind) error {
 	return nil
 }
 
-func (f *ring0Factory) EditorEnvs() []string {
-	return []string{"KUBE_EDITOR", "EDITOR"}
-}
-
-// overlyCautiousIllegalFileCharacters matches characters that *might* not be supported.  Windows is really restrictive, so this is really restrictive
-var overlyCautiousIllegalFileCharacters = regexp.MustCompile(`[^(\w/\.)]`)
-
-// computeDiscoverCacheDir takes the parentDir and the host and comes up with a "usually non-colliding" name.
-func computeDiscoverCacheDir(parentDir, host string) string {
-	// strip the optional scheme from host if its there:
-	schemelessHost := strings.Replace(strings.Replace(host, "https://", "", 1), "http://", "", 1)
-	// now do a simple collapse of non-AZ09 characters.  Collisions are possible but unlikely.  Even if we do collide the problem is short lived
-	safeHost := overlyCautiousIllegalFileCharacters.ReplaceAllString(schemelessHost, "_")
-
-	return filepath.Join(parentDir, safeHost)
-}
-
 // this method exists to help us find the points still relying on internal types.
 func InternalVersionDecoder() runtime.Decoder {
 	return legacyscheme.Codecs.UniversalDecoder()
@@ -628,20 +585,4 @@ func InternalVersionDecoder() runtime.Decoder {
 func InternalVersionJSONEncoder() runtime.Encoder {
 	encoder := legacyscheme.Codecs.LegacyCodec(legacyscheme.Scheme.PrioritizedVersionsAllGroups()...)
 	return unstructured.JSONFallbackEncoder{Encoder: encoder}
-}
-
-// setKubernetesDefaults sets default values on the provided client config for accessing the
-// Kubernetes API or returns an error if any of the defaults are impossible or invalid.
-// TODO this isn't what we want.  Each clientset should be setting defaults as it sees fit.
-func setKubernetesDefaults(config *restclient.Config) error {
-	// TODO remove this hack.  This is allowing the GetOptions to be serialized.
-	config.GroupVersion = &schema.GroupVersion{Group: "", Version: "v1"}
-
-	if config.APIPath == "" {
-		config.APIPath = "/api"
-	}
-	if config.NegotiatedSerializer == nil {
-		config.NegotiatedSerializer = legacyscheme.Codecs
-	}
-	return restclient.SetKubernetesDefaults(config)
 }
