@@ -44,7 +44,9 @@ fi
 
 # connect to vCenter using VCP username and password
 export GOVC_INSECURE=1
-export GOVC_URL='https://'$K8S_SECRET_VCP_USERNAME':'$K8S_SECRET_VCP_PASSWORD'@'$K8S_SECRET_VC_IP':'$K8S_SECRET_VC_PORT'/sdk'
+export GOVC_USERNAME=$K8S_SECRET_VCP_USERNAME
+export GOVC_PASSWORD=$K8S_SECRET_VCP_PASSWORD
+export GOVC_URL='https://'$K8S_SECRET_VC_IP':'$K8S_SECRET_VC_PORT'/sdk'
 error_message=$(govc ls 2>&1 >/dev/null)
 
 if [ $? -eq 1 ]; then
@@ -63,7 +65,8 @@ fi
 NUMBER_OF_REGISTERED_NODES=`kubectl get nodes -o json | jq '.items | length'`
 
  # connect to vCenter using VC Admin username and password
-export GOVC_URL='https://'$K8S_SECRET_VC_ADMIN_USERNAME':'$K8S_SECRET_VC_ADMIN_PASSWORD'@'$K8S_SECRET_VC_IP':'$K8S_SECRET_VC_PORT'/sdk'
+export GOVC_USERNAME=$K8S_SECRET_VC_ADMIN_USERNAME
+export GOVC_PASSWORD=$K8S_SECRET_VC_ADMIN_PASSWORD
 # Verify if the Datacenter exists or not.
 govc datacenter.info $K8S_SECRET_DATACENTER &> /dev/null
 if [ $? -eq 0 ]; then

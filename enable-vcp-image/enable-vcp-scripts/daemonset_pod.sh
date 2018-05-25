@@ -42,7 +42,9 @@ update_VcpConfigStatus "$POD_NAME" "$PHASE" "$DAEMONSET_PHASE_RUNNING" ""
 
 # connect to vCenter using VC Admin username and password
 export GOVC_INSECURE=1
-export GOVC_URL='https://'${K8S_SECRET_VC_ADMIN_USERNAME}':'$K8S_SECRET_VC_ADMIN_PASSWORD'@'$K8S_SECRET_VC_IP':'$K8S_SECRET_VC_PORT'/sdk'
+export GOVC_USERNAME=$K8S_SECRET_VC_ADMIN_USERNAME
+export GOVC_PASSWORD=$K8S_SECRET_VC_ADMIN_PASSWORD
+export GOVC_URL='https://'$K8S_SECRET_VC_IP':'$K8S_SECRET_VC_PORT'/sdk'
 
 # Get VM's UUID, Find VM Path using VM UUID and set disk.enableUUID to 1 on the VM
 vmuuid=$(cat /host/sys/class/dmi/id/product_serial | sed -e 's/^VMware-//' -e 's/-/ /' | awk '{ print tolower($1$2$3$4 "-" $5$6 "-" $7$8 "-" $9$10 "-" $11$12$13$14$15$16) }')
