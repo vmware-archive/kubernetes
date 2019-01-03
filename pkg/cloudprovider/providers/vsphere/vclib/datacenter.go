@@ -145,6 +145,20 @@ func (dc *Datacenter) GetAllDatastores(ctx context.Context) (map[string]*Datasto
 	return dsURLInfoMap, nil
 }
 
+func (dc *Datacenter) GetAllHosts(ctx context.Context) ([]types.ManagedObjectReference, error) {
+	finder := getFinder(dc)
+	hostSystems, err := finder.HostSystemList(ctx, "*")
+	if err != nil {
+		klog.Errorf("Failed to get all hostSystems. err: %+v", err)
+		return nil, err
+	}
+	var hostMors []types.ManagedObjectReference
+	for _, hs := range hostSystems {
+		hostMors = append(hostMors, hs.Reference())
+	}
+	return hostMors, nil
+}
+
 // GetDatastoreByPath gets the Datastore object from the given vmDiskPath
 func (dc *Datacenter) GetDatastoreByPath(ctx context.Context, vmDiskPath string) (*Datastore, error) {
 	datastorePathObj := new(object.DatastorePath)

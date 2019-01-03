@@ -33,11 +33,14 @@ import (
 
 	"gopkg.in/gcfg.v1"
 
+	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/vapi/rest"
 	"github.com/vmware/govmomi/vapi/tags"
 	"github.com/vmware/govmomi/vim25/mo"
+	vmwaretypes "github.com/vmware/govmomi/vim25/types"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 	cloudprovider "k8s.io/cloud-provider"
@@ -45,6 +48,8 @@ import (
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib/diskmanagers"
+	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
+	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 )
 
 // VSphere Cloud Provider constants
@@ -68,12 +73,14 @@ var cleanUpDummyVMLock sync.RWMutex
 const (
 	MissingUsernameErrMsg = "Username is missing"
 	MissingPasswordErrMsg = "Password is missing"
+	NoZoneTagInVCErrMsg = "No zone tags found in vCenter"
 )
 
 // Error constants
 var (
 	ErrUsernameMissing = errors.New(MissingUsernameErrMsg)
 	ErrPasswordMissing = errors.New(MissingPasswordErrMsg)
+	NoZoneTagInVC = errors.New(NoZoneTagInVCErrMsg)
 )
 
 var _ cloudprovider.Interface = (*VSphere)(nil)
@@ -1417,4 +1424,256 @@ func (vs *VSphere) GetZoneByNodeName(ctx context.Context, nodeName k8stypes.Node
 
 func (vs *VSphere) GetZoneByProviderID(ctx context.Context, providerID string) (cloudprovider.Zone, error) {
 	return cloudprovider.Zone{}, cloudprovider.NotImplemented
+}
+
+func (vs *VSphere) GetVolumeLabels(volumePath string) (map[string]string, error) {
+	// Create context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	datastorePathObj, err := vclib.GetDatastorePathObjFromVMDiskPath(volumePath)
+	if err != nil {
+		klog.Errorf("Failed to get datastore for volume: %v: %+v", volumePath, err)
+		return nil, err
+	}
+	dsZones, err := vs.GetZonesForDatastore(ctx, datastorePathObj.Datastore)
+	if err != nil {
+		klog.Errorf("Failed to get zones for datastore %v: %+v", datastorePathObj.Datastore, err)
+		return nil, err
+	}
+	dsZones, err = vs.collapseZonesInRegion(ctx, dsZones)
+	// FIXME: For now, pick the first zone of datastore as the zone of volume
+	labels := make(map[string]string)
+	if len(dsZones) > 0 {
+		labels[kubeletapis.LabelZoneRegion] = dsZones[0].Region
+		labels[kubeletapis.LabelZoneFailureDomain] = dsZones[0].FailureDomain
+	}
+	return labels, nil
+}
+
+// collapse all zones in same region. Join FailureDomain with well known separator
+func (vs *VSphere) collapseZonesInRegion(ctx context.Context, zones []cloudprovider.Zone) ([]cloudprovider.Zone, error) {
+	// first create a map of region -> list of zones in that region
+	regionToZones := make(map[string][]string)
+	for _, zone := range zones {
+		fds, exists := regionToZones[zone.Region]
+		if !exists {
+			fds = make([]string, 0)
+		}
+		regionToZones[zone.Region] = append(fds, zone.FailureDomain)
+	}
+
+	// Join all fds in same region and return Zone instances
+	collapsedZones := make([]cloudprovider.Zone, 0)
+	for region, fds := range regionToZones {
+		fdSet := sets.NewString(fds...)
+		appendedZone := volumeutil.ZonesSetToLabelValue(fdSet)
+		collapsedZones = append(collapsedZones, cloudprovider.Zone{FailureDomain: appendedZone, Region: region})
+	}
+	return collapsedZones, nil
+}
+
+func (vs *VSphere) GetZonesForDatastore(ctx context.Context, datastore string) ([]cloudprovider.Zone, error) {
+	vsi, err := vs.getVSphereInstanceForServer(vs.cfg.Workspace.VCenterIP, ctx)
+	if err != nil {
+		klog.Errorf("Failed to get vSphere instance: %+v", err)
+		return nil, err
+	}
+	dc, err := vclib.GetDatacenter(ctx, vsi.conn, vs.cfg.Workspace.Datacenter)
+	if err != nil {
+		klog.Errorf("Failed to get datacenter: %+v", err)
+		return nil, err
+	}
+	// get the hosts mounted on this datastore
+	// datastore -> ["host-1", "host-2", "host-3", ...]
+	ds, err := dc.GetDatastoreByName(ctx, datastore)
+	if err != nil {
+		klog.Errorf("Failed to get datastore by name: %v: %+v", datastore, err)
+		return nil, err
+	}
+	dsHosts, err := ds.GetDatastoreHostMounts(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get datastore host mounts for %v: %+v", datastore, err)
+		return nil, err
+	}
+	klog.V(4).Infof("Got host mounts for datastore: %v: %v", datastore, dsHosts)
+
+	// compute map of zone to list of hosts in that zone across all hosts in vsphere
+	// zone -> ["host-i", "host-j", "host-k", ...]
+	zoneToHosts, err := vs.GetZoneToHosts(ctx, vsi)
+	if err != nil {
+		klog.Errorf("Failed to get zones for hosts: %+v", err)
+		return nil, err
+	}
+	klog.V(4).Infof("Got zone to hosts: %v", zoneToHosts)
+
+	// datastore belongs to a zone if all hosts in that zone mount that datastore
+	dsZones := make([]cloudprovider.Zone, 0)
+	for zone, zoneHosts := range zoneToHosts {
+		// if zone is valid and zoneHosts is a subset of dsHosts, then add zone
+		if zone.Region != "" && containsAll(dsHosts, zoneHosts) {
+			dsZones = append(dsZones, zone)
+		}
+	}
+	klog.V(4).Infof("Datastore %s belongs to zones: %v", datastore, dsZones)
+	return dsZones, nil
+}
+
+// get a map of 'zone' -> 'list of hosts in that zone' in all of given VC
+func (vs *VSphere) GetZoneToHosts(ctx context.Context, vsi *VSphereInstance) (map[cloudprovider.Zone][]vmwaretypes.ManagedObjectReference, error) {
+	// Approach is to find tags with the category of 'vs.cfg.Labels.Zone'
+	zoneCategoryName := vs.cfg.Labels.Zone
+	if zoneCategoryName == "" {
+		zoneCategoryName = "zone"
+	}
+	regionCategoryName := vs.cfg.Labels.Region
+	if regionCategoryName == "" {
+		regionCategoryName = "region"
+	}
+	zoneToHosts := make(map[cloudprovider.Zone][]vmwaretypes.ManagedObjectReference)
+
+	getHostsInTagCategory := func(ctx context.Context, tagCategoryName string) (map[vmwaretypes.ManagedObjectReference]string, error) {
+
+		hostToTag := make(map[vmwaretypes.ManagedObjectReference]string)
+		err := withTagsClient(ctx, vsi.conn, func(c *rest.Client) error {
+			// Look whether the zone/region tag is defined in VC
+			tagManager := tags.NewManager(c)
+			tagsForCat, err := tagManager.GetTagsForCategory(ctx, tagCategoryName)
+			if err != nil {
+				klog.V(4).Infof("No tags with category %s exists in VC. So ignoring.", tagCategoryName)
+				// return a special error so that tag unavailability can be ignored
+				return NoZoneTagInVC
+			}
+			klog.V(4).Infof("List of tags under category %s: %v", tagCategoryName, tagsForCat)
+
+			// Each such tag is a different 'zone' marked in vCenter.
+			// Query for objects associated with each tag. Consider Host, Cluster and Datacenter kind of objects.
+			tagToObjects := make(map[string][]mo.Reference)
+			for _, tag := range tagsForCat {
+				klog.V(4).Infof("Getting objects associated with tag %s", tag.Name)
+				objects, err := tagManager.ListAttachedObjects(ctx, tag.Name)
+				if err != nil {
+					klog.Errorf("Error fetching objects associated with zone tag %s: %+v", tag.Name, err)
+					return err
+				}
+				tagToObjects[tag.Name] = objects
+			}
+			klog.V(4).Infof("Map of tag to objects: %v", tagToObjects)
+
+			// Infer zone for hosts within Datacenter, hosts within clusters and hosts - in this order of increasing priority
+			// The below nested for-loops goes over all the objects in tagToObjects three times over.
+			for _, moType := range []string{"Datacenter", "ClusterComputeResource", "HostSystem"} {
+				for tagName, objects := range tagToObjects {
+					for _, obj := range objects {
+						if obj.Reference().Type == moType {
+							klog.V(4).Infof("Found zone tag %s associated with %s of type %T: %s", tagName, obj, obj, obj.Reference().Value)
+							switch moType {
+							case "Datacenter":
+								// mark that all hosts in this datacenter has tag applied
+								dcObjRef := object.NewReference(vsi.conn.Client, obj.Reference())
+								klog.V(4).Infof("Converted mo obj %v to govmomi object ref %v", obj, dcObjRef)
+								dcObj, ok := dcObjRef.(*object.Datacenter)
+								if !ok {
+									errMsg := fmt.Sprintf("Not able to convert object to Datacenter %v", obj)
+									klog.Errorf(errMsg)
+									return errors.New(errMsg)
+								}
+								klog.V(4).Infof("Converted to object Datacenter %v", dcObj)
+								dc := vclib.Datacenter{dcObj}
+								hosts, err := dc.GetAllHosts(ctx)
+								if err != nil {
+									klog.Errorf("Could not get hosts from datacenter %v: %+v", dc, err)
+									return err
+								}
+								for _, host := range hosts {
+									hostToTag[host] = tagName
+								}
+							case "ClusterComputeResource":
+								// mark that all hosts in this cluster has tag applied
+								clusterObjRef := object.NewReference(vsi.conn.Client, obj.Reference())
+								clusterObj, ok := clusterObjRef.(*object.ClusterComputeResource)
+								if !ok {
+									errMsg := fmt.Sprintf("Not able to convert object ClusterComputeResource %v", obj)
+									klog.Errorf(errMsg)
+									return errors.New(errMsg)
+								}
+								hostSystemList, err := clusterObj.Hosts(ctx)
+								if err != nil {
+									klog.Errorf("Not able to get hosts in cluster %v: %+v", clusterObj, err)
+									return err
+								}
+								for _, host := range hostSystemList {
+									hostToTag[host.Reference()] = tagName
+								}
+							case "HostSystem":
+								// mark that this host has tag applied
+								hostToTag[obj.Reference()] = tagName
+							}
+						}
+					}
+				}
+			}
+			return nil // no error
+		})
+		if err != nil {
+			klog.Errorf("Error processing tag category %s: %+v", tagCategoryName, err)
+			return nil, err
+		}
+		klog.V(6).Infof("Computed hostToTag: %v", hostToTag)
+		return hostToTag, nil
+	}
+
+	hostToZone, err := getHostsInTagCategory(ctx, zoneCategoryName)
+	if err != nil {
+		if err == NoZoneTagInVC {
+			return zoneToHosts, nil
+		}
+		klog.Errorf("Get hosts in tag category %s failed: %+v", zoneCategoryName, err)
+		return nil, err
+	}
+
+	hostToRegion, err := getHostsInTagCategory(ctx, regionCategoryName)
+	if err != nil {
+		if err == NoZoneTagInVC {
+			return zoneToHosts, nil
+		}
+		klog.Errorf("Get hosts in tag category %s failed: %+v", regionCategoryName, err)
+		return nil, err
+	}
+
+	// populate zoneToHosts based on hostToZone and hostToRegion
+	klog.V(6).Infof("hostToZone: %v", hostToZone)
+	klog.V(6).Infof("hostToRegion: %v", hostToRegion)
+	for host, zone := range hostToZone {
+		region, regionExists := hostToRegion[host]
+		if !regionExists {
+			klog.Errorf("Host %s has a zone, but no region. So ignoring.", host)
+			continue
+		}
+		cpZone := cloudprovider.Zone{FailureDomain: zone, Region: region}
+		hosts, exists := zoneToHosts[cpZone]
+		if !exists {
+			hosts = make([]vmwaretypes.ManagedObjectReference, 0)
+		}
+		zoneToHosts[cpZone] = append(hosts, host)
+	}
+	klog.V(4).Infof("Final zoneToHosts: %v", zoneToHosts)
+	return zoneToHosts, nil
+}
+
+// returns true if s1 contains all elements from s2; false otherwise
+func containsAll(s1 []vmwaretypes.ManagedObjectReference, s2 []vmwaretypes.ManagedObjectReference) bool {
+	for _, v := range s2 {
+		foundv := false
+		for _, i := range s1 {
+			if i == v {
+				foundv = true
+				break
+			}
+		}
+		if !foundv {
+			return false
+		}
+	}
+	return true
 }

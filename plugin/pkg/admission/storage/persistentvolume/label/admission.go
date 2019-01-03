@@ -29,6 +29,7 @@ import (
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/aws"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/azure"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/gce"
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	vol "k8s.io/kubernetes/pkg/volume"
@@ -58,6 +59,7 @@ type persistentVolumeLabel struct {
 	cloudConfig      []byte
 	gceCloudProvider *gce.Cloud
 	azureProvider    *azure.Cloud
+	vsphereProvider  *vsphere.VSphere
 }
 
 var _ admission.MutationInterface = &persistentVolumeLabel{}
@@ -130,6 +132,13 @@ func (l *persistentVolumeLabel) Admit(a admission.Attributes) (err error) {
 		}
 		volumeLabels = labels
 	}
+	if volume.Spec.VsphereVolume != nil {
+		labels, err := l.findVsphereVolumeLabels(volume)
+		if err != nil {
+			return admission.NewForbidden(a, fmt.Errorf("error querying vSphere Volume %s: %v", volume.Spec.VsphereVolume.VolumePath, err))
+		}
+		volumeLabels = labels
+	}
 
 	requirements := make([]api.NodeSelectorRequirement, 0)
 	if len(volumeLabels) != 0 {
@@ -179,6 +188,46 @@ func (l *persistentVolumeLabel) Admit(a admission.Attributes) (err error) {
 	}
 
 	return nil
+}
+
+func (l *persistentVolumeLabel) findVsphereVolumeLabels(volume *api.PersistentVolume) (map[string]string, error) {
+	vsphereProvider, err := l.getVsphereProvider()
+	if err != nil {
+		return nil, err
+	}
+	if vsphereProvider == nil {
+		return nil, fmt.Errorf("unable to build vSphere cloud provider")
+	}
+
+	labels, err := vsphereProvider.GetVolumeLabels(volume.Spec.VsphereVolume.VolumePath)
+	if err != nil {
+		return nil, err
+	}
+
+	return labels, nil
+}
+
+func (l *persistentVolumeLabel) getVsphereProvider() (*vsphere.VSphere, error) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
+	if l.vsphereProvider == nil {
+		var cloudConfigReader io.Reader
+		if len(l.cloudConfig) > 0 {
+			cloudConfigReader = bytes.NewReader(l.cloudConfig)
+		}
+		cloudProvider, err := cloudprovider.GetCloudProvider("vsphere", cloudConfigReader)
+		if err != nil || cloudProvider == nil {
+			return nil, err
+		}
+		vsphereCloudProvider, ok := cloudProvider.(*vsphere.VSphere)
+		if !ok {
+			// GetCloudProvider failed
+			return nil, fmt.Errorf("error retrieving vSphere Cloud Provider")
+		}
+		l.vsphereProvider = vsphereCloudProvider
+	}
+	return l.vsphereProvider, nil
 }
 
 func (l *persistentVolumeLabel) findAWSEBSLabels(volume *api.PersistentVolume) (map[string]string, error) {
