@@ -22,10 +22,13 @@ import (
 	"strings"
 	"sync"
 
+        "github.com/vmware/govmomi/object"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
+	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog"
 	"k8s.io/kubernetes/pkg/cloudprovider/providers/vsphere/vclib"
+	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 )
 
 // Stores info about the kubernetes node
@@ -34,6 +37,7 @@ type NodeInfo struct {
 	vm         *vclib.VirtualMachine
 	vcServer   string
 	vmUUID     string
+	//zone       cloudprovider.Zone
 }
 
 type NodeManager struct {
@@ -47,17 +51,25 @@ type NodeManager struct {
 	registeredNodes map[string]*v1.Node
 	//CredentialsManager
 	credentialManager *SecretCredentialManager
+	// Maps node name to zone information
+	zoneInfoMap map[string]*cloudprovider.Zone
+	// zone tag category from vsphere.conf
+	zoneCategoryName string
+	// region tag category from vsphere.conf
+	regionCategoryName string
 
 	// Mutexes
 	registeredNodesLock   sync.RWMutex
 	nodeInfoLock          sync.RWMutex
 	credentialManagerLock sync.Mutex
+	zoneInfoLock          sync.RWMutex
 }
 
 type NodeDetails struct {
 	NodeName string
 	vm       *vclib.VirtualMachine
 	VMUUID   string
+	Zone     cloudprovider.Zone
 }
 
 // TODO: Make it configurable in vsphere.conf
@@ -190,6 +202,12 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 					klog.V(4).Infof("Found node %s as vm=%+v in vc=%s and datacenter=%s",
 						node.Name, vm, res.vc, res.datacenter.Name())
 
+					// keep the zones discovered for the node
+					nodeZone := node.ObjectMeta.Labels[kubeletapis.LabelZoneFailureDomain]
+					nodeRegion := node.ObjectMeta.Labels[kubeletapis.LabelZoneRegion]
+					zone := cloudprovider.Zone{FailureDomain: nodeZone, Region: nodeRegion}
+					klog.V(4).Infof("Storing zone %v for node %s", zone, node.Name)
+					nm.addZoneInfo(ctx, node.ObjectMeta.Name, &zone)
 					nodeInfo := &NodeInfo{dataCenter: res.datacenter, vm: vm, vcServer: res.vc, vmUUID: nodeUUID}
 					nm.addNodeInfo(node.ObjectMeta.Name, nodeInfo)
 					for range queueChannel {
@@ -214,18 +232,35 @@ func (nm *NodeManager) DiscoverNode(node *v1.Node) error {
 	return vclib.ErrNoVMFound
 }
 
+func (nm *NodeManager) addZoneInfo(ctx context.Context, nodeName string, zone *cloudprovider.Zone) {
+	klog.V(4).Infof("add zone info to node %s: %v", nodeName, *zone)
+	nm.zoneInfoLock.Lock()
+	nm.zoneInfoMap[nodeName] = zone
+	nm.zoneInfoLock.Unlock()
+}
+
+func (nm *NodeManager) getZoneInfo(ctx context.Context, nodeName string) (*cloudprovider.Zone, error) {
+	nm.zoneInfoLock.RLock()
+	zone := nm.zoneInfoMap[nodeName]
+	nm.zoneInfoLock.RUnlock()
+	return zone, nil
+}
+
 func (nm *NodeManager) RegisterNode(node *v1.Node) error {
+	klog.V(4).Infof("Register node called: %v", *node)
 	nm.addNode(node)
 	nm.DiscoverNode(node)
 	return nil
 }
 
 func (nm *NodeManager) UnRegisterNode(node *v1.Node) error {
+	klog.V(4).Infof("UnRegister node called: %v", *node)
 	nm.removeNode(node)
 	return nil
 }
 
 func (nm *NodeManager) RediscoverNode(nodeName k8stypes.NodeName) error {
+	klog.V(4).Infof("Rediscover node called: %v", nodeName)
 	node, err := nm.GetNode(nodeName)
 
 	if err != nil {
@@ -258,6 +293,10 @@ func (nm *NodeManager) removeNode(node *v1.Node) {
 	nm.nodeInfoLock.Lock()
 	delete(nm.nodeInfoMap, node.ObjectMeta.Name)
 	nm.nodeInfoLock.Unlock()
+
+	nm.zoneInfoLock.Lock()
+	delete(nm.zoneInfoMap, node.ObjectMeta.Name)
+	nm.zoneInfoLock.Unlock()
 }
 
 // GetNodeInfo returns a NodeInfo which datacenter, vm and vc server ip address.
@@ -310,7 +349,11 @@ func (nm *NodeManager) GetNodeDetails() ([]NodeDetails, error) {
 			return nil, err
 		}
 		klog.V(4).Infof("Updated NodeInfo %v for node %q.", nodeInfo, nodeName)
-		nodeDetails = append(nodeDetails, NodeDetails{nodeName, nodeInfo.vm, nodeInfo.vmUUID})
+		zone, err := nm.getZoneInfo(context.TODO(), nodeName)
+		if err != nil {
+			return nil, err
+		}
+		nodeDetails = append(nodeDetails, NodeDetails{nodeName, nodeInfo.vm, nodeInfo.vmUUID, *zone})
 	}
 	return nodeDetails, nil
 }
@@ -443,3 +486,54 @@ func (nm *NodeManager) UpdateCredentialManager(credentialManager *SecretCredenti
 	defer nm.credentialManagerLock.Unlock()
 	nm.credentialManager = credentialManager
 }
+
+func (nm *NodeManager) GetHostsInZone(ctx context.Context, zone cloudprovider.Zone) ([]*object.HostSystem, error) {
+	// TODO: Implementation by Karthik goes here
+	klog.V(4).Infof("GetHostsInZone called with registeredNodes: %v", nm.registeredNodes)
+	nodeDetails, err := nm.GetNodeDetails()
+	if err != nil {
+		return nil, err
+	}
+	klog.V(4).Infof("Got Node Details: %v", nodeDetails)
+	// return those hosts that are in given zone
+	hosts := make([]*object.HostSystem, 0)
+	for _, n := range nodeDetails {
+                if ((zone.FailureDomain == "" || zone.FailureDomain == n.Zone.FailureDomain) && (zone.Region == "" || zone.Region == n.Zone.Region)) {
+		//if n.Zone == zone {
+			host, err := n.vm.HostSystem(ctx)
+			if err != nil {
+				klog.Errorf("Failed to get host system for VM %s. err: %+v", n.vm, err)
+				continue
+			}
+			hosts = append(hosts, host)
+		}
+	}
+	klog.V(4).Infof("GetHostsInZone %v returning: %v", zone, hosts)
+	return hosts, nil
+}
+
+// func (nm *NodeManager) GetZoneToHosts(ctx context.Context) (map[cloudprovider.Zone][]vmwaretypes.ManagedObjectReference, error) {
+// 	klog.V(4).Infof("GetZoneToHosts called with registeredNodes: %v", nm.registeredNodes)
+// 	nodeDetails, err := nm.GetNodeDetails()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	klog.V(4).Infof("Got Node Details: %v", nodeDetails)
+// 	// build a map of zone -> "list of hosts in that zone" from nodeDetails
+// 	zoneToHosts := make(map[cloudprovider.Zone][]vmwaretypes.ManagedObjectReference)
+// 	for _, n := range nodeDetails {
+// 		hosts := zoneToHosts[n.Zone]
+// 		if hosts == nil {
+// 			hosts = make([]vmwaretypes.ManagedObjectReference, 0)
+// 		}
+
+// 		// find node's host from the VM and add it to map
+// 		host, err := n.vm.HostSystem(ctx)
+// 		if err != nil {
+// 			klog.Errorf("Failed to get host system for VM: %q. err: %+v", n.vm.InventoryPath, err)
+// 			continue
+// 		}
+// 		zoneToHosts[n.Zone] = append(hosts, host.Reference())
+// 	}
+// 	return zoneToHosts, nil
+// }
