@@ -1211,6 +1211,14 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 			} else {
 				// If zone is provided, first get the datastores in the zone.
 				dsList, err = getDatastoresForZone(ctx, dc, vs.nodeManager, volumeOptions.AvailabilityZone)
+               
+                                // If unable to get any datastore, fail the operation
+                                if len(dsList) == 0 {
+                                   err := fmt.Errorf("Failed to find a shared datastore matching zone %s", volumeOptions.AvailabilityZone)
+                                   klog.Error(err)
+                                   return "", err
+                                }
+				
 				klog.V(4).Infof("Specified zone : %s. Picking a datastore as per the storage policy %s among the zoned datastores : %s", volumeOptions.AvailabilityZone,
 					volumeOptions.StoragePolicyName, dsList)
 				// Among the compatible datastores, select the one based on the free space.
@@ -1222,10 +1230,18 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 				return "", err
 			}
 		} else {
-			// If only zone is given, pick the datastore in the zone with maximum free space
+             		// If zone is given, pick the datastore in the zone with maximum free space
 			if (volumeOptions.Datastore == "" && len(volumeOptions.AvailabilityZone) != 0) {
 				klog.V(4).Infof("Specified zone : %s", volumeOptions.AvailabilityZone)
 				dsList, err = getDatastoresForZone(ctx, dc, vs.nodeManager, volumeOptions.AvailabilityZone)
+				
+				// If unable to get any datastore, fail the operation
+                                if len(dsList) == 0 {
+                                   err := fmt.Errorf("Failed to find a shared datastore matching zone %s", volumeOptions.AvailabilityZone)
+                                   klog.Error(err)
+                                   return "", err
+                                }
+
 				if err != nil {
 					return "", err
 				}
