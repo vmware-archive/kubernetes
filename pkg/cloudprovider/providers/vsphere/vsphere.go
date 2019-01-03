@@ -73,14 +73,14 @@ var cleanUpDummyVMLock sync.RWMutex
 const (
 	MissingUsernameErrMsg = "Username is missing"
 	MissingPasswordErrMsg = "Password is missing"
-	NoZoneTagInVCErrMsg = "No zone tags found in vCenter"
+	NoZoneTagInVCErrMsg   = "No zone tags found in vCenter"
 )
 
 // Error constants
 var (
 	ErrUsernameMissing = errors.New(MissingUsernameErrMsg)
 	ErrPasswordMissing = errors.New(MissingPasswordErrMsg)
-	NoZoneTagInVC = errors.New(NoZoneTagInVCErrMsg)
+	NoZoneTagInVC      = errors.New(NoZoneTagInVCErrMsg)
 )
 
 var _ cloudprovider.Interface = (*VSphere)(nil)
@@ -521,6 +521,9 @@ func buildVSphereFromConfig(cfg VSphereConfig) (*VSphere, error) {
 			vsphereInstanceMap: vsphereInstanceMap,
 			nodeInfoMap:        make(map[string]*NodeInfo),
 			registeredNodes:    make(map[string]*v1.Node),
+			zoneInfoMap:        make(map[string]*cloudprovider.Zone),
+			zoneCategoryName:   cfg.Labels.Zone,
+			regionCategoryName: cfg.Labels.Region,
 		},
 		isSecretInfoProvided: isSecretInfoProvided,
 		cfg:                  &cfg,
@@ -1144,6 +1147,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 	klog.V(1).Infof("Starting to create a vSphere volume with volumeOptions: %+v", volumeOptions)
 	createVolumeInternal := func(volumeOptions *vclib.VolumeOptions) (canonicalVolumePath string, err error) {
 		var datastore string
+		var dsList []*vclib.DatastoreInfo
 		// If datastore not specified, then use default datastore
 		if volumeOptions.Datastore == "" {
 			datastore = vs.cfg.Workspace.DefaultDatastore
@@ -1164,6 +1168,27 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 		}
 		var vmOptions *vclib.VMOptions
 		if volumeOptions.VSANStorageProfileData != "" || volumeOptions.StoragePolicyName != "" {
+			// If datastore and zone are specified, first validate if the datastore is in the provided zone.
+			if len(volumeOptions.Zone) != 0 && volumeOptions.Datastore != "" {
+				klog.V(4).Infof("Specified zone : %s, datastore : %s", volumeOptions.Zone, volumeOptions.Datastore)
+				dsList, err = getDatastoresForZone(ctx, dc, vs.nodeManager, volumeOptions.Zone)
+				if err != nil {
+					return "", err
+				}
+
+				// Validate if the datastore provided belongs to the zone. If not, fail the operation.
+				found := false
+				for _, ds := range dsList {
+					if ds.Info.Name == volumeOptions.Datastore {
+						found = true
+						break
+					}
+				}
+				if !found {
+					msg := fmt.Sprintf("The specified datastore %s does not match the provided availability zones : %s", volumeOptions.Datastore, volumeOptions.Zone)
+					return "", errors.New(msg)
+				}
+			}
 			// Acquire a read lock to ensure multiple PVC requests can be processed simultaneously.
 			cleanUpDummyVMLock.RLock()
 			defer cleanUpDummyVMLock.RUnlock()
@@ -1183,29 +1208,84 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 			}
 		}
 		if volumeOptions.StoragePolicyName != "" && volumeOptions.Datastore == "" {
-			datastore, err = getPbmCompatibleDatastore(ctx, dc, volumeOptions.StoragePolicyName, vs.nodeManager)
+			if len(volumeOptions.Zone) == 0 {
+				klog.V(4).Infof("Selecting a shared datastore as per the storage policy %s", volumeOptions.StoragePolicyName)
+				datastore, err = getPbmCompatibleDatastore(ctx, dc, volumeOptions.StoragePolicyName, vs.nodeManager)
+			} else {
+				// If zone is specified, first get the datastores in the zone.
+				dsList, err = getDatastoresForZone(ctx, dc, vs.nodeManager, volumeOptions.Zone)
+
+				// If unable to get any datastore, fail the operation.
+				if len(dsList) == 0 {
+					err := fmt.Errorf("Failed to find a shared datastore matching zone %s", volumeOptions.Zone)
+					klog.Error(err)
+					return "", err
+				}
+
+				klog.V(4).Infof("Specified zone : %s. Picking a datastore as per the storage policy %s among the zoned datastores : %s", volumeOptions.Zone,
+					volumeOptions.StoragePolicyName, dsList)
+				// Among the compatible datastores, select the one based on the maximum free space.
+				datastore, err = getPbmCompatibleZonedDatastore(ctx, dc, volumeOptions.StoragePolicyName, dsList)
+			}
+			klog.V(1).Infof("Datastore selected as per policy : %s", datastore)
 			if err != nil {
 				klog.Errorf("Failed to get pbm compatible datastore with storagePolicy: %s. err: %+v", volumeOptions.StoragePolicyName, err)
 				return "", err
 			}
 		} else {
-			// Since no storage policy is specified but datastore is specified, check
-			// if the given datastore is a shared datastore across all node VMs.
-			sharedDsList, err := getSharedDatastoresInK8SCluster(ctx, dc, vs.nodeManager)
-			if err != nil {
-				klog.Errorf("Failed to get shared datastore: %+v", err)
-				return "", err
-			}
-			found := false
-			for _, sharedDs := range sharedDsList {
-				if datastore == sharedDs.Info.Name {
-					found = true
-					break
+			// If zone is specified, pick the datastore in the zone with maximum free space within the zone.
+			if volumeOptions.Datastore == "" && len(volumeOptions.Zone) != 0 {
+				klog.V(4).Infof("Specified zone : %s", volumeOptions.Zone)
+				dsList, err = getDatastoresForZone(ctx, dc, vs.nodeManager, volumeOptions.Zone)
+
+				// If unable to get any datastore, fail the operation
+				if len(dsList) == 0 {
+					err := fmt.Errorf("Failed to find a shared datastore matching zone %s", volumeOptions.Zone)
+					klog.Error(err)
+					return "", err
 				}
-			}
-			if !found {
-				msg := fmt.Sprintf("The specified datastore %s is not a shared datastore across node VMs", datastore)
-				return "", errors.New(msg)
+
+				if err != nil {
+					return "", err
+				}
+				datastore, err = getMostFreeDatastoreName(ctx, nil, dsList)
+				if err != nil {
+					klog.Errorf("Failed to get shared datastore: %+v", err)
+					return "", err
+				}
+				klog.V(1).Infof("Specified zone : %s. Selected datastore : %s", volumeOptions.StoragePolicyName, datastore)
+			} else {
+				var sharedDsList []*vclib.DatastoreInfo
+				if len(volumeOptions.Zone) == 0 {
+					// If zone is not provided, get the shared datastore across all node VMs.
+					klog.V(4).Infof("Validating if datastore %s is shared across all node VMs", datastore)
+					var err error
+					sharedDsList, err = getSharedDatastoresInK8SCluster(ctx, dc, vs.nodeManager)
+					if err != nil {
+						klog.Errorf("Failed to get shared datastore: %+v", err)
+						return "", err
+					}
+				} else {
+					// If zone is provided, get the shared datastores in that zone.
+					klog.V(4).Infof("Validating if datastore %s is in zone %s ", datastore, volumeOptions.Zone)
+					sharedDsList, err = getDatastoresForZone(ctx, dc, vs.nodeManager, volumeOptions.Zone)
+					if err != nil {
+						return "", err
+					}
+				}
+				found := false
+				// Check if the selected datastore belongs to the list of shared datastores computed.
+				for _, sharedDs := range sharedDsList {
+					if datastore == sharedDs.Info.Name {
+						klog.V(4).Infof("Datastore validation succeeded")
+						found = true
+						break
+					}
+				}
+				if !found {
+					msg := fmt.Sprintf("The specified datastore %s is not a shared datastore across node VMs or does not match the provided availability zones : %s", datastore, volumeOptions.Zone)
+					return "", errors.New(msg)
+				}
 			}
 		}
 		ds, err := dc.GetDatastoreByName(ctx, datastore)
