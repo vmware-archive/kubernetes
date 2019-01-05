@@ -61,6 +61,8 @@ const (
 	MacOuiVC                      = "00:50:56"
 	MacOuiEsx                     = "00:0c:29"
 	CleanUpDummyVMRoutineInterval = 5
+	DefaultZoneCategoryName       = "zone"
+	DefaultRegionCategoryName     = "region"
 )
 
 var cleanUpRoutineInitialized = false
@@ -510,6 +512,14 @@ func buildVSphereFromConfig(cfg VSphereConfig) (*VSphere, error) {
 	if cfg.Global.VCenterPort == "" {
 		cfg.Global.VCenterPort = "443"
 	}
+	if cfg.Labels.Zone == "" {
+		cfg.Labels.Zone = DefaultZoneCategoryName
+	}
+	if cfg.Labels.Region == "" {
+		cfg.Labels.Region = DefaultRegionCategoryName
+	}
+	klog.V(4).Infof("vSphere cloud provider will look for tag category of %s for zone and %s for region", cfg.Labels.Zone, cfg.Labels.Region)
+
 	vsphereInstanceMap, err := populateVsphereInstanceMap(&cfg)
 	if err != nil {
 		return nil, err
@@ -1602,14 +1612,6 @@ func (vs *VSphere) GetZonesForDatastore(ctx context.Context, datastore string) (
 // get a map of 'zone' -> 'list of hosts in that zone' in all of given VC
 func (vs *VSphere) GetZoneToHosts(ctx context.Context, vsi *VSphereInstance) (map[cloudprovider.Zone][]vmwaretypes.ManagedObjectReference, error) {
 	// Approach is to find tags with the category of 'vs.cfg.Labels.Zone'
-	zoneCategoryName := vs.cfg.Labels.Zone
-	if zoneCategoryName == "" {
-		zoneCategoryName = "zone"
-	}
-	regionCategoryName := vs.cfg.Labels.Region
-	if regionCategoryName == "" {
-		regionCategoryName = "region"
-	}
 	zoneToHosts := make(map[cloudprovider.Zone][]vmwaretypes.ManagedObjectReference)
 
 	getHostsInTagCategory := func(ctx context.Context, tagCategoryName string) (map[vmwaretypes.ManagedObjectReference]string, error) {
@@ -1642,7 +1644,7 @@ func (vs *VSphere) GetZoneToHosts(ctx context.Context, vsi *VSphereInstance) (ma
 
 			// Infer zone for hosts within Datacenter, hosts within clusters and hosts - in this order of increasing priority
 			// The below nested for-loops goes over all the objects in tagToObjects three times over.
-			for _, moType := range []string{"Datacenter", "ClusterComputeResource", "HostSystem"} {
+			for _, moType := range []string{vclib.DatacenterType, vclib.ClusterComputeResourceType, vclib.HostSystemType} {
 				for tagName, objects := range tagToObjects {
 					for _, obj := range objects {
 						if obj.Reference().Type == moType {
@@ -1703,21 +1705,21 @@ func (vs *VSphere) GetZoneToHosts(ctx context.Context, vsi *VSphereInstance) (ma
 		return hostToTag, nil
 	}
 
-	hostToZone, err := getHostsInTagCategory(ctx, zoneCategoryName)
+	hostToZone, err := getHostsInTagCategory(ctx, vs.cfg.Labels.Zone)
 	if err != nil {
 		if err == NoZoneTagInVC {
 			return zoneToHosts, nil
 		}
-		klog.Errorf("Get hosts in tag category %s failed: %+v", zoneCategoryName, err)
+		klog.Errorf("Get hosts in tag category %s failed: %+v", vs.cfg.Labels.Zone, err)
 		return nil, err
 	}
 
-	hostToRegion, err := getHostsInTagCategory(ctx, regionCategoryName)
+	hostToRegion, err := getHostsInTagCategory(ctx, vs.cfg.Labels.Region)
 	if err != nil {
 		if err == NoZoneTagInVC {
 			return zoneToHosts, nil
 		}
-		klog.Errorf("Get hosts in tag category %s failed: %+v", regionCategoryName, err)
+		klog.Errorf("Get hosts in tag category %s failed: %+v", vs.cfg.Labels.Region, err)
 		return nil, err
 	}
 
@@ -1743,15 +1745,14 @@ func (vs *VSphere) GetZoneToHosts(ctx context.Context, vsi *VSphereInstance) (ma
 
 // returns true if s1 contains all elements from s2; false otherwise
 func containsAll(s1 []vmwaretypes.ManagedObjectReference, s2 []vmwaretypes.ManagedObjectReference) bool {
-	for _, v := range s2 {
-		foundv := false
-		for _, i := range s1 {
-			if i == v {
-				foundv = true
-				break
-			}
-		}
-		if !foundv {
+	// put all elements of s1 into a map
+	s1Map := make(map[vmwaretypes.ManagedObjectReference]bool)
+	for _, mor := range s1 {
+		s1Map[mor] = true
+	}
+	// verify if all elements of s2 are present in s1Map
+	for _, mor := range s2 {
+		if _, found := s1Map[mor]; !found {
 			return false
 		}
 	}
