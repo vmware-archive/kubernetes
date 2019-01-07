@@ -360,6 +360,10 @@ func (v *vsphereVolumeProvisioner) Provision(selectedNode *v1.Node, allowedTopol
 	}
 	klog.V(1).Infof("Provision with allowedTopologies : %s", allowedTopologies)
 	selectedZones, err := util.ZonesFromAllowedTopologies(allowedTopologies)
+	if err != nil {
+		return nil, err
+	}
+
 	klog.V(4).Infof("Selected zones for volume : %s", selectedZones)
 	volSpec, err := v.manager.CreateVolume(v, selectedZones.List())
 	if err != nil {

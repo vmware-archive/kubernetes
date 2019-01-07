@@ -1195,8 +1195,9 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 					}
 				}
 				if !found {
-					msg := fmt.Sprintf("The specified datastore %s does not match the provided availability zones : %s", volumeOptions.Datastore, volumeOptions.Zone)
-					return "", errors.New(msg)
+					err := fmt.Errorf("The specified datastore %s does not match the provided zones : %s", volumeOptions.Datastore, volumeOptions.Zone)
+					klog.Error(err)
+					return "", err
 				}
 			}
 			// Acquire a read lock to ensure multiple PVC requests can be processed simultaneously.
@@ -1266,6 +1267,7 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 				klog.V(1).Infof("Specified zone : %s. Selected datastore : %s", volumeOptions.StoragePolicyName, datastore)
 			} else {
 				var sharedDsList []*vclib.DatastoreInfo
+				var err error
 				if len(volumeOptions.Zone) == 0 {
 					// If zone is not provided, get the shared datastore across all node VMs.
 					klog.V(4).Infof("Validating if datastore %s is shared across all node VMs", datastore)
@@ -1275,6 +1277,8 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 						klog.Errorf("Failed to get shared datastore: %+v", err)
 						return "", err
 					}
+					// Prepare error msg to be used later, if required.
+					err = fmt.Errorf("The specified datastore %s is not a shared datastore across node VMs", datastore)
 				} else {
 					// If zone is provided, get the shared datastores in that zone.
 					klog.V(4).Infof("Validating if datastore %s is in zone %s ", datastore, volumeOptions.Zone)
@@ -1282,6 +1286,8 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 					if err != nil {
 						return "", err
 					}
+					// Prepare error msg to be used later, if required.
+					err = fmt.Errorf("The specified datastore %s does not match the provided availability zones %s", datastore, volumeOptions.Zone)
 				}
 				found := false
 				// Check if the selected datastore belongs to the list of shared datastores computed.
@@ -1293,8 +1299,8 @@ func (vs *VSphere) CreateVolume(volumeOptions *vclib.VolumeOptions) (canonicalVo
 					}
 				}
 				if !found {
-					msg := fmt.Sprintf("The specified datastore %s is not a shared datastore across node VMs or does not match the provided availability zones : %s", datastore, volumeOptions.Zone)
-					return "", errors.New(msg)
+					klog.Error(err)
+					return "", err
 				}
 			}
 		}

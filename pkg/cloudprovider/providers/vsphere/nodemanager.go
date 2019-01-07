@@ -246,20 +246,17 @@ func (nm *NodeManager) getZoneInfo(ctx context.Context, nodeName string) (*cloud
 }
 
 func (nm *NodeManager) RegisterNode(node *v1.Node) error {
-	klog.V(4).Infof("Register node called: %v", *node)
 	nm.addNode(node)
 	nm.DiscoverNode(node)
 	return nil
 }
 
 func (nm *NodeManager) UnRegisterNode(node *v1.Node) error {
-	klog.V(4).Infof("UnRegister node called: %v", *node)
 	nm.removeNode(node)
 	return nil
 }
 
 func (nm *NodeManager) RediscoverNode(nodeName k8stypes.NodeName) error {
-	klog.V(4).Infof("Rediscover node called: %v", nodeName)
 	node, err := nm.GetNode(nodeName)
 
 	if err != nil {
