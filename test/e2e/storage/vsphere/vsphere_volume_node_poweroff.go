@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ var _ = utils.SIGDescribe("Node Poweroff [Feature:vsphere] [Slow] [Disruptive]",
 	*/
 	It("verify volume status after node power off", func() {
 		By("Creating a Storage Class")
-		storageClassSpec := getVSphereStorageClassSpec("test-sc", nil)
+		storageClassSpec := getVSphereStorageClassSpec("test-sc", nil, nil)
 		storageclass, err := client.StorageV1().StorageClasses().Create(storageClassSpec)
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to create storage class with err: %v", err))
 		defer client.StorageV1().StorageClasses().Delete(storageclass.Name, nil)

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 	"k8s.io/kubernetes/pkg/volume/util"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
@@ -235,7 +236,7 @@ func verifyContentOfVSpherePV(client clientset.Interface, pvc *v1.PersistentVolu
 	framework.Logf("Successfully verified content of the volume")
 }
 
-func getVSphereStorageClassSpec(name string, scParameters map[string]string) *storage.StorageClass {
+func getVSphereStorageClassSpec(name string, scParameters map[string]string, zones []string) *storage.StorageClass {
 	var sc *storage.StorageClass
 
 	sc = &storage.StorageClass{
@@ -249,6 +250,17 @@ func getVSphereStorageClassSpec(name string, scParameters map[string]string) *st
 	}
 	if scParameters != nil {
 		sc.Parameters = scParameters
+	}
+	if zones != nil {
+		term := v1.TopologySelectorTerm{
+			MatchLabelExpressions: []v1.TopologySelectorLabelRequirement{
+				{
+					Key:    kubeletapis.LabelZoneFailureDomain,
+					Values: zones,
+				},
+			},
+		}
+		sc.AllowedTopologies = append(sc.AllowedTopologies, term)
 	}
 	return sc
 }
@@ -396,6 +408,30 @@ func verifyVSphereVolumesAccessible(c clientset.Interface, pod *v1.Pod, persiste
 		filepath := filepath.Join("/mnt/", fmt.Sprintf("volume%v", index+1), "/emptyFile.txt")
 		_, err = framework.LookForStringInPodExec(namespace, pod.Name, []string{"/bin/touch", filepath}, "", time.Minute)
 		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+// verify volumes are created on one of the specified zones
+func verifyVolumeCreationOnRightZone(persistentvolumes []*v1.PersistentVolume, nodeName string, zones []string) {
+	for _, pv := range persistentvolumes {
+		volumePath := pv.Spec.VsphereVolume.VolumePath
+		// Extract datastoreName from the volume path in the pv spec
+		// For example : "vsanDatastore" is extracted from "[vsanDatastore] 25d8b159-948c-4b73-e499-02001ad1b044/volume.vmdk"
+		datastoreName := volumePath[strings.Index(volumePath, "[")+1 : strings.Index(volumePath, "]")]
+		nodeInfo := TestContext.NodeMapper.GetNodeInfo(nodeName)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		// Get the datastore object reference from the datastore name
+		datastoreRef, err := nodeInfo.VSphere.GetDatastoreRefFromName(ctx, nodeInfo.DataCenterRef, datastoreName)
+		if err != nil {
+			Expect(err).NotTo(HaveOccurred())
+		}
+		var allDatastores []string
+		for _, zone := range zones {
+			datastoreInZone := TestContext.NodeMapper.GetDatastoresInZone(nodeInfo.VSphere.Config.Hostname, zone)
+			allDatastores = append(allDatastores, datastoreInZone...)
+		}
+		Expect(allDatastores).To(ContainElement(datastoreRef.Value), "PV was created in an unsupported zone.")
 	}
 }
 

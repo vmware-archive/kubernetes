@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -54,6 +54,11 @@ func bootstrapOnce() {
 	err = TestContext.NodeMapper.GenerateNodeMap(vsphereInstances, *nodeList)
 	if err != nil {
 		framework.Failf("Failed to bootstrap vSphere with error: %v", err)
+	}
+	// 4. Generate Zone to Datastore mapping
+	err = TestContext.NodeMapper.GenerateZoneToDatastoreMap()
+	if err != nil {
+		framework.Failf("Failed to generate zone to datastore mapping with error: %v", err)
 	}
 	close(waiting)
 }
