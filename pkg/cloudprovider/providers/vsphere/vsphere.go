@@ -1495,12 +1495,12 @@ func (vs *VSphere) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
 		}
 
 		if zone.Region == "" {
-			if vs.cfg.Labels.Region != "" {
+			if vs.cfg.Labels.Region != DefaultRegionCategoryName {
 				return fmt.Errorf("vSphere region category %q does not match any tags for node %s [%s]", vs.cfg.Labels.Region, nodeName, vs.vmUUID)
 			}
 		}
 		if zone.FailureDomain == "" {
-			if vs.cfg.Labels.Zone != "" {
+			if vs.cfg.Labels.Zone != DefaultZoneCategoryName {
 				return fmt.Errorf("vSphere zone category %q does not match any tags for node %s [%s]", vs.cfg.Labels.Zone, nodeName, vs.vmUUID)
 			}
 		}
