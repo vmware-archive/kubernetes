@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ func invokeTest(f *framework.Framework, client clientset.Interface, namespace st
 	scParameters["diskformat"] = diskFormat
 
 	By("Creating Storage Class With DiskFormat")
-	storageClassSpec := getVSphereStorageClassSpec("thinsc", scParameters)
+	storageClassSpec := getVSphereStorageClassSpec("thinsc", scParameters, nil)
 	storageclass, err := client.StorageV1().StorageClasses().Create(storageClassSpec)
 	Expect(err).NotTo(HaveOccurred())
 
